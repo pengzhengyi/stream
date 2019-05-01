@@ -3,6 +3,9 @@ import random
 import sys
 import time
 
+import File
+import Print
+
 
 _version = sys.version_info
 if _version < (3, 7):
@@ -45,22 +48,18 @@ def build_lib(base_dir, to, filetype, file_filter, entry_sep, quiet):
                 (relative path is not guaranteed to work)
             2. <to> does not point to a directory
     """
-    def out(msg):
-        if not quiet:
-            print(msg)
-
     if not os.path.exists(base_dir):
         raise BuildException("path (%s) not exists" % base_dir)
 
-    out("building library from %s" % base_dir)
+    Print.out("building library from %s" % base_dir, quiet)
 
     saveat = _filepath_to_save(to, filetype)
     with open(saveat, 'w+') as lib_writer:
         lib_writer.write(base_dir + entry_sep)
 
-        for i, filepath in enumerate(_files_in_dir(base_dir, file_filter)):
+        for i, filepath in enumerate(File.files_in_dir(base_dir, file_filter)):
             file_msg = '%d %s' % (i, filepath)
-            out("+ discovered " + file_msg)
+            Print.out("+ discovered " + file_msg, quiet)
             lib_writer.write(file_msg + entry_sep)
 
     return i + 1
@@ -186,28 +185,6 @@ mformats = {
 
 
 # helper functions
-def _files_in_dir(base_dir, file_filter):
-    """
-    Find all files in a directory satisfying specified condition
-
-    Args:
-        base_dir: The base directory to start traversing
-        file_filter: A filepath will be yielded when
-            1. file_filter is None
-            2. evaulating file_filter on filename returns True
-
-    Returns:
-        A generator of relative filepaths from base_dir
-            e.g. suppose /dev contains foo.txt and bar.txt
-                    (foo.txt, bar.txt) will be returned
-    """
-    for dirpath, _, filenames in os.walk(base_dir):
-        relpath = os.path.relpath(dirpath, start=base_dir)
-        for filename in filenames:
-            if file_filter is None or file_filter(filename):
-                yield os.path.join(relpath, filename)
-
-
 def _custom_libname(filetype, salt_len=2):
     """
     Choose a custom name for library file
