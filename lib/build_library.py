@@ -101,7 +101,7 @@ def build_music_lib(
         fmt_choice: Choices which set of audio formats are accepted
             default to main
         quiet: Whether progress is printed
-            default to True
+            default to Silenced
 
     Returns:
         Number of file entries written
