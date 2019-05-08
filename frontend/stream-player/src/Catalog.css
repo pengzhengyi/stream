@@ -1,0 +1,47 @@
+.catalog {
+    text-align: left;
+    width: 20%;
+}
+
+.catalog.ios {
+    width: 70%;
+    margin: 0 auto;
+}
+
+.catalog-item {
+    font-size: medium;
+    margin: 5px 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.catalog-item:hover, .active {
+    color: lightskyblue;
+    overflow: visible;
+}
+
+.active {
+    font-weight: bold;
+}
+
+.player {
+    bottom: 0;
+    background-color: lightblue;
+    color: white;
+    height: 80px;
+    position: fixed;
+    width: 100%;
+}
+
+.controls div {
+    display: inline-block;
+    margin: 0 7.5px;
+}
+
+audio {
+    display: block;
+    margin: 0 auto;
+    width: 80%;
+    height: 60%;
+}

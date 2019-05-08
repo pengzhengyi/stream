@@ -1,25 +1,39 @@
 import React, { Component } from 'react';
-import logo from './logo.svg';
+import { library } from '@fortawesome/fontawesome-svg-core'
+import { faBackward, faForward, faPause, faPlay } from '@fortawesome/free-solid-svg-icons'
+import { servaddr } from './env.js';
 import './App.css';
+import Catalog from './Catalog.js';
+
+library.add(faBackward, faForward, faPause, faPlay)
 
 class App extends Component {
+    constructor(props) {
+        super(props);
+
+        this.servaddr = servaddr;
+
+        this.state = {
+            catalog: {}
+        };
+        
+    }
+
+    componentDidMount() {
+        this.getCatalog();
+    }
+
+    getCatalog = () => {
+        fetch(`${this.servaddr}/music/catalog`)
+        .then(res => res.json())
+        .then(catalog => this.setState({catalog: catalog}))
+    }
+
   render() {
     return (
       <div className="App">
-        <header className="App-header">
-          <img src={logo} className="App-logo" alt="logo" />
-          <p>
-            Edit <code>src/App.js</code> and save to reload.
-          </p>
-          <a
-            className="App-link"
-            href="https://reactjs.org"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Learn React
-          </a>
-        </header>
+        <h1>Stream Player</h1>
+        <Catalog catalog={this.state.catalog}></Catalog>
       </div>
     );
   }
