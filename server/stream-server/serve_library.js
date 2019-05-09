@@ -5,6 +5,13 @@ const path = require('path')
 const libDir = './data';
 const resourcesDir = './resources'
 
+/**
+ * all libraries in directory 
+ * {
+ *    mlib: [mlibfile1, mlibfile2, ...],
+ *    vlib: [vlibfile1, vlibfile2, ...],
+ *    ...
+ * }*/
 const filenames = fs.readdirSync(libDir);
 const libs = {};
 for (let filename of filenames) {
@@ -21,6 +28,28 @@ for (let filename of filenames) {
 }
 
 
+/* get latest library of a kind */
+function getLibTimestamp(libfilename) {
+    libfilename = path.basename(libfilename);
+    const i = libfilename.indexOf('_');
+    console.assert(i !== -1);
+    return libfilename.substring(0, i);
+}
+
+
+function latestLibInKind(kind) {
+    const klibs = libs[kind];
+    klibs.sort(function(libfile1, libfile2) {
+        return getLibTimestamp(libfile2) - getLibTimestamp(libfile1);
+    });
+    return klibs[0];
+}
+
+
+/**
+ * resources directory will be symlinked to the base directory of library
+ * the catalog will be returned
+ */
 function useLib(filename) {
     /* validate and read library file */
     const filepath = path.join(libDir, filename);
@@ -81,8 +110,10 @@ function get_filepath(entries, index, relative=true) {
     return relative? relpath: filepath;
 }
 
+
 module.exports = {
     libs: libs,
     useLib: useLib,
-    get_filepath: get_filepath
+    get_filepath: get_filepath,
+    latestLibInKind: latestLibInKind
 }

@@ -2,7 +2,7 @@
 const libServer = require('./serve_library.js');
 
 
-let lib = libServer.libs.mlib[0];
+let lib = libServer.latestLibInKind('mlib');
 let entries = libServer.useLib(lib);
 
 function sendMusicCatalog(req, res) {
@@ -20,8 +20,8 @@ function sendMusicPath(req, res) {
     
     let filepath;
     try {
-        filepath = libServer.get_filepath(entries, index, relative=true);
-        res.json({index: filepath})
+        filepath = libServer.get_filepath(entries, index, relative=false);
+        res.sendFile(filepath, {root: __dirname})
     } catch(error) {
         res.status(400).send(error.message);
         return;
