@@ -30,11 +30,10 @@ class Player extends Component {
     }
 
     componentDidUpdate(prevProps, prevState) {
-        if (prevState.indexes === undefined && this.props.indexes !== undefined) {
+        if (prevState.bi === undefined && this.props.indexes !== undefined) {
             const bi = this.props.si === undefined ? 0 :
                 this.props.indexes.indexOf(this.props.si);
             this.setState({
-                indexes: this.props.indexes,
                 bi: bi,
                 buffer: this.props.indexes.slice(0),
             }, () => this.setAudioByBufIndex(bi));
@@ -44,6 +43,10 @@ class Player extends Component {
             const si = Number.parseInt(this.props.si);
             const bi = this.props.indexes.indexOf(si);
             this.setState({bi: bi}, () => this.setAudioByBufIndex(bi, {startPlaying: true}));
+        }
+        
+        if (this.props.onIOS) {
+            this.audio = document.getElementsByTagName('audio')[0];
         }
     }
 
@@ -58,7 +61,6 @@ class Player extends Component {
     load = () => {
         if (this.audio) {
             this.audio.load();
-            this.setState({play: false});
         }
     }
 
@@ -119,9 +121,8 @@ class Player extends Component {
 
     getCurFileSrcByIndex = () => {
         if (this.props.onIOS) {
-            const audio = document.getElementsByTagName("audio")[0];
-            if (audio) {
-                audio.load();
+            if (this.audio) {
+                this.load();
             }
         }
 
@@ -129,12 +130,12 @@ class Player extends Component {
     }
 
     setAudioByIndex = (i, startPlaying=false) => {
-        if (this.props.onIOS) {
-            return;
+        this.load();
+
+        if (!this.props.onIOS) {
+            this.audio = new Audio(this.getFileSrcByIndex(i));
         }
 
-        this.load();
-        this.audio = new Audio(this.getFileSrcByIndex(i));
         this.audio.onended = this.next;
         if (startPlaying) {
             this.play();
@@ -148,7 +149,7 @@ class Player extends Component {
     render() {
         return (
             <div className="player">
-                <span className="itemname">{this.props.getName(this.getCurFileIndex())}</span>
+                <p className="itemname">{this.props.getName(this.getCurFileIndex())}</p>
                 {
                     this.state.bi !== undefined && this.props.onIOS ?
                     (<audio controls preload="auto" onPlay={this.iosReload}>

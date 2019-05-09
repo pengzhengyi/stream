@@ -8,9 +8,9 @@ const path = require('path');
 const app = express();
 const port = 8888;
 
-app.use(cors({
-    origin: [`http://localhost:${env.frontendPort}`, `http://${env.IP}:${env.frontendPort}`],
-}))
+const origin = [`http://localhost:${env.frontendPort}`, `http://${env.IP}:${env.frontendPort}`];
+console.log(origin);
+app.use(cors({origin: origin}))
 
 app.use('/music', express.static(path.join(__dirname, 'resources')));
 

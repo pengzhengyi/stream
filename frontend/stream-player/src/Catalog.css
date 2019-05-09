@@ -29,7 +29,7 @@
     bottom: 0;
     background-color: lightblue;
     color: white;
-    height: 80px;
+    height: 100px;
     position: fixed;
     width: 100%;
 }
@@ -39,9 +39,15 @@
     margin: 0 7.5px;
 }
 
+.itemname {
+    height: 20px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+}
+
 audio {
     display: block;
     margin: 0 auto;
     width: 80%;
-    height: 60%;
 }

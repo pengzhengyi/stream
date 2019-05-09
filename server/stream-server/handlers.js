@@ -35,7 +35,7 @@ function notFoundHandler(req, res) {
 
 
 module.exports = {
-    sendMusicPath, sendMusicPath,
+    sendMusicPath: sendMusicPath,
     sendMusicCatalog: sendMusicCatalog,
     notFoundHandler: notFoundHandler
 }
