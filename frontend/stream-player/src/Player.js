@@ -152,7 +152,7 @@ class Player extends Component {
                 <p className="itemname">{this.props.getName(this.getCurFileIndex())}</p>
                 {
                     this.state.bi !== undefined && this.props.onIOS ?
-                    (<audio controls preload="auto" onPlay={this.iosReload}>
+                    (<audio autoplay="true" controls preload="auto" onPlay={this.iosReload}>
                         <source src={this.getCurFileSrcByIndex()} type={"audio/" + this.props.getExtension(this.getCurFileIndex())}>
                         </source>
                     </audio>) : (
