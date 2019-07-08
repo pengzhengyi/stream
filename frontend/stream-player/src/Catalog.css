@@ -40,9 +40,11 @@
 }
 
 .itemname {
+    margin-left: auto;
+    margin-right: auto;
+    width: 90%;
     height: 20px;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow-x: scroll;
     white-space: nowrap;
 }
 

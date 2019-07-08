@@ -1,1 +1,0 @@
-../../Python/danmaku2ass/danmaku2ass.py

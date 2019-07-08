@@ -142,7 +142,8 @@ def dir_video2audio(base_dir=None, file_filter=None, to=None,
     return result
 
 
-converter_fp = os.path.join(sys.path[0], "danmaku2ass.py")
+converter_fp = os.path.join(sys.path[0], "danmaku2ass", "danmaku2ass.py")
+
 
 def danmu2ass(filepath, converter_fp=converter_fp,
               input_format="autodetect", screensize="1920x1200",
