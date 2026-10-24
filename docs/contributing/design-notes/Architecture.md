@@ -195,6 +195,16 @@ point in the core.
   playlists, the default audio quality, and *linked accounts*.
 - **Deleting an Account** removes its sessions, playlists, wanted-by rows, and
   linked accounts.
+- **Built from pwdlib and our own session table.** pwdlib hashes passwords with
+  Argon2id and rehashes them on sign-in when its parameters change. Sessions
+  store only a SHA-256 of a random token and expire after inactivity. Creating
+  the first admin happens in one transaction, so two simultaneous first
+  registrations can't both become admin. fastapi-users was considered and not
+  chosen:
+  - it is in maintenance mode;
+  - it forces an async database and email sign-in;
+  - it stores session tokens in the clear;
+  - it would still need our own account creation and *Sign out everywhere*.
 
 ## Linked accounts
 
