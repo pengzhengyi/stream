@@ -26,6 +26,7 @@
     "pengzhengyi",
     "playwright",
     "pluggy",
+    "pwdlib ",
     "Pydantic",
     "pydocstyle",
     "pylint",
