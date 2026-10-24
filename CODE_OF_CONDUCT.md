@@ -47,7 +47,7 @@ individual officially represents the project in public spaces.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported privately to the maintainer through the repository's
-[private reporting form](https://github.com/pengzhengyi/stream/security/advisories/new).
+[private reporting form](https://github.com/pengzhengyi/medleyplay/security/advisories/new).
 Begin the title with "Conduct report" so it is not mistaken for a security
 vulnerability. Only the repository's maintainers can see the report. Don't post it in a public
 issue, pull request, or discussion.

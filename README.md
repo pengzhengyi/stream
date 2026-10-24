@@ -1,4 +1,4 @@
-# stream
+# medleyplay
 
 Play music on your local network, from your own files and from Bilibili.
 

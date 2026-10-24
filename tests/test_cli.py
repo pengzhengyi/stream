@@ -1,4 +1,4 @@
-"""The command line: `python -m stream`."""
+"""The command line: `python -m medleyplay`."""
 
 import re
 import runpy
@@ -7,7 +7,7 @@ from importlib.metadata import version
 
 import pytest
 
-from stream.__main__ import main
+from medleyplay.__main__ import main
 
 
 def test_version_flag_prints_the_installed_package_version(
@@ -18,23 +18,23 @@ def test_version_flag_prints_the_installed_package_version(
 
     assert exit_info.value.code == 0
     output = capsys.readouterr().out
-    assert output == f"stream {version('stream')}\n"
-    assert re.fullmatch(r"stream \d+\.\d+\.\d+\S*\n", output)
+    assert output == f"medleyplay {version('medleyplay')}\n"
+    assert re.fullmatch(r"medleyplay \d+\.\d+\.\d+\S*\n", output)
 
 
 def test_running_the_module_with_version_exits_successfully(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setattr(sys, "argv", ["stream", "--version"])
+    monkeypatch.setattr(sys, "argv", ["medleyplay", "--version"])
     # runpy warns when the module it is about to execute is already imported.
-    monkeypatch.delitem(sys.modules, "stream.__main__")
+    monkeypatch.delitem(sys.modules, "medleyplay.__main__")
 
     with pytest.raises(SystemExit) as exit_info:
-        runpy.run_module("stream", run_name="__main__")
+        runpy.run_module("medleyplay", run_name="__main__")
 
     assert exit_info.value.code == 0
-    assert capsys.readouterr().out.startswith("stream ")
+    assert capsys.readouterr().out.startswith("medleyplay ")
 
 
 def test_no_arguments_exits_successfully() -> None:

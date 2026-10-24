@@ -2,7 +2,7 @@
 
 > [!IMPORTANT]
 > **Status: approved, not yet implemented.** This note describes the first
-> usable version of stream. How the system is built (the core, plugins,
+> usable version of medleyplay. How the system is built (the core, plugins,
 > processes, Jobs, Accounts, and the Mode) is in [Architecture](Architecture.md).
 
 ## Contents
@@ -21,7 +21,7 @@
   from **local Libraries** and from **Bilibili**.
 - One household: each person signs in to their own Account; the server isn't
   exposed to the internet.
-- Unintrusive: stream never moves, renames, or retags your files. What it knows
+- Unintrusive: medleyplay never moves, renames, or retags your files. What it knows
   about your music lives in its own data folder.
 
 ## Decisions at a glance
@@ -41,9 +41,9 @@
 | Tags | tinytag (MIT); a small reader of our own for protected `.m4p` files | mutagen is GPL; tinytag reports no DRM |
 | Audio quality | Best available audio by default; a lower tier on request | Your choice; a song is a few MB |
 | Download policy | *Smart playlists* marked *Keep downloaded*, one shared *storage limit*, and a *removal order*, all in the core | Rules you write; removal deletes files, so it is reviewed code |
-| Over the limit | Rules win: kept songs are never removed to make room; stream warns | A song you asked to keep stays |
+| Over the limit | Rules win: kept songs are never removed to make room; medleyplay warns | A song you asked to keep stays |
 | Idempotency | Natural keys, client-chosen ids, absolute values, retry-safe Jobs | A retried request or a restart never duplicates work |
-| Data folder | One folder for the database, Downloads, and cache: `STREAM_DATA_DIR`, defaulting to the platform's app-data folder; logins live in the Keychain | One thing to back up; your Libraries stay untouched |
+| Data folder | One folder for the database, Downloads, and cache: `MEDLEYPLAY_DATA_DIR`, defaulting to the platform's app-data folder; logins live in the Keychain | One thing to back up; your Libraries stay untouched |
 | Toolchain | mypy strict, pytest, Hypothesis, ruff, import-linter; ESLint, Vitest, Playwright | Fully typed; see the instructions files |
 
 ## Language
@@ -54,7 +54,7 @@
 | *Linked account* | An Account's login on a site, such as Bilibili cookies. |
 | **Track** | A piece of music: title, artists, album, duration, artwork. Each Account has its own **favorite**, **rating** (1–5 stars), and play history for it. |
 | **Source** | Where a Track's audio comes from: a file in a Library, or a Bilibili video part. A Source can be **missing** (gone at the last scan) or **unavailable** (removed from Bilibili, or its plugin is off). |
-| **Library** | A storage root you register: a folder or a zip archive now, a network drive later. stream only reads it. |
+| **Library** | A storage root you register: a folder or a zip archive now, a network drive later. medleyplay only reads it. |
 | *Download* | The one copy of a Bilibili Source on the server's disk, at an **audio quality**. |
 | **Playlist** | An Account's ordered list of Tracks. A *smart playlist* is defined by **rules** instead of a list. |
 | *Keep downloaded* | A switch on a smart playlist: every Track it matches should have a Download. Those Tracks are *wanted by* that Account. |
@@ -94,7 +94,7 @@
 
 ### Add from Bilibili
 
-- Paste a link. stream accepts only `bilibili.com` and `b23.tv` addresses. The
+- Paste a link. medleyplay accepts only `bilibili.com` and `b23.tv` addresses. The
   plugin resolves short links, canonicalizes `av` and `BV` ids and part numbers,
   and reads the title, uploader, parts, and available qualities. The host is
   checked again after resolving, and yt-dlp only ever sees the canonical URL.
@@ -249,8 +249,8 @@
 - [ ] Job progress in every open browser.
 - [ ] Settings: Accounts, Libraries, linked accounts, storage, Mode, plugins and
       their health, and the yt-dlp version.
-- [ ] `stream backup <file>`: a consistent copy of the database through SQLite's
-      backup API; `stream reset-password`; `stream serve --safe-mode`.
+- [ ] `medleyplay backup <file>`: a consistent copy of the database through SQLite's
+      backup API; `medleyplay reset-password`; `medleyplay serve --safe-mode`.
 
 **Not in the MVP:** video and MVs, searching Bilibili, importing Bilibili
 favorites, network drives, other removal orders, merging duplicate Tracks,

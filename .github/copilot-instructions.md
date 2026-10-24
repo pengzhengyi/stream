@@ -1,6 +1,6 @@
-# stream — Copilot instructions
+# medleyplay — Copilot instructions
 
-stream plays music on your local network, from your own files and from Bilibili.
+medleyplay plays music on your local network, from your own files and from Bilibili.
 A **Python 3.14 server** (FastAPI is planned) keeps its library in **SQLite** and
 serves a **React + Vite + TypeScript** web client from `web/`. The domain core —
 the library, playback, and the rules that connect them — is plain Python with no

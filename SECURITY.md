@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-stream is in early development and hasn't published a release yet. Security
+medleyplay is in early development and hasn't published a release yet. Security
 fixes apply to the latest commit on the default branch.
 
 ## Reporting a vulnerability
@@ -23,9 +23,9 @@ Include:
 To report a conduct problem rather than a vulnerability, see the
 [Code of Conduct](CODE_OF_CONDUCT.md#enforcement).
 
-## What stream treats as sensitive
+## What medleyplay treats as sensitive
 
-- **Site logins.** stream can use your own Bilibili login cookies to reach
+- **Site logins.** medleyplay can use your own Bilibili login cookies to reach
   higher-quality audio. They stay on the machine that runs the server, are never
   sent anywhere but the site they belong to, and are never served to other
   devices. Never paste cookies into an issue or a log excerpt.

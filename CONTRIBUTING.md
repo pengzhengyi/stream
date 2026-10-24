@@ -1,6 +1,6 @@
-# Contributing to stream
+# Contributing to medleyplay
 
-Thank you for considering a contribution. stream is early stage, so small,
+Thank you for considering a contribution. medleyplay is early stage, so small,
 well-scoped changes are easiest to review and merge.
 
 ## Ways to contribute
@@ -47,7 +47,7 @@ dependency change, run `uv lock` and commit the lock file with it.
 Run the server's package from the command line with:
 
 ```bash
-uv run python -m stream --version
+uv run python -m medleyplay --version
 ```
 
 ### Coverage
@@ -56,7 +56,7 @@ uv run python -m stream --version
 uv run pytest --cov --cov-report=term-missing --cov-report=html
 ```
 
-Coverage is measured on `src/stream` only, with branch coverage on; the HTML report
+Coverage is measured on `src/medleyplay` only, with branch coverage on; the HTML report
 is written to `htmlcov/`. CI fails below **90% line** or **85% branch** coverage,
 and warns below 95% line. Branch coverage is gated too because a decision point can
 be fully line-covered with only one of its paths ever taken — a gap a line-only gate

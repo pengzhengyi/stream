@@ -1,5 +1,5 @@
 [project]
-name = "stream"
+name = "medleyplay"
 version = "0.0.0"
 description = "Play music on your local network, from your own files and from Bilibili."
 readme = "README.md"
@@ -57,7 +57,7 @@ ignore = [
 convention = "google"
 
 [tool.ruff.lint.isort]
-known-first-party = ["stream"]
+known-first-party = ["medleyplay"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10
@@ -96,7 +96,7 @@ filterwarnings = ["error"]
 # each is checked on its own; see CONTRIBUTING.md.
 [tool.coverage.run]
 branch = true
-source = ["stream"]
+source = ["medleyplay"]
 
 [tool.coverage.report]
 show_missing = true

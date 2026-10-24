@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Renamed the project from stream to medleyplay.
+
 ### Removed
 
 - **The 2019 prototype** — the Express server, the Create React App client, and

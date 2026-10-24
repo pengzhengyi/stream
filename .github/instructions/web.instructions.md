@@ -35,7 +35,7 @@ npm run e2e      # Playwright end-to-end (needs: npx playwright install chromium
 - Tests are deterministic: no real timers or network. Mock the server API at the
   `fetch` boundary.
 - Quality tools keep content-aware incremental data under the ignored `.cache/`.
-- Keep the client free of secrets; it only ever talks to the stream server.
+- Keep the client free of secrets; it only ever talks to the medleyplay server.
 
 ## Comments
 

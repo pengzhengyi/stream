@@ -20,7 +20,7 @@ Apply to the server and its tests. Full setup and the pull-request checklist are
   because they use `assert`. `pip-audit` checks the dependencies pinned in `uv.lock`
   against known-vulnerability advisories and fails on a match. Fix a finding or
   upgrade the dependency; do not suppress it without a reason in a comment.
-- **Imports at the top,** sorted by ruff; absolute imports from `stream`.
+- **Imports at the top,** sorted by ruff; absolute imports from `medleyplay`.
 - **Write self-documenting code.** Clear names, small functions, and good types
   carry the meaning so the code reads without narration. The rules for the
   comments that remain are in [Docstrings and comments](#docstrings-and-comments).
@@ -109,7 +109,7 @@ it grows past that.
   it. Test-driven: a failing test first, then the minimum code, then refactor. A bug
   fix starts with a test that reproduces it.
 - **pytest,** with plain functions and `assert`. Tests live in `tests/`, mirroring
-  the layout of `src/stream`, one file per module under test (`stream/foo.py` →
+  the layout of `src/medleyplay`, one file per module under test (`medleyplay/foo.py` →
   `tests/test_foo.py`). Tests run in parallel, so each must be independent.
 - **The name states the behavior:** scenario and expected outcome, as a sentence
   (`test_version_flag_prints_the_installed_package_version`). The body states one
