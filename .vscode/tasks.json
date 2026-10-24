@@ -1,0 +1,172 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "sync",
+      "detail": "Python: install the locked dependencies into .venv.",
+      "type": "shell",
+      "command": "uv sync --locked",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "format: verify",
+      "detail": "Python: the same formatting gate CI runs.",
+      "type": "shell",
+      "command": "uv run ruff format --check",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "format: fix",
+      "detail": "Python: apply formatting and the lint fixes ruff can make.",
+      "type": "shell",
+      "command": "uv run ruff format && uv run ruff check --fix",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "lint",
+      "detail": "Python: lint with ruff.",
+      "type": "shell",
+      "command": "uv run ruff check",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "typecheck",
+      "detail": "Python: mypy in strict mode over src and tests.",
+      "type": "shell",
+      "command": "uv run mypy",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "test",
+      "detail": "Python: run the tests in parallel.",
+      "type": "shell",
+      "command": "uv run pytest",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "test: file",
+      "detail": "Python inner loop: run one file, class, or test, stopping at the first failure.",
+      "type": "shell",
+      "command": "uv run pytest -x -n 0 ${input:pytestTarget}",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "coverage",
+      "detail": "Python: run tests with branch coverage; the HTML report is in htmlcov/. CI fails below 90% line or 85% branch.",
+      "type": "shell",
+      "command": "uv run pytest --cov --cov-report=term-missing --cov-report=html",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "web: install",
+      "detail": "Web: install the locked dependencies.",
+      "type": "shell",
+      "command": "npm ci",
+      "group": "build",
+      "options": {
+        "cwd": "${workspaceFolder}/web"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "web: build",
+      "detail": "Web: typecheck and build the production bundle.",
+      "type": "shell",
+      "command": "npm run build",
+      "group": "build",
+      "options": {
+        "cwd": "${workspaceFolder}/web"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "web: check",
+      "detail": "Web: typecheck, lint, style, format, and unit tests.",
+      "type": "shell",
+      "command": "npm run check",
+      "group": "test",
+      "options": {
+        "cwd": "${workspaceFolder}/web"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "web: e2e",
+      "detail": "Web: Playwright end-to-end tests (needs: npx playwright install chromium).",
+      "type": "shell",
+      "command": "npm run e2e",
+      "group": "test",
+      "options": {
+        "cwd": "${workspaceFolder}/web"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "verify: all",
+      "detail": "Everything CI runs for Python and the web client, in order.",
+      "type": "shell",
+      "group": {
+        "kind": "test"
+      },
+      "dependsOn": [
+        "format: verify",
+        "lint",
+        "typecheck",
+        "coverage",
+        "web: check",
+        "web: build",
+        "web: e2e"
+      ],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
+      "label": "docs: lint markdown",
+      "detail": "Lint every Markdown file, as the Docs job does.",
+      "type": "shell",
+      "command": "markdownlint-cli2",
+      "problemMatcher": []
+    },
+    {
+      "label": "docs: check links",
+      "detail": "Check links and anchors between files.",
+      "type": "shell",
+      "command": "lychee --config lychee.toml --offline --no-progress \"**/*.md\"",
+      "problemMatcher": []
+    },
+    {
+      "label": "docs: check spelling",
+      "detail": "Spell-check the whole tree.",
+      "type": "shell",
+      "command": "npx --yes cspell@8 lint --no-progress --config cspell.json .",
+      "problemMatcher": []
+    },
+    {
+      "label": "clean",
+      "detail": "Remove environments, caches, and build output for a cold run.",
+      "type": "shell",
+      "command": "rm -rf .venv .pytest_cache .mypy_cache .ruff_cache .hypothesis .coverage* htmlcov coverage.json coverage.xml dist build web/node_modules web/dist web/.cache web/playwright-report web/test-results",
+      "group": "build",
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "pytestTarget",
+      "type": "promptString",
+      "description": "pytest target (for example: tests/test_cli.py::test_no_arguments_exits_successfully)",
+      "default": "tests/"
+    }
+  ]
+}
