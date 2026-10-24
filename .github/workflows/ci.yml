@@ -38,6 +38,11 @@ jobs:
       - name: Lint
         run: uv run ruff check
 
+      # ruff's S rules cover most of what bandit checks; bandit adds its own
+      # analysis of src, configured in pyproject.toml.
+      - name: Scan for insecure code
+        run: uv run bandit -q -c pyproject.toml -r src
+
       - name: Type-check
         run: uv run mypy
 
@@ -81,6 +86,15 @@ jobs:
           if line < 95:
               print(f"::warning::Line coverage is {line:.2f}%; 95% is the aspirational target.")
           PY
+
+      # Audits exactly what uv.lock pins, hashes included, so pip-audit resolves
+      # nothing itself. A package with a known vulnerability fails the job. The
+      # process substitution needs bash, which is the runner's default shell.
+      - name: Audit dependencies for known vulnerabilities
+        run: >-
+          uv run pip-audit
+          -r <(uv export --locked --format requirements-txt --no-emit-project --quiet)
+          --disable-pip --progress-spinner off
 
   frontend_quality:
     name: Frontend quality
