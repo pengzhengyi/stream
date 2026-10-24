@@ -25,6 +25,7 @@
     "mypy",
     "pengzhengyi",
     "playwright",
+    "pluggy",
     "Pydantic",
     "pydocstyle",
     "pylint",
