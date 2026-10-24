@@ -93,6 +93,15 @@ models, a constant `API_VERSION`, and a contract test kit per extension point.
 It is the only part of stream a plugin may import; import-linter enforces it,
 and the core never imports a plugin.
 
+**The registry** is our own, typed one. Each plugin exposes
+`register(registry)` and adds providers by key, for example
+`registry.add_source_resolver("bilibili", resolver)`, so mypy checks a plugin's
+shape where it registers. Every call goes through one guarded path: deadline,
+circuit breaker, and validation. pluggy was considered and not chosen: it is
+built for many plugins on one hook, while every extension point here has one
+provider per key. Its results are untyped, and isolation would have to wrap each
+implementation.
+
 **Plugins** (`stream.plugins.*`), built in:
 
 | Extension point | Chosen by | Runs in | Responsibility | MVP plugin |
