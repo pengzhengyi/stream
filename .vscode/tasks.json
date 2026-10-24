@@ -34,6 +34,22 @@
       "problemMatcher": []
     },
     {
+      "label": "security: bandit",
+      "detail": "Python: bandit over src, as CI runs it.",
+      "type": "shell",
+      "command": "uv run bandit -q -c pyproject.toml -r src",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "security: audit",
+      "detail": "Python: pip-audit over the locked dependencies; needs network and a bash-compatible shell.",
+      "type": "shell",
+      "command": "uv run pip-audit -r <(uv export --locked --format requirements-txt --no-emit-project --quiet) --disable-pip --progress-spinner off",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
       "label": "typecheck",
       "detail": "Python: mypy in strict mode over src and tests.",
       "type": "shell",
@@ -122,8 +138,10 @@
       "dependsOn": [
         "format: verify",
         "lint",
+        "security: bandit",
         "typecheck",
         "coverage",
+        "security: audit",
         "web: check",
         "web: build",
         "web: e2e"
