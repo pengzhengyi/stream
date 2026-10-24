@@ -1,0 +1,4 @@
+# Check out every text file with LF line endings, on every platform, so a CRLF
+# checkout never changes what a formatter or a test expects. Git still detects
+# binary files and leaves them alone.
+* text=auto eol=lf

@@ -12,6 +12,8 @@ globs:
 ignores:
   - "**/node_modules/**"
   - "coverage/**"
+  - ".venv/**"
+  - "htmlcov/**"
 
 config:
   MD013: false  # line length — prose wraps at ~80 columns by intent
