@@ -12,7 +12,14 @@ Apply to the server and its tests. Full setup and the pull-request checklist are
 
 - **ruff is the formatter and the linter.** Follow what `ruff format` and
   `ruff check` report rather than fighting them; the rule set and the reason for
-  each exclusion are in `pyproject.toml`. Line length is 100.
+  each exclusion are in `pyproject.toml`. Line length is 100. ruff stays the
+  formatter (it is black-compatible) and its `S` rules already cover most of
+  bandit's checks, so no second formatter or linter is added.
+- **Two security checks sit beside ruff.** `bandit` scans `src` for insecure code
+  such as `shell=True`, unsafe deserialization, and weak hashes; tests are excluded
+  because they use `assert`. `pip-audit` checks the dependencies pinned in `uv.lock`
+  against known-vulnerability advisories and fails on a match. Fix a finding or
+  upgrade the dependency; do not suppress it without a reason in a comment.
 - **Imports at the top,** sorted by ruff; absolute imports from `stream`.
 - **Write self-documenting code.** Clear names, small functions, and good types
   carry the meaning so the code reads without narration. The rules for the
@@ -149,8 +156,10 @@ Run what CI runs, from the repository root:
 uv sync --locked
 uv run ruff format --check
 uv run ruff check
+uv run bandit -q -c pyproject.toml -r src
 uv run mypy
 uv run pytest --cov --cov-report=term-missing
+uv run pip-audit -r <(uv export --locked --format requirements-txt --no-emit-project --quiet) --disable-pip --progress-spinner off   # needs network
 ```
 
 `uv run ruff format` and `uv run ruff check --fix` apply the fixes ruff can make.

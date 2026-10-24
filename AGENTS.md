@@ -26,8 +26,10 @@ and npm.
 uv sync --locked
 uv run ruff format --check
 uv run ruff check
+uv run bandit -q -c pyproject.toml -r src
 uv run mypy
 uv run pytest --cov --cov-report=term-missing
+uv run pip-audit -r <(uv export --locked --format requirements-txt --no-emit-project --quiet) --disable-pip --progress-spinner off   # needs network
 
 # Web client
 cd web && npm ci && npm run check && npm run build
@@ -36,13 +38,15 @@ cd web && npm run e2e
 ```
 
 > [!IMPORTANT]
-> Three details above are load-bearing, not decoration. `uv sync --locked` fails
+> Four details above are load-bearing, not decoration. `uv sync --locked` fails
 > when `uv.lock` disagrees with `pyproject.toml`, so a dependency change always
 > ships with its lock file. `ruff format --check` is a gate of its own: `ruff check`
 > does not report formatting, so a clean lint is not a clean CI. And `mypy` runs in
 > strict mode over `src` and `tests`; a test that is not annotated fails it. Coverage
 > floors are 90% line and 85% branch, enforced in CI from the JSON report
-> ([`CONTRIBUTING.md`](CONTRIBUTING.md#coverage) explains them).
+> ([`CONTRIBUTING.md`](CONTRIBUTING.md#coverage) explains them). Finally, `pip-audit`
+> reads the locked dependency set, not the active environment, and a known
+> vulnerability in it fails CI ([`CONTRIBUTING.md`](CONTRIBUTING.md#security-checks)).
 
 ## Read next
 

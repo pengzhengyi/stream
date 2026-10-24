@@ -14,8 +14,10 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "bandit",
     "hypothesis",
     "mypy",
+    "pip-audit",
     "pytest",
     "pytest-cov",
     "pytest-xdist",
@@ -74,6 +76,12 @@ files = ["src", "tests"]
 python_version = "3.13"
 warn_unreachable = true
 enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
+
+# ── bandit ──────────────────────────────────────────────────────────────────
+# Runs over `src` in CI (`bandit -c pyproject.toml -r src`). Tests are excluded
+# because they use `assert` (B101) by design and never ship.
+[tool.bandit]
+exclude_dirs = ["tests"]
 
 # ── pytest ──────────────────────────────────────────────────────────────────
 [tool.pytest.ini_options]

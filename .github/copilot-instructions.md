@@ -22,15 +22,17 @@ Python is managed by [uv](https://docs.astral.sh/uv/) (`pyproject.toml`, `uv.loc
 uv sync --locked
 uv run ruff format --check
 uv run ruff check
+uv run bandit -q -c pyproject.toml -r src
 uv run mypy
 uv run pytest --cov --cov-report=term-missing   # coverage floors: see CONTRIBUTING.md
+uv run pip-audit -r <(uv export --locked --format requirements-txt --no-emit-project --quiet) --disable-pip --progress-spinner off   # needs network
 
 # Web client
 cd web && npm ci && npm run check && npm run build
 cd web && npm run e2e   # needs: npx playwright install chromium
 ```
 
-VS Code tasks (**Terminal → Run Task**) mirror these: `sync`, `lint`, `typecheck`,
+VS Code tasks (**Terminal → Run Task**) mirror these: `sync`, `lint`, `security: bandit`, `security: audit`, `typecheck`,
 `test`, `coverage`, `web: check`, `verify: all`, and more.
 
 `ruff format --check` is the formatting gate and CI runs it before the linter.
