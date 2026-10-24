@@ -49,6 +49,7 @@
     "xdist",
     "xfail",
     "yt-dlp",
+    "yutto ",
     "zhengyi"
   ],
   "ignorePaths": [

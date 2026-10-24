@@ -35,7 +35,7 @@
 | Layout | The song table and queue for browsing; a stage view for Now playing | Fits 16:9 Bilibili covers, messy titles, and keyboard use |
 | Accounts | Local Accounts, admin or member; each has its own ratings, playlists, policy, and linked accounts | A household shares the music, not the taste |
 | Mode | *Online*, *Offline*, or *Auto* from the server's network; Offline holds Downloads in the *Downloads* tab | No surprise downloads on a hotspot or with no internet |
-| Bilibili | yt-dlp as a library, in the `bilibili` plugin; each Account's own login | The only maintained, permissively licensed option; no headless browser |
+| Bilibili | The `bilibili` plugin: yt-dlp as a library by default, yutto as a separate command for fallback; each Account's own login | yt-dlp has the broadest coverage and a library API; yutto reads Bilibili's APIs, so a page change rarely breaks both; no headless browser |
 | Bilibili playback | Adding a Bilibili Track downloads it; a Track without a Download plays once a new Job finishes | A request never waits on a Job |
 | Libraries | fsspec in the `fsspec-library` plugin; folders and zip archives now | Network drives later by configuration |
 | Tags | tinytag (MIT); a small reader of our own for protected `.m4p` files | mutagen is GPL; tinytag reports no DRM |

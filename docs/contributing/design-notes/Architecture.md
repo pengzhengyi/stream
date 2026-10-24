@@ -128,6 +128,37 @@ Plugins implement core-defined extension points only. They add no HTTP routes, n
 tables, and no scheduled tasks; a new kind of feature starts as a new extension
 point in the core.
 
+### The bilibili plugin
+
+The plugin implements the three Bilibili extension points through one facade,
+backed by two tools that read Bilibili differently. The core sees one resolver,
+one downloader, and one credential spec, never the tools.
+
+| Backend | Role | How it reads Bilibili | Runs as |
+| --- | --- | --- | --- |
+| yt-dlp | Default | The video page, plus APIs | A library inside the Job process |
+| yutto | Fallback | Bilibili's web APIs | A separate command started by the Job process |
+
+- **Fallback rule:** when yt-dlp fails with a *plugin* failure, such as an
+  extractor that no longer understands the page, the Job retries once with
+  yutto. Network and auth failures don't fall back, since yutto would hit the
+  same wall. The Download records which backend produced it, and site health in
+  Settings shows each backend separately.
+- **Plugin settings** choose the order, or turn the fallback off.
+- **Each backend returns the plugin API's models,** so the contract tests run
+  against both. For example, a resolve returns the same Source key and parts
+  whichever backend answered.
+- **Bundled tools.** The plugin declares yt-dlp and yutto as its own
+  dependencies, so installing the plugin installs both.
+  - **yutto is GPL-3.0**, so medleyplay never imports it. The plugin only runs
+    it as a separate program and ships its license notice with the
+    third-party notices.
+  - **yutto needs ffmpeg** even for audio only. Without ffmpeg, the fallback
+    is off and Settings says why.
+- **Linked accounts:** yt-dlp reads the Job's temporary cookies file. yutto
+  receives the session as an auth file (`--auth-file`) in the Job's working
+  folder, never on its command line, where other processes could read it.
+
 ## Failures
 
 - **Three classes.** A *network* failure (unreachable, timeout) parks the Job
