@@ -1,10 +1,19 @@
 # MVP
 
-> [!NOTE]
-> **Status: proposed.** This note describes the first usable version of stream
-> and is awaiting review. Names in *italics* are proposed terms still open for
-> review. How the system is built (the core, plugins, processes, Jobs, Accounts,
-> and the Mode) is in [Architecture](Architecture.md).
+> [!IMPORTANT]
+> **Status: approved, not yet implemented.** This note describes the first
+> usable version of stream. How the system is built (the core, plugins,
+> processes, Jobs, Accounts, and the Mode) is in [Architecture](Architecture.md).
+
+## Contents
+
+- [Goal](#goal), [decisions at a glance](#decisions-at-a-glance), and
+  [language](#language)
+- [Data model](#data-model) and [flows](#flows)
+- [Errors and boundary cases](#errors-and-boundary-cases),
+  [security](#security), and [testing](#testing)
+- [Client notes](#client-notes), [MVP checklist](#mvp-checklist), and
+  [build order](#build-order)
 
 ## Goal
 
@@ -164,7 +173,7 @@
   later replaces the Download.
 - **Protected `.m4p`:** listed as *can't play* and never served.
 - **A Library goes offline** (a drive is unplugged): it is marked offline and its
-  Tracks are greyed out, not deleted.
+  Tracks are grayed out, not deleted.
 - **A plugin is off, faulted, or quarantined:** its Tracks stay; their existing
   Downloads play, and the policy treats them as unsatisfiable.
 - **Interrupted work and duplicate requests:** see
@@ -270,7 +279,3 @@ the next. From step 4 on, each step is usable in a browser.
    removal, and Online and Offline.
 7. **Client views:** the song table, queue, stage, add dialog, *Downloads* tab,
    and settings.
-
-## Open questions
-
-1. **Names:** *Download* or *Local copy*; *Removal order*.

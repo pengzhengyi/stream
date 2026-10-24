@@ -1,9 +1,21 @@
 # Architecture
 
-> [!NOTE]
-> **Status: proposed.** This note describes how stream is built: a small core
-> that is reviewed closely, and features that arrive as plugins behind feature
-> toggles. Names in *italics* are proposed terms still open for review.
+> [!IMPORTANT]
+> **Status: approved, not yet implemented.** This note describes how stream is
+> built: a small core that is reviewed closely, and features that arrive as
+> plugins behind feature toggles. What the MVP delivers, and in what order, is in
+> [MVP](MVP.md).
+
+## Contents
+
+- [Goal](#goal) and [threat model](#threat-model)
+- [Options](#options) and [processes](#processes)
+- [Core and plugins](#core-and-plugins), [failures](#failures),
+  [Jobs](#jobs), and [feature toggles](#feature-toggles)
+- [Policy](#policy), [Accounts](#accounts), [linked accounts](#linked-accounts),
+  and [Online and Offline](#online-and-offline)
+- [Idempotent operations](#idempotent-operations),
+  [quality gates](#quality-gates), and [what is left out](#deliberately-left-out)
 
 ## Goal
 
@@ -183,7 +195,7 @@ point in the core.
 
 - An **Account** is a person in the household, with a username, a password
   (Argon2id), and a role: **admin** or **member**. The first Account is the admin;
-  afterwards, an admin creates Accounts. The last admin can't be removed or
+  afterward, an admin creates Accounts. The last admin can't be removed or
   demoted, and `stream reset-password` recovers a lost admin password.
 - **Signing in** creates a server-side session behind an HttpOnly, SameSite=Lax
   cookie; with the Host and Origin checks, this covers cross-site requests.
@@ -197,7 +209,7 @@ point in the core.
   linked accounts.
 - **Built from pwdlib and our own session table.** pwdlib hashes passwords with
   Argon2id and rehashes them on sign-in when its parameters change. Sessions
-  store only a SHA-256 of a random token and expire after inactivity. Creating
+  store only a SHA-256 hash of a random token and expire after inactivity. Creating
   the first admin happens in one transaction, so two simultaneous first
   registrations can't both become admin. fastapi-users was considered and not
   chosen:
@@ -267,8 +279,3 @@ point in the core.
 - **HTTPS on the LAN:** sessions travel in the clear on the home network. A
   reverse proxy with a local certificate can be added later.
 - **Per-Account storage quotas.**
-
-## Open questions
-
-1. **Names:** *linked account*, *Mode*, *Downloads* tab, *faulted*,
-   *quarantined*, *wanted by*.
