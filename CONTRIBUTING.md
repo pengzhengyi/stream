@@ -32,8 +32,10 @@ Clone the repository and run:
 uv sync --locked
 uv run ruff format --check
 uv run ruff check
+uv run bandit -q -c pyproject.toml -r src
 uv run mypy
 uv run pytest
+uv run pip-audit -r <(uv export --locked --format requirements-txt --no-emit-project --quiet) --disable-pip --progress-spinner off   # needs network
 ```
 
 `ruff format --check` is the formatting gate and CI runs it first. `ruff check` does
@@ -68,6 +70,24 @@ annotated, and `Any` appears only with a stated reason. `ruff` selects every rul
 and excludes only the ones that conflict with the formatter or with this project's
 conventions; each exclusion in `pyproject.toml` has its reason beside it. Complexity
 limits (cyclomatic complexity 10, 7 parameters, 40 statements) fail the lint.
+
+### Security checks
+
+ruff stays the formatter and linter; its `S` rules already include most of bandit's
+checks. Two tools add what ruff does not:
+
+- **bandit** scans `src` for insecure code, configured under `[tool.bandit]` in
+  `pyproject.toml`. Tests are excluded because they use `assert`.
+- **pip-audit** checks the dependencies pinned in `uv.lock` against the Python
+  Packaging Advisory Database and exits non-zero when one has a known
+  vulnerability. `uv export` feeds it the locked, hashed set, so it audits exactly
+  what `uv sync --locked` installs rather than whatever is in the active
+  environment. It needs network access and a shell that supports `<( )` (bash, zsh).
+
+When pip-audit reports a vulnerability, upgrade the dependency with `uv lock
+--upgrade-package <name>` and commit `uv.lock`. A fix that does not exist yet is a
+decision for the pull request: name the advisory and the reason in the description
+rather than silencing the check.
 
 ### Properties, beside examples
 
@@ -147,9 +167,10 @@ A real misspelling belongs in the text, not the dictionary: only genuine vocabul
 
 Common tasks are wired up in `.vscode/tasks.json` (**Terminal → Run Task**), so you
 can run them without memorizing commands: `sync`, `format: verify`, `format: fix`,
-`lint`, `typecheck`, `test`, `test: file`, `coverage`, `web: install`, `web: build`,
-`web: check`, `web: e2e`, `verify: all` (everything CI runs), `docs: lint markdown`,
-`docs: check links`, `docs: check spelling`, and `clean`. The recommended extensions
+`lint`, `security: bandit`, `security: audit`, `typecheck`, `test`, `test: file`,
+`coverage`, `web: install`, `web: build`, `web: check`, `web: e2e`, `verify: all`
+(everything CI runs), `docs: lint markdown`, `docs: check links`,
+`docs: check spelling`, and `clean`. The recommended extensions
 are in `.vscode/extensions.json`.
 
 ## Guardrails
@@ -182,6 +203,7 @@ Before opening a pull request:
 - [ ] Add or update tests for behavior changes.
 - [ ] Update documentation and design notes for changed behavior or decisions.
 - [ ] Run `uv run ruff format --check`, `uv run ruff check`, and `uv run mypy`.
+- [ ] Run `uv run bandit` and `uv run pip-audit` as in [Security checks](#security-checks).
 - [ ] Run `uv run pytest --cov` and confirm coverage stays above the floors.
 - [ ] If you changed `web/`, run `npm run check`, `npm run build`, and `npm run e2e`.
 - [ ] If you changed Markdown, run `markdownlint-cli2` and the link check.
