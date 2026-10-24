@@ -1,9 +1,9 @@
 {
-  "name": "stream-web",
+  "name": "medleyplay-web",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Web client for stream, a music player for the local network.",
+  "description": "Web client for medleyplay, a music player for the local network.",
   "engines": {
     "node": ">=24"
   },

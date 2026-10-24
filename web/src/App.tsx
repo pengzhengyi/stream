@@ -6,7 +6,7 @@
 export function App() {
   return (
     <main className="app">
-      <h1>stream</h1>
+      <h1>medleyplay</h1>
     </main>
   );
 }

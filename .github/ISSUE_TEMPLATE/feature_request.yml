@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest an idea for stream.
+description: Suggest an idea for medleyplay.
 title: "feat: "
 labels: ["enhancement"]
 body:
@@ -14,7 +14,7 @@ body:
     id: proposal
     attributes:
       label: Proposal
-      description: What should stream do instead?
+      description: What should medleyplay do instead?
     validations:
       required: true
   - type: textarea

@@ -22,6 +22,7 @@
     "lychee",
     "markdownlint",
     "mccabe",
+    "medleyplay",
     "mypy",
     "pengzhengyi",
     "playwright",

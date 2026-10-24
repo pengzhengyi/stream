@@ -7,6 +7,6 @@ describe("App", () => {
   it("shows the page title", () => {
     render(<App />);
 
-    expect(screen.getByRole("heading", { level: 1, name: "stream" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "medleyplay" })).toBeInTheDocument();
   });
 });

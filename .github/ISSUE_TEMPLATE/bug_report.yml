@@ -1,5 +1,5 @@
 name: Bug report
-description: Report incorrect behavior in stream.
+description: Report incorrect behavior in medleyplay.
 title: "fix: "
 labels: ["bug"]
 body:

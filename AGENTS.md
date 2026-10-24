@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Guidance for coding agents working in stream.
+Guidance for coding agents working in medleyplay.
 
 This file carries what an agent needs before it can act: what the project is and
 how to build and test it. Everything else — conventions, engineering principles,
@@ -11,7 +11,7 @@ it, so the two cannot drift apart.
 
 ## What this is
 
-stream plays music on your local network, from your own files and from Bilibili.
+medleyplay plays music on your local network, from your own files and from Bilibili.
 A Python 3.14 server (FastAPI is planned) keeps its library in SQLite and serves a
 React, Vite, and TypeScript web client from `web/`. Design notes live in
 `docs/contributing/design-notes/`.

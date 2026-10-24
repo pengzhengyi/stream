@@ -1,15 +1,15 @@
-"""Command-line entry point: `python -m stream`."""
+"""Command-line entry point: `python -m medleyplay`."""
 
 import argparse
 from collections.abc import Sequence
 
-from stream import __version__
+from medleyplay import __version__
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Parse the command line and return the process exit code."""
     parser = argparse.ArgumentParser(
-        prog="stream",
+        prog="medleyplay",
         description="Play music on your local network.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")

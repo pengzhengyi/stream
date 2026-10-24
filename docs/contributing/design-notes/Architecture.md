@@ -1,7 +1,7 @@
 # Architecture
 
 > [!IMPORTANT]
-> **Status: approved, not yet implemented.** This note describes how stream is
+> **Status: approved, not yet implemented.** This note describes how medleyplay is
 > built: a small core that is reviewed closely, and features that arrive as
 > plugins behind feature toggles. What the MVP delivers, and in what order, is in
 > [MVP](MVP.md).
@@ -100,9 +100,9 @@ flowchart LR
 - Web: the API, sign-in, media serving with Range, and SSE.
 - Network detection for the Mode.
 
-**The plugin API** (`stream.plugin_api`): the Protocols, the message and value
+**The plugin API** (`medleyplay.plugin_api`): the Protocols, the message and value
 models, a constant `API_VERSION`, and a contract test kit per extension point.
-It is the only part of stream a plugin may import; import-linter enforces it,
+It is the only part of medleyplay a plugin may import; import-linter enforces it,
 and the core never imports a plugin.
 
 **The registry** is our own, typed one. Each plugin exposes
@@ -114,7 +114,7 @@ built for many plugins on one hook, while every extension point here has one
 provider per key. Its results are untyped, and isolation would have to wrap each
 implementation.
 
-**Plugins** (`stream.plugins.*`), built in:
+**Plugins** (`medleyplay.plugins.*`), built in:
 
 | Extension point | Chosen by | Runs in | Responsibility | MVP plugin |
 | --- | --- | --- | --- | --- |
@@ -168,7 +168,7 @@ point in the core.
 - **A disabled plugin is never imported.**
 - **Safe start.** A plugin that fails to import, targets another `API_VERSION`,
   or claims a key already taken is *quarantined*, and the server boots without
-  it. `stream serve --safe-mode` starts with every plugin off.
+  it. `medleyplay serve --safe-mode` starts with every plugin off.
 - **Data outlives its plugin.** Tracks whose Source kind has no enabled plugin
   stay in the catalog. Their existing Downloads play, and the policy treats them
   as unsatisfiable rather than failed.
@@ -182,7 +182,7 @@ point in the core.
   `plan(apply(plan(s)))` is a no-op, which a Hypothesis property checks.
 - **Invariants**, each a Hypothesis property:
   - a wanted Download is never removed;
-  - when the wanted set exceeds the limit, stream reports it rather than
+  - when the wanted set exceeds the limit, medleyplay reports it rather than
     removing wanted Downloads;
   - a Download served in the last hour is never removed.
 - **Across Accounts:** the wanted set is the union of every Account's *Keep
@@ -196,7 +196,7 @@ point in the core.
 - An **Account** is a person in the household, with a username, a password
   (Argon2id), and a role: **admin** or **member**. The first Account is the admin;
   afterward, an admin creates Accounts. The last admin can't be removed or
-  demoted, and `stream reset-password` recovers a lost admin password.
+  demoted, and `medleyplay reset-password` recovers a lost admin password.
 - **Signing in** creates a server-side session behind an HttpOnly, SameSite=Lax
   cookie; with the Host and Origin checks, this covers cross-site requests.
   Repeated failed sign-ins are throttled. Signing out ends the session at once,
@@ -238,7 +238,7 @@ point in the core.
   time. Wi-Fi networks you mark as *metered*, such as a phone hotspot, count as
   Offline.
 - **Online:** requested Downloads start at once.
-- **Offline:** stream contacts no music site.
+- **Offline:** medleyplay contacts no music site.
   - Downloads wait in the *Downloads* tab.
   - A pasted link is saved raw; it is canonicalized, and merged with any
     existing Source, once Online.
