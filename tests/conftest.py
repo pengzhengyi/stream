@@ -43,7 +43,9 @@ def hasher() -> PasswordHash:
 def accounts(
     units: sessionmaker[Session], hasher: PasswordHash, clock: FakeClock
 ) -> AccountService:
-    return AccountService(units, hasher, clock, SignInThrottle(clock))
+    # Several Accounts on, so the suites can exercise roles and members; the
+    # one-Account default has its own tests.
+    return AccountService(units, hasher, clock, SignInThrottle(clock), multiple_accounts=True)
 
 
 @pytest.fixture

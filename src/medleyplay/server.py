@@ -27,14 +27,16 @@ from medleyplay.web.deps import Services
 DEFAULT_PORT: Final = 8000
 DATA_DIR_VARIABLE: Final = "MEDLEYPLAY_DATA_DIR"
 ALLOWED_HOSTS_VARIABLE: Final = "MEDLEYPLAY_ALLOWED_HOSTS"
+MULTIPLE_ACCOUNTS_VARIABLE: Final = "MEDLEYPLAY_MULTIPLE_ACCOUNTS"
 
 
 @dataclass(frozen=True)
 class Settings:
-    """Where the server keeps its data, and which host names it answers to."""
+    """Where the server keeps its data, which host names it answers to, and its Accounts."""
 
     data_dir: Path
     allowed_hosts: tuple[str, ...]
+    multiple_accounts: bool = False
 
     @classmethod
     def from_environment(cls, environ: Mapping[str, str]) -> "Settings":
@@ -42,11 +44,17 @@ class Settings:
 
         `MEDLEYPLAY_DATA_DIR` overrides the data folder. `MEDLEYPLAY_ALLOWED_HOSTS`
         adds comma-separated host names, such as a router's DNS name for the server.
+        `MEDLEYPLAY_MULTIPLE_ACCOUNTS=1` lets an admin create more Accounts.
         """
         configured = environ.get(DATA_DIR_VARIABLE)
         data_dir = Path(configured) if configured else default_data_dir(environ)
         extra = tuple(h.strip() for h in environ.get(ALLOWED_HOSTS_VARIABLE, "").split(",") if h)
-        return cls(data_dir=data_dir, allowed_hosts=(*local_host_names(), *extra))
+        multiple = environ.get(MULTIPLE_ACCOUNTS_VARIABLE, "").lower() in {"1", "true", "yes"}
+        return cls(
+            data_dir=data_dir,
+            allowed_hosts=(*local_host_names(), *extra),
+            multiple_accounts=multiple,
+        )
 
 
 def default_data_dir(environ: Mapping[str, str], platform: str = sys.platform) -> Path:
@@ -92,12 +100,16 @@ def open_database(data_dir: Path) -> Engine:
     return engine
 
 
-def build_services(engine: Engine, clock: Clock = utc_now) -> Services:
+def build_services(
+    engine: Engine, clock: Clock = utc_now, *, multiple_accounts: bool = False
+) -> Services:
     """Return the services over the database `engine` opens."""
     units = make_sessionmaker(engine)
     hasher = PasswordHash((Argon2Hasher(),))
     return Services(
-        accounts=AccountService(units, hasher, clock, SignInThrottle(clock)),
+        accounts=AccountService(
+            units, hasher, clock, SignInThrottle(clock), multiple_accounts=multiple_accounts
+        ),
         catalog=CatalogService(units, clock),
     )
 
@@ -112,7 +124,9 @@ def build_app(settings: Settings) -> FastAPI:
         engine.dispose()
 
     return create_app(
-        build_services(engine), settings.allowed_hosts, lifespan=close_database_on_shutdown
+        build_services(engine, multiple_accounts=settings.multiple_accounts),
+        settings.allowed_hosts,
+        lifespan=close_database_on_shutdown,
     )
 
 

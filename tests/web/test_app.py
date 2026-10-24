@@ -17,7 +17,7 @@ def test_a_write_from_another_sites_page_is_refused(client: TestClient) -> None:
     )
 
     assert response.status_code == 403
-    assert client.get("/api/setup").json() == {"set_up": False}
+    assert not client.get("/api/setup").json()["set_up"]
 
 
 def test_a_write_from_the_servers_own_page_is_allowed(client: TestClient) -> None:

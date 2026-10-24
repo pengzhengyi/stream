@@ -194,8 +194,9 @@ one downloader, and one credential spec, never the tools.
 
 ## Feature toggles
 
-- **One source of truth:** the config file. Settings edits it, and the change
-  applies on restart, which Settings offers.
+- **One source of truth:** the config file, which also holds core settings such
+  as `multiple_accounts`. Settings edits it, and the change applies on restart,
+  which Settings offers.
 - **A disabled plugin is never imported.**
 - **Safe start.** A plugin that fails to import, targets another `API_VERSION`,
   or claims a key already taken is *quarantined*, and the server boots without
@@ -224,6 +225,11 @@ one downloader, and one credential spec, never the tools.
 
 ## Accounts
 
+- **One Account by default.** The core setting `multiple_accounts`, off by
+  default, lets an admin create more Accounts. Off, the household signs in with
+  the first Account. The data model is the same either way, so turning it on
+  later needs no migration; turning it off stops new Accounts and leaves existing
+  ones working. Tests cover both values.
 - An **Account** is a person in the household, with a username, a password
   (Argon2id), and a role: **admin** or **member**. The first Account is the admin;
   afterward, an admin creates Accounts. The last admin can't be removed or

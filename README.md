@@ -20,7 +20,8 @@ uv run medleyplay reset-password <name>    # a lost password; signs the Account 
 Open `http://<this machine>:8000/docs` to sign in and try the API. The first
 Account, created through `POST /api/setup`, is the admin. Add a host name the
 server should answer to, such as a router's DNS name, with
-`MEDLEYPLAY_ALLOWED_HOSTS=music.home`.
+`MEDLEYPLAY_ALLOWED_HOSTS=music.home`. The server has one Account; set
+`MEDLEYPLAY_MULTIPLE_ACCOUNTS=1` to let the admin add more.
 
 > [!TIP]
 > When the macOS firewall is on, other devices can't connect until Python is

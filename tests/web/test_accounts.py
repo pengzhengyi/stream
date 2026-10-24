@@ -10,7 +10,9 @@ def test_setup_reports_whether_the_first_admin_exists(client: TestClient) -> Non
     before = client.get("/api/setup").json()
     set_up_as_alice(client)
 
-    assert (before, client.get("/api/setup").json()) == ({"set_up": False}, {"set_up": True})
+    after = client.get("/api/setup").json()
+    assert (before["set_up"], after["set_up"]) == (False, True)
+    assert after["multiple_accounts"]
 
 
 def test_setting_up_creates_an_admin_and_signs_the_browser_in(client: TestClient) -> None:
