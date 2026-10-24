@@ -67,14 +67,25 @@ class AccountService:
         *,
         idle_timeout: timedelta = SESSION_IDLE_TIMEOUT,
         new_token: Callable[[], str] = lambda: secrets.token_urlsafe(32),
+        multiple_accounts: bool = False,
     ) -> None:
-        """Create a service over the database `units` open."""
+        """Create a service over the database `units` open.
+
+        With `multiple_accounts` off, the household uses its first Account and no
+        more can be created; Accounts that already exist keep working.
+        """
         self._units = units
         self._hasher = hasher
         self._clock = clock
         self._throttle = throttle
         self._idle_timeout = idle_timeout
         self._new_token = new_token
+        self._multiple_accounts = multiple_accounts
+
+    @property
+    def multiple_accounts(self) -> bool:
+        """Return whether an admin may create more Accounts."""
+        return self._multiple_accounts
 
     def is_set_up(self) -> bool:
         """Return whether the first admin exists."""
@@ -107,8 +118,11 @@ class AccountService:
             return self._start_session(db, row)
 
     def create_account(self, caller: Account, new: NewAccount) -> Account:
-        """Create an Account; only an admin may."""
+        """Create an Account; only an admin may, and only with several Accounts turned on."""
         _require_admin(caller)
+        if not self._multiple_accounts:
+            message = "This server has one Account; turn on several Accounts to add more."
+            raise ForbiddenError(message)
         username, display_name = parse_username(new.username), parse_display_name(new.display_name)
         check_password(new.password)
         row = AccountRow(

@@ -30,9 +30,10 @@ class AccountOut(BaseModel):
 
 
 class SetupStatus(BaseModel):
-    """Whether the first admin has been created."""
+    """Whether the first admin has been created, and whether more Accounts may be."""
 
     set_up: bool
+    multiple_accounts: bool
 
 
 class AccountIn(BaseModel):
@@ -64,7 +65,7 @@ class RoleIn(BaseModel):
 @router.get("/setup")
 def setup_status(accounts: AccountsDep) -> SetupStatus:
     """Return whether the first admin exists yet."""
-    return SetupStatus(set_up=accounts.is_set_up())
+    return SetupStatus(set_up=accounts.is_set_up(), multiple_accounts=accounts.multiple_accounts)
 
 
 @router.post("/setup", status_code=status.HTTP_201_CREATED)
@@ -109,7 +110,7 @@ def list_accounts(me: SignedInAccount, accounts: AccountsDep) -> list[AccountOut
 
 @router.post("/accounts", status_code=status.HTTP_201_CREATED)
 def create_account(body: AccountIn, me: SignedInAccount, accounts: AccountsDep) -> AccountOut:
-    """Create an Account; admins only. A taken username is refused."""
+    """Create an Account; admins only, with several Accounts on. A taken username is refused."""
     return AccountOut.of(accounts.create_account(me, body.to_new_account()))
 
 

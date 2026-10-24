@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from medleyplay.server import Settings, build_app, default_data_dir, local_host_names
@@ -46,6 +47,19 @@ def test_the_built_app_creates_its_database_and_answers(tmp_path: Path) -> None:
     with TestClient(app) as client:
         response = client.get("/api/setup")
 
-    assert response.json() == {"set_up": False}
+    assert response.json() == {"set_up": False, "multiple_accounts": False}
     assert (data_dir / "medleyplay.sqlite3").is_file()
     assert data_dir.stat().st_mode & 0o777 == 0o700
+
+
+def test_one_account_is_the_default() -> None:
+    assert not Settings.from_environment({}).multiple_accounts
+
+
+@pytest.mark.parametrize(("value", "expected"), [("1", True), ("true", True), ("0", False)])
+def test_several_accounts_are_turned_on_by_medleyplay_multiple_accounts(
+    value: str, *, expected: bool
+) -> None:
+    settings = Settings.from_environment({"MEDLEYPLAY_MULTIPLE_ACCOUNTS": value})
+
+    assert settings.multiple_accounts is expected

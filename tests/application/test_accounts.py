@@ -301,3 +301,26 @@ def test_resetting_the_password_of_an_unknown_username_is_not_found(
 ) -> None:
     with pytest.raises(NotFoundError, match="'nobody'"):
         accounts.reset_password("nobody", "a brand new password")
+
+
+def test_with_one_account_the_first_admin_is_created_but_no_more(
+    units: sessionmaker[Session], hasher: PasswordHash, clock: FakeClock
+) -> None:
+    one_account = AccountService(units, hasher, clock, SignInThrottle(clock))
+    alice = one_account.create_first_admin(NewAccountFactory.admin()).account
+
+    with pytest.raises(ForbiddenError, match="one Account"):
+        one_account.create_account(alice, NewAccountFactory.member())
+
+    assert not one_account.multiple_accounts
+    assert one_account.list_accounts(alice) == [alice]
+
+
+def test_turning_several_accounts_off_leaves_existing_accounts_working(
+    accounts: AccountService, units: sessionmaker[Session], hasher: PasswordHash, clock: FakeClock
+) -> None:
+    _household(accounts)
+
+    one_account = AccountService(units, hasher, clock, SignInThrottle(clock))
+
+    assert one_account.sign_in("bob", PASSWORD).account.username == "bob"
