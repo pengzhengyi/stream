@@ -190,4 +190,6 @@ Before opening a pull request:
 
 ## Code of conduct
 
-All participants must follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+All participants must follow the [Code of Conduct](CODE_OF_CONDUCT.md). To report a
+conduct problem privately, see
+[Enforcement](CODE_OF_CONDUCT.md#enforcement).

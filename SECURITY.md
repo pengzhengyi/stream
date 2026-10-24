@@ -20,6 +20,9 @@ Include:
 - The potential impact.
 - Any suggested fix or mitigation.
 
+To report a conduct problem rather than a vulnerability, see the
+[Code of Conduct](CODE_OF_CONDUCT.md#enforcement).
+
 ## What stream treats as sensitive
 
 - **Site logins.** stream can use your own Bilibili login cookies to reach

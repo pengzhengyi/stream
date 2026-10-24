@@ -46,10 +46,16 @@ individual officially represents the project in public spaces.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the project maintainers.
+reported privately to the maintainer through the repository's
+[private reporting form](https://github.com/pengzhengyi/stream/security/advisories/new).
+Begin the title with "Conduct report" so it is not mistaken for a security
+vulnerability. Only the repository's maintainers can see the report. Don't post it in a public
+issue, pull request, or discussion.
 
-> [!WARNING]
-> Add a private enforcement contact before the first public release.
+To report content on GitHub itself, such as an abusive comment, you can also use
+GitHub's **Report content** option from the menu on that comment, issue, or pull
+request. It goes to GitHub's moderators, who can remove the content or act on the
+account.
 
 All complaints will be reviewed and investigated promptly and fairly. Community
 leaders must respect the privacy and security of the reporter of any incident.
