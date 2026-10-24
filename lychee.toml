@@ -1,0 +1,21 @@
+# lychee link checking for the documentation.
+#
+# Run from the repository root:
+#   lychee --offline .
+#
+# Anchor fragments are checked too, so a renamed heading fails even though the file
+# still exists. `--offline` skips external links, which is what CI does: an external
+# page can fail without the repository changing. Run without it to check those on
+# demand.
+
+include_fragments = "anchor-only"
+
+# Only authored documentation: Markdown files, never dependencies or build output.
+# These exclusions are regular expressions, not globs.
+exclude_path = [
+  "node_modules/",
+  "\\.venv/",
+  "(^|/)dist/",
+  "^htmlcov/",
+  "playwright-report/",
+]

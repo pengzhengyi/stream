@@ -1,6 +1,13 @@
-# Routine updates arrive as one pull request per ecosystem per week; majors stay
-# ungrouped so a failure is attributable to one package. Package-manager
-# ecosystems are added with the first code that uses them.
+# Grouping policy
+#
+# Routine updates arrive as one pull request per ecosystem per week, because a
+# batch of patch and minor bumps is reviewed as a unit and rarely needs to be
+# picked apart. Major updates stay ungrouped on purpose: they carry the breaking
+# changes, and a failure has to be attributable to one package.
+#
+# Security fixes are grouped separately from version updates: Dependabot never
+# folds them into a version-update group, so without `applies-to` they arrive one
+# pull request per advisory.
 version: 2
 updates:
   - package-ecosystem: "github-actions"
@@ -13,3 +20,34 @@ updates:
         update-types:
           - "minor"
           - "patch"
+
+  # Reads pyproject.toml and uv.lock.
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      python:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+      python-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/web"
+    schedule:
+      interval: "weekly"
+    groups:
+      npm:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+      npm-security:
+        applies-to: security-updates
+        patterns:
+          - "*"

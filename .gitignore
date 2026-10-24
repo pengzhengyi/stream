@@ -1,4 +1,3 @@
-# Language and framework sections land with the first code.
 
 # ── OS ───────────────────────────────────────────────────────────────────
 .DS_Store
@@ -38,3 +37,19 @@ cookies.txt
 # ── Tool caches and reports ──────────────────────────────────────────────
 .cache/
 coverage/
+
+# ── Python ───────────────────────────────────────────────────────────────
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.coverage*
+htmlcov/
+coverage.xml
+coverage.json
+dist/
+build/
+*.egg-info/

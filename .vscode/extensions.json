@@ -1,0 +1,26 @@
+{
+  // Recommended extensions. Keep the list lean and vetted.
+  "recommendations": [
+    // --- Python ---
+    "ms-python.python",
+    "ms-python.vscode-pylance",         // editor feedback only; CI type-checks with mypy
+    "charliermarsh.ruff",               // lint and format
+
+    // --- Web client ---
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "stylelint.vscode-stylelint",
+    "vitest.explorer",
+    "ms-playwright.playwright",
+
+    // --- Honor shared config and quality ---
+    "editorconfig.editorconfig",
+    "streetsidesoftware.code-spell-checker",
+    "davidanson.vscode-markdownlint",
+
+    // --- Git and docs ---
+    "eamodio.gitlens",
+    "mermaidchart.vscode-mermaid-chart"
+  ],
+  "unwantedRecommendations": []
+}

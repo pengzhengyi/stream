@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [master]
+    branches: [main]
 
 permissions:
   contents: read
@@ -13,6 +13,157 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  python:
+    name: Python
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.3.2
+        with:
+          enable-cache: true
+
+      # --locked fails when uv.lock disagrees with pyproject.toml, so a dependency
+      # change always arrives with its lock file. The Python version comes from
+      # .python-version.
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Verify formatting
+        run: uv run ruff format --check
+
+      - name: Lint
+        run: uv run ruff check
+
+      - name: Type-check
+        run: uv run mypy
+
+      - name: Test with coverage
+        run: uv run pytest --cov --cov-report=json --cov-report=term-missing
+
+      - name: Check coverage thresholds
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+
+          totals = json.load(open("coverage.json"))["totals"]
+          line = 100 * totals["covered_lines"] / totals["num_statements"]
+          branches = totals["num_branches"]
+          branch = 100 * totals["covered_branches"] / branches if branches else 100.0
+          message = f"Line coverage: {line:.2f}%  Branch coverage: {branch:.2f}%"
+          print(message)
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write("### Python coverage\n\n")
+              summary.write("| Measure | Coverage | Floor |\n| --- | --- | --- |\n")
+              summary.write(f"| Line | {line:.2f}% | 90% |\n")
+              summary.write(f"| Branch | {branch:.2f}% | 85% |\n")
+
+          failures = []
+          if line < 90:
+              failures.append(f"Line coverage {line:.2f}% is below the 90% required floor.")
+
+          # Branch coverage is the stronger signal: a decision point can be fully
+          # line-covered with only one of its paths ever taken, so a line-only gate
+          # cannot see it.
+          if branch < 85:
+              failures.append(f"Branch coverage {branch:.2f}% is below the 85% required floor.")
+
+          if failures:
+              raise SystemExit("\n".join(failures))
+
+          # Not every line can be reached, so the aspirational target leaves room
+          # for the ones that cannot.
+          if line < 95:
+              print(f"::warning::Line coverage is {line:.2f}%; 95% is the aspirational target.")
+          PY
+
+  frontend_quality:
+    name: Frontend quality
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check (typecheck, lint, style, format, unit tests)
+        run: npm run check
+
+      - name: Build
+        run: npm run build
+
+  frontend_e2e:
+    name: Frontend E2E
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps --only-shell chromium
+
+      - name: End-to-end tests (Playwright)
+        run: npm run e2e
+
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          # Relative to the workspace, not this job's working-directory, which
+          # applies only to `run` steps.
+          path: web/playwright-report
+          retention-days: 14
+          if-no-files-found: ignore
+
+  frontend:
+    name: Frontend
+    if: always()
+    needs: [frontend_quality, frontend_e2e]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Verify every frontend lane passed
+        env:
+          QUALITY_RESULT: ${{ needs.frontend_quality.result }}
+          E2E_RESULT: ${{ needs.frontend_e2e.result }}
+        run: |
+          test "$QUALITY_RESULT" = "success"
+          test "$E2E_RESULT" = "success"
+
   docs:
     name: Docs
     runs-on: ubuntu-latest
@@ -29,5 +180,16 @@ jobs:
       - name: Check local links
         uses: lycheeverse/lychee-action@v2
         with:
-          args: --offline --no-progress --include-fragments "**/*.md"
+          args: --config lychee.toml --offline --no-progress "**/*.md" ".github/**/*.md"
           fail: true
+
+      # Advisory like the checks above: a word cspell has not met yet arrives as a
+      # reviewable dictionary change. The whole tree is swept, not only the files a
+      # pull request touched, because a new cspell dictionary can flag files nobody
+      # edited.
+      - name: Check spelling
+        uses: streetsidesoftware/cspell-action@v9
+        with:
+          config: cspell.json
+          files: "**"
+          incremental_files_only: false
