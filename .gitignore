@@ -1,58 +1,40 @@
-# Created by https://www.gitignore.io/api/vim
-# Edit at https://www.gitignore.io/?templates=vim
+# Language and framework sections land with the first code.
 
-### Vim ###
-# Swap
-[._]*.s[a-v][a-z]
-[._]*.sw[a-p]
-[._]s[a-rt-v][a-z]
-[._]ss[a-gi-z]
-[._]sw[a-p]
-
-# Session
-Session.vim
-
-# Temporary
-.netrwhist
-*~
-# Auto-generated tag files
-tags
-# Persistent undo
-[._]*.un~
-
-# End of https://www.gitignore.io/api/vim
-
-
-
-# Created by https://www.gitignore.io/api/macos
-# Edit at https://www.gitignore.io/?templates=macos
-
-### macOS ###
-# General
+# ── OS ───────────────────────────────────────────────────────────────────
 .DS_Store
 .AppleDouble
 .LSOverride
-
-# Icon must end with two \r
-Icon
-
-# Thumbnails
 ._*
+Thumbs.db
 
-# Files that might appear in the root of a volume
-.DocumentRevisions-V100
-.fseventsd
-.Spotlight-V100
-.TemporaryItems
-.Trashes
-.VolumeIcon.icns
-.com.apple.timemachine.donotpresent
+# ── Editors ──────────────────────────────────────────────────────────────
+.idea/
+[._]*.sw[a-p]
+*~
+Session.vim
+.netrwhist
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
 
-# Directories potentially created on remote AFP share
-.AppleDB
-.AppleDesktop
-Network Trash Folder
-Temporary Items
-.apdisk
+# ── Secrets: credentials and a Bilibili login never enter the repository ─
+.env
+.env.*
+!.env.example
+cookies.txt
+*.cookies
 
-# End of https://www.gitignore.io/api/macos
+# ── Runtime data: the library database and the audio cache ──────────────
+/data/
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# ── Tool caches and reports ──────────────────────────────────────────────
+.cache/
+coverage/

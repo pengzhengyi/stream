@@ -1,0 +1,54 @@
+name: Bug report
+description: Report incorrect behavior in stream.
+title: "fix: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please include enough detail to reproduce it.
+        **Never paste login cookies or tokens** — redact them from logs first.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Include the Bilibili link or a description of the local file, if one is involved.
+      placeholder: |
+        1. Add ...
+        2. Play ...
+        3. See ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and browser
+      placeholder: "iPhone 15, Safari 19"
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: "commit SHA, branch, or release"
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context

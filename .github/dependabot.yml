@@ -1,0 +1,15 @@
+# Routine updates arrive as one pull request per ecosystem per week; majors stay
+# ungrouped so a failure is attributable to one package. Package-manager
+# ecosystems are added with the first code that uses them.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
