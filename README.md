@@ -22,6 +22,11 @@ Account, created through `POST /api/setup`, is the admin. Add a host name the
 server should answer to, such as a router's DNS name, with
 `MEDLEYPLAY_ALLOWED_HOSTS=music.home`.
 
+> [!TIP]
+> When the macOS firewall is on, other devices can't connect until Python is
+> allowed incoming connections: accept the prompt on first start, or add it in
+> System Settings › Network › Firewall › Options.
+
 ## Development
 
 Setup, the checks CI runs, and the pull-request checklist are in
