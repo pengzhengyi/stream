@@ -1,0 +1,19 @@
+# markdownlint-cli2 configuration.
+#
+# Lints authored Markdown only, and turns off rules the project violates by
+# intent — so `markdownlint-cli2` runs clean with no hand-filtering.
+#
+# Run from the repository root:  markdownlint-cli2
+
+globs:
+  - "**/*.md"
+
+# Never lint generated output or vendored trees.
+ignores:
+  - "**/node_modules/**"
+  - "coverage/**"
+
+config:
+  MD013: false  # line length — prose wraps at ~80 columns by intent
+  MD024:        # duplicate headings — a changelog repeats Added/Changed per version
+    siblings_only: true
