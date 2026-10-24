@@ -6,7 +6,16 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "alembic>=1.20.1",
+    "fastapi>=0.162.0",
+    "pwdlib[argon2]>=0.3.1",
+    "sqlalchemy>=2.1.6",
+    "uvicorn>=0.54.0",
+]
+
+[project.scripts]
+medleyplay = "medleyplay.__main__:main"
 
 [build-system]
 requires = ["uv_build>=0.13.5,<0.14"]
@@ -15,7 +24,9 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "bandit",
+    "httpx2>=2.16.0",
     "hypothesis",
+    "import-linter>=2.15",
     "mypy",
     "pip-audit",
     "pytest",
@@ -51,7 +62,11 @@ ignore = [
     "PLR2004", # a test names its expected values inline
     "D",       # a test's name is its documentation
     "ANN401",  # fixtures may be generic
+    "S105",    # test passwords are fixtures, not secrets
+    "S106",
 ]
+# Alembic loads migration scripts by path; they are not an importable package.
+"src/medleyplay/persistence/migrations/**" = ["INP001"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -76,6 +91,36 @@ files = ["src", "tests"]
 python_version = "3.13"
 warn_unreachable = true
 enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
+
+# ── import-linter ───────────────────────────────────────────────────────────
+# The layers of the core; a test runs these contracts with the rest of the suite.
+[tool.importlinter]
+root_package = "medleyplay"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "The core is layered: web, then application, then persistence, then domain"
+type = "layers"
+layers = [
+    "medleyplay.__main__",
+    "medleyplay.server",
+    "medleyplay.web",
+    "medleyplay.application",
+    "medleyplay.persistence",
+    "medleyplay.domain",
+]
+
+[[tool.importlinter.contracts]]
+name = "The domain uses no framework"
+type = "forbidden"
+source_modules = ["medleyplay.domain"]
+forbidden_modules = ["fastapi", "starlette", "pydantic", "sqlalchemy", "alembic", "pwdlib", "uvicorn"]
+
+[[tool.importlinter.contracts]]
+name = "Only the web layer and the composition root use the web framework"
+type = "forbidden"
+source_modules = ["medleyplay.application", "medleyplay.persistence"]
+forbidden_modules = ["fastapi", "starlette", "uvicorn"]
 
 # ── bandit ──────────────────────────────────────────────────────────────────
 # Runs over `src` in CI (`bandit -c pyproject.toml -r src`). Tests are excluded
