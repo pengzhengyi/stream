@@ -1,6 +1,17 @@
 # stream
-play songs in local network hosted by your computer 
 
-## Dependencies
+Play music on your local network, from your own files and from Bilibili.
 
-* at least python3.3
+> [!NOTE]
+> **Status: rewrite in progress.** The 2019 prototype has been retired, and the
+> new player is being designed. Nothing here is usable yet; see
+> [`CHANGELOG.md`](CHANGELOG.md) for what has changed.
+
+## Security
+
+Please report vulnerabilities privately, as described in
+[`SECURITY.md`](SECURITY.md).
+
+## License
+
+[MIT](LICENSE)
