@@ -180,7 +180,7 @@ jobs:
       - name: Check local links
         uses: lycheeverse/lychee-action@v2
         with:
-          args: --config lychee.toml --offline --no-progress "**/*.md"
+          args: --config lychee.toml --offline --no-progress "**/*.md" ".github/**/*.md"
           fail: true
 
       # Advisory like the checks above: a word cspell has not met yet arrives as a

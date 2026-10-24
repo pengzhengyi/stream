@@ -142,7 +142,7 @@
       "label": "docs: check links",
       "detail": "Check links and anchors between files.",
       "type": "shell",
-      "command": "lychee --config lychee.toml --offline --no-progress \"**/*.md\"",
+      "command": "lychee --config lychee.toml --offline --no-progress \"**/*.md\" \".github/**/*.md\"",
       "problemMatcher": []
     },
     {
