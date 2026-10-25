@@ -82,7 +82,8 @@
   served.
 - `playlist` and `playlist_entry`: owned by an Account; a smart playlist stores
   its rules and the *Keep downloaded* switch.
-- `wanted_by`: account, track; derived from *Keep downloaded* playlists.
+- *Wanted by* (account, track) is derived from *Keep downloaded* playlists at
+  each evaluation rather than stored; see [Download policy](Download%20policy.md).
 - `job`: kind, target, requested by, state, process id, attempts, interruptions,
   retry time, error.
 - `plugin_state`: plugin, stored state, faulted.

@@ -218,9 +218,11 @@ one downloader, and one credential spec, never the tools.
   - a wanted Download is never removed;
   - when the wanted set exceeds the limit, medleyplay reports it rather than
     removing wanted Downloads;
-  - a Download served in the last hour is never removed.
+  - a Download downloaded, served, or wanted in the last day, or one that
+    can't be downloaded again, is never removed.
 - **Across Accounts:** the wanted set is the union of every Account's *Keep
-  downloaded* playlists, recorded as *wanted by* rows. A single limit is set by
+  downloaded* playlists, computed at each evaluation; see
+  [Download policy](Download%20policy.md#the-wanted-set). A single limit is set by
   an admin, and Settings shows the space each Account's rules hold.
 - **Which login downloads:** the Account that asked, or for a policy Download,
   the first Account that wants the Track and has a valid linked account.
@@ -244,7 +246,7 @@ one downloader, and one credential spec, never the tools.
   storage limit, and the Mode. The *Downloads* tab shows who asked for each.
 - **Each Account's own:** favorites, ratings, play history, playlists, smart
   playlists, the default audio quality, and *linked accounts*.
-- **Deleting an Account** removes its sessions, playlists, wanted-by rows, and
+- **Deleting an Account** removes its sessions, playlists, and so its wants, and
   linked accounts.
 - **Built from pwdlib and our own session table.** pwdlib hashes passwords with
   Argon2id and rehashes them on sign-in when its parameters change. Sessions
