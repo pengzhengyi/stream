@@ -22,6 +22,7 @@ from medleyplay.plugin_host.client import (
     LoadReport,
     PluginHost,
 )
+from medleyplay.plugin_host.job_wire import KeyOutcome
 from tests.support.echo import SAY, Said, Say
 from tests.support.factories import AccountFactory
 from tests.support.fakes import FakeClock
@@ -266,3 +267,48 @@ def test_a_busy_host_makes_the_call_unavailable(
 
     with pytest.raises(PluginUnavailableError, match="busy for 2 s"):
         plugins.call(SAY, "parrot", Say(text="hello"))
+
+
+def _outcome(trailing: int, *, succeeded: bool = False) -> KeyOutcome:
+    return KeyOutcome(
+        plugin="parrot",
+        key="parrot",
+        trailing_failures=trailing,
+        succeeded=succeeded,
+        last_failure="ValueError: boom" if trailing else "",
+    )
+
+
+def test_a_jobs_faults_count_toward_faulting_like_the_hosts(
+    units: sessionmaker[Session], clock: FakeClock
+) -> None:
+    with started_plugins(units, clock, "parrot") as plugins:
+        _fail(plugins, "parrot", FAULT_AFTER - 2)
+        plugins.record_outcomes([_outcome(2)])
+        status = _status(plugins, "parrot")
+
+    assert status.state is PluginState.FAULTED
+
+
+def test_a_job_whose_key_succeeded_before_failing_restarts_the_count(
+    units: sessionmaker[Session], clock: FakeClock
+) -> None:
+    with started_plugins(units, clock, "parrot") as plugins:
+        _fail(plugins, "parrot", FAULT_AFTER - 1)
+        plugins.record_outcomes([_outcome(1, succeeded=True)])
+        _fail(plugins, "parrot", FAULT_AFTER - 2)
+        status = _status(plugins, "parrot")
+
+    assert status.state is PluginState.ON
+
+
+def test_a_job_process_loads_only_the_plugins_for_its_points(
+    units: sessionmaker[Session], clock: FakeClock
+) -> None:
+    with started_plugins(units, clock, "parrot", "mynah") as plugins:
+        _fail(plugins, "mynah", FAULT_AFTER)
+        for_echo = plugins.plugins_for(["echo"])
+        for_nothing = plugins.plugins_for(["tag_reader"])
+
+    assert for_echo == ("parrot",)
+    assert for_nothing == ()

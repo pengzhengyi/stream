@@ -1,26 +1,25 @@
 """The server's side of the pipe: start a plugin host, call it with deadlines, restart it."""
 
-import contextlib
 import itertools
-import os
-import queue
-import signal
-import subprocess  # nosec B404 -- starts only the core's own host module
-import sys
 import threading
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import IO, Final
+from typing import Final
 
 from pydantic import BaseModel, ValidationError
 
 from medleyplay.plugin_api import Operation
 from medleyplay.plugin_host.loader import BUILT_IN_PLUGINS
+from medleyplay.plugin_host.process import (
+    ChildExitedError,
+    ChildProcess,
+    ChildTimeoutError,
+    HostCommand,
+)
 from medleyplay.plugin_host.wire import (
     FROM_HOST,
-    MAX_LINE,
     Call,
     FailureKind,
     FromHost,
@@ -30,12 +29,23 @@ from medleyplay.plugin_host.wire import (
     Ready,
     Reply,
     Start,
-    encode,
 )
+
+__all__ = [
+    "LOAD_DEADLINE",
+    "MEMORY_LIMIT",
+    "CallFailedError",
+    "HostBusyError",
+    "HostCommand",
+    "HostStartError",
+    "LoadReport",
+    "PluginHost",
+]
+
+type _Process = ChildProcess[FromHost]
 
 LOAD_DEADLINE: Final = timedelta(seconds=30)
 MEMORY_LIMIT: Final = 1024**3
-_STOP_GRACE: Final = 2.0
 
 
 class CallFailedError(Exception):
@@ -55,14 +65,6 @@ class HostStartError(Exception):
     """The plugin host itself failed to start, before or between loading plugins."""
 
 
-@dataclass(frozen=True)
-class HostCommand:
-    """How to start a plugin host process."""
-
-    argv: tuple[str, ...] = (sys.executable, "-m", "medleyplay.plugin_host")
-    env: Mapping[str, str] | None = None
-
-
 @dataclass
 class LoadReport:
     """What happened to each plugin the host was asked to load."""
@@ -75,86 +77,6 @@ class LoadReport:
         return next(
             (name for name, keys in self.loaded.items() if key in keys.get(point, ())), None
         )
-
-
-class _Timeout(Exception):  # noqa: N818 -- private control flow, never raised to callers
-    pass
-
-
-class _HostDied(Exception):  # noqa: N818 -- private control flow, never raised to callers
-    pass
-
-
-class _Process:
-    """One running host, with a thread reading its replies so reads can time out."""
-
-    def __init__(self, command: HostCommand) -> None:
-        env = None if command.env is None else {**os.environ, **command.env}
-        # The argv is the server's own interpreter running a module of the core.
-        self._popen = subprocess.Popen(  # noqa: S603  # nosec B603
-            command.argv,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            text=True,
-            encoding="utf-8",
-            env=env,
-            start_new_session=True,
-        )
-        self._lines: queue.Queue[str | None] = queue.Queue()
-        threading.Thread(target=self._read, args=(_pipe(self._popen.stdout),), daemon=True).start()
-
-    def _read(self, stdout: IO[str]) -> None:
-        with contextlib.suppress(ValueError, OSError):
-            while line := stdout.readline(MAX_LINE + 1):
-                self._lines.put(line)
-        self._lines.put(None)
-
-    def alive(self) -> bool:
-        return self._popen.poll() is None
-
-    def send(self, message: Start | Call) -> None:
-        stdin = _pipe(self._popen.stdin)
-        try:
-            stdin.write(encode(message))
-            stdin.flush()
-        except (BrokenPipeError, ValueError) as error:
-            raise _HostDied from error
-
-    def receive(self, timeout: float) -> FromHost:
-        try:
-            line = self._lines.get(timeout=max(timeout, 0))
-        except queue.Empty:
-            raise _Timeout from None
-        if line is None or not line.endswith("\n"):
-            raise _HostDied
-        try:
-            return FROM_HOST.validate_json(line)
-        except ValidationError as error:
-            raise _HostDied from error
-
-    def stop(self) -> None:
-        # Closing the pipe ends a host at once; the kill is for one that doesn't exit.
-        with contextlib.suppress(OSError):
-            _pipe(self._popen.stdin).close()
-        with contextlib.suppress(subprocess.TimeoutExpired):
-            self._popen.wait(timeout=_STOP_GRACE)
-        self.kill()
-
-    def kill(self) -> None:
-        with contextlib.suppress(ProcessLookupError, PermissionError):
-            os.killpg(self._popen.pid, signal.SIGKILL)
-        self._popen.wait()
-        for pipe in (self._popen.stdin, self._popen.stdout):
-            if pipe is not None:
-                with contextlib.suppress(OSError):
-                    pipe.close()
-
-
-def _pipe(pipe: IO[str] | None) -> IO[str]:
-    if pipe is None:  # pragma: no cover -- Popen opens every pipe it is asked for
-        message = "The plugin host was started without its pipes."
-        raise RuntimeError(message)
-    return pipe
 
 
 class PluginHost:
@@ -246,11 +168,11 @@ class PluginHost:
                 if isinstance(message, Reply) and message.id == call.id:
                     self._peak_memory = message.peak_memory
                     return message
-        except _Timeout:
+        except ChildTimeoutError:
             self._discard(process)
             message_text = f"{call.point}.{call.operation} missed its deadline of {deadline:g} s."
             raise CallFailedError(kind="plugin", message=message_text) from None
-        except _HostDied:
+        except ChildExitedError:
             self._discard(process)
             message_text = f"The plugin host exited during {call.point}.{call.operation}."
             raise CallFailedError(kind="plugin", message=message_text) from None
@@ -263,7 +185,7 @@ class PluginHost:
         report = LoadReport(quarantined=dict(self.report.quarantined))
         pending = [name for name in self._plugins if name not in report.quarantined]
         while True:
-            process = _Process(self._command)
+            process = ChildProcess(self._command, FROM_HOST)
             loading = self._load(process, pending, report)
             if loading is None:
                 self.report = report
@@ -297,7 +219,7 @@ class PluginHost:
                         return None
                     case Reply():
                         break  # A reply before `Ready`: the host is broken.
-        except (_Timeout, _HostDied):
+        except (ChildTimeoutError, ChildExitedError):
             pass
         if loading is None:
             process.kill()

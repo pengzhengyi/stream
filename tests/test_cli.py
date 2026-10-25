@@ -59,7 +59,7 @@ def _answers(*answers: str) -> Iterator[str]:
 def _household_with_alice(data_dir: Path) -> None:
     """Create Alice, the first admin, in the database in `data_dir`."""
     engine = open_database(data_dir)
-    build_services(engine).accounts.create_first_admin(NewAccountFactory.admin())
+    build_services(engine, data_dir).accounts.create_first_admin(NewAccountFactory.admin())
     engine.dispose()
 
 
@@ -124,7 +124,7 @@ def test_reset_password_sets_the_new_password(
     assert exit_code == 0
     assert "signed it out everywhere" in capsys.readouterr().out
     engine = open_database(data_dir)
-    signed_in = build_services(engine).accounts.sign_in("alice", "a brand new password")
+    signed_in = build_services(engine, data_dir).accounts.sign_in("alice", "a brand new password")
     engine.dispose()
     assert signed_in.account.username == "alice"
 
@@ -140,7 +140,10 @@ def test_reset_password_changes_nothing_when_the_repeat_differs(
     assert exit_code == 1
     assert "don't match" in capsys.readouterr().err
     engine = open_database(data_dir)
-    assert build_services(engine).accounts.sign_in("alice", PASSWORD).account.username == "alice"
+    assert (
+        build_services(engine, data_dir).accounts.sign_in("alice", PASSWORD).account.username
+        == "alice"
+    )
     engine.dispose()
 
 

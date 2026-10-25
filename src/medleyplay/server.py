@@ -1,11 +1,12 @@
 """The composition root: settings from the environment and the config file, and the app."""
 
 import contextlib
+import fcntl
 import os
 import socket
 import sys
-from collections.abc import AsyncIterator, Mapping
-from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Iterator, Mapping
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -19,6 +20,8 @@ from sqlalchemy import Engine
 from medleyplay.application import Clock
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
+from medleyplay.application.job_runner import JobProcesses, JobRunner
+from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.config import CONFIG_FILE, Config, load_config
@@ -29,6 +32,8 @@ from medleyplay.web.app import create_app
 from medleyplay.web.deps import Services
 
 DEFAULT_PORT: Final = 8000
+JOBS_FOLDER: Final = "jobs"
+INSTANCE_LOCK: Final = "server.lock"
 DATA_DIR_VARIABLE: Final = "MEDLEYPLAY_DATA_DIR"
 ALLOWED_HOSTS_VARIABLE: Final = "MEDLEYPLAY_ALLOWED_HOSTS"
 
@@ -110,49 +115,86 @@ def open_database(data_dir: Path) -> Engine:
 
 def build_services(
     engine: Engine,
+    data_dir: Path,
     clock: Clock = utc_now,
     *,
     config: Config = Config(),  # noqa: B008 -- a frozen value
     safe_mode: bool = False,
     source: PluginSource = PluginSource(),  # noqa: B008 -- a frozen value
+    kinds: Mapping[str, AnyJobKind] | None = None,
 ) -> Services:
-    """Return the services over the database `engine` opens, configured by `config`."""
+    """Return the services over the database in `data_dir`, configured by `config`.
+
+    `kinds` are the Job kinds the server runs; Jobs keep their working folders in
+    `jobs` in the data folder.
+    """
     units = make_sessionmaker(engine)
     hasher = PasswordHash((Argon2Hasher(),))
     available = plugin_names(source.package)
     enabled = () if safe_mode else config.enabled_plugins(available)
     lineup = Lineup(available, enabled, config.unknown_plugins(available), safe_mode)
     host = PluginHost(enabled, package=source.package, command=source.command) if enabled else None
+    plugins = PluginService(units, clock, lineup, host)
+    job_kinds = kinds or {}
+    processes = JobProcesses(source.command, source.package)
+    runner = JobRunner(
+        units, clock, job_kinds, plugins, data_dir / JOBS_FOLDER, processes=processes
+    )
     return Services(
         accounts=AccountService(
             units, hasher, clock, SignInThrottle(clock), multiple_accounts=config.multiple_accounts
         ),
         catalog=CatalogService(units, clock),
-        plugins=PluginService(units, clock, lineup, host),
+        plugins=plugins,
+        jobs=JobService(units, clock, job_kinds, runner),
     )
 
 
 def build_app(settings: Settings, source: PluginSource = PluginSource()) -> FastAPI:  # noqa: B008 -- a frozen value
     """Return the server's app for `settings`.
 
-    The app starts the plugin host when it starts, and stops it and closes the
-    database when it shuts down. A config file that doesn't parse raises
-    `ConfigError`.
+    The app starts the plugin host and the Job runner when it starts, and stops
+    them and closes the database when it shuts down. A config file that doesn't
+    parse raises `ConfigError`; another server using the same data folder raises
+    `AlreadyRunningError` as the app starts.
     """
     config = load_config(settings.data_dir / CONFIG_FILE)
     engine = open_database(settings.data_dir)
-    services = build_services(engine, config=config, safe_mode=settings.safe_mode, source=source)
+    services = build_services(
+        engine, settings.data_dir, config=config, safe_mode=settings.safe_mode, source=source
+    )
 
     @asynccontextmanager
-    async def run_plugins(_: FastAPI) -> AsyncIterator[None]:
-        services.plugins.start()
+    async def run_in_background(_: FastAPI) -> AsyncIterator[None]:
         try:
-            yield
+            with hold_instance_lock(settings.data_dir):
+                services.plugins.start()
+                services.jobs.start()
+                try:
+                    yield
+                finally:
+                    services.jobs.stop()
+                    services.plugins.close()
         finally:
-            services.plugins.close()
             engine.dispose()
 
-    return create_app(services, settings.allowed_hosts, lifespan=run_plugins)
+    return create_app(services, settings.allowed_hosts, lifespan=run_in_background)
+
+
+class AlreadyRunningError(Exception):
+    """Another server is using this data folder."""
+
+
+@contextmanager
+def hold_instance_lock(data_dir: Path) -> Iterator[None]:
+    """Hold the data folder's server lock, so a second server can't run Jobs on it too."""
+    with (data_dir / INSTANCE_LOCK).open("a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            message = f"Another medleyplay server is using {data_dir}."
+            raise AlreadyRunningError(message) from None
+        yield
 
 
 def environment() -> Mapping[str, str]:

@@ -1,7 +1,7 @@
 # Architecture
 
 > [!IMPORTANT]
-> **Status: approved; the core's Accounts, catalog, and plugin host are implemented.** This note describes how medleyplay is
+> **Status: approved; the core's Accounts, catalog, plugin host, and Jobs are implemented.** This note describes how medleyplay is
 > built: a small core that is reviewed closely, and features that arrive as
 > plugins behind feature toggles. What the MVP delivers, and in what order, is in
 > [MVP](MVP.md).
@@ -180,14 +180,15 @@ one downloader, and one credential spec, never the tools.
 | --- | --- |
 | `waiting` | Held until the Mode is Online |
 | `queued` | Ready to start |
-| `running` | Has a process and a lease the runner renews |
+| `running` | Has a process, which holds its Job's lock |
 | `succeeded`, `failed`, `cancelled` | Finished |
 
 - **One active Job per kind and target**, enforced by a partial unique index.
   Asking again returns the existing Job.
-- **Startup recovery:** kill the process groups recorded for `running` Jobs, set
-  them back to `queued`, and reconcile the download folder against `download`
-  rows: remove stray temporary files, and record or remove files with no row.
+- **Startup recovery:** kill the process group of each `running` Job whose
+  process still holds its lock, set them back to `queued`, and reconcile the
+  download folder against `download` rows: remove stray temporary files, and
+  record or remove files with no row. How Jobs run is in [Jobs](Jobs.md).
 - **Completing a Download:** validate the result, rename the file into place, and
   record the row in one step that the reconcile can always finish.
 - **Online to Offline:** running Download Jobs are cancelled and go back to

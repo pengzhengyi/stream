@@ -6,7 +6,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from medleyplay.config import ConfigError
-from medleyplay.server import PluginSource, Settings, build_app, default_data_dir, local_host_names
+from medleyplay.server import (
+    AlreadyRunningError,
+    PluginSource,
+    Settings,
+    build_app,
+    default_data_dir,
+    local_host_names,
+)
 from tests.support.api import set_up_as_alice
 from tests.support.hosts import TEST_COMMAND, TEST_PLUGINS
 
@@ -114,3 +121,11 @@ def test_in_safe_mode_the_built_app_starts_no_plugins(tmp_path: Path) -> None:
         providers = client.get("/api/features").json()["providers"]
 
     assert providers == {}
+
+
+def test_a_second_server_on_the_same_data_folder_is_refused(tmp_path: Path) -> None:
+    first = build_app(Settings(data_dir=tmp_path, allowed_hosts=("testserver",)))
+    second = build_app(Settings(data_dir=tmp_path, allowed_hosts=("testserver",)))
+
+    with TestClient(first), pytest.raises(AlreadyRunningError), TestClient(second):
+        pass

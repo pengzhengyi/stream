@@ -6,6 +6,7 @@ so it survives a restart, until an admin resets the plugin.
 """
 
 import threading
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Protocol
 
@@ -31,6 +32,7 @@ from medleyplay.plugin_host.client import (
     HostStartError,
     LoadReport,
 )
+from medleyplay.plugin_host.job_wire import KeyOutcome
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -168,12 +170,34 @@ class PluginService:
             case "network" | "auth":
                 return PluginCallError(error.kind, f"{owner}: {error}")
             case "plugin":
-                self._count_fault(owner, key, str(error))
+                self._count_faults(owner, key, 1, str(error))
                 return PluginCallError("plugin", f"{owner}: {error}")
 
-    def _count_fault(self, owner: str, key: str, reason: str) -> None:
+    def plugins_for(self, points: Iterable[str]) -> tuple[str, ...]:
+        """Return the plugins that are on and hold a key for any of `points`, by name."""
+        wanted = set(points)
+        return tuple(
+            sorted(
+                name
+                for name, keys in self._report().loaded.items()
+                if name not in self._faults and wanted & set(keys)
+            )
+        )
+
+    def record_outcomes(self, outcomes: Iterable[KeyOutcome]) -> None:
+        """Count a Job's plugin faults, key by key, as if its calls were made here."""
+        for outcome in outcomes:
+            if outcome.succeeded or outcome.trailing_failures == 0:
+                with self._lock:
+                    self._failures.pop((outcome.plugin, outcome.key), None)
+            if outcome.trailing_failures:
+                self._count_faults(
+                    outcome.plugin, outcome.key, outcome.trailing_failures, outcome.last_failure
+                )
+
+    def _count_faults(self, owner: str, key: str, count: int, reason: str) -> None:
         with self._lock:
-            failures = self._failures.get((owner, key), 0) + 1
+            failures = self._failures.get((owner, key), 0) + count
             self._failures[owner, key] = failures
             if failures < FAULT_AFTER or owner in self._faults:
                 return

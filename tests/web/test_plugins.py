@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
+from medleyplay.application.jobs import JobService
 from medleyplay.web.app import create_app
 from medleyplay.web.deps import Services
 from tests.conftest import TEST_HOST
@@ -22,10 +23,11 @@ def plugin_client(
     clock: FakeClock,
     accounts: AccountService,
     catalog: CatalogService,
+    jobs: JobService,
 ) -> Iterator[TestClient]:
     """A client of a server with the test plugins `parrot` and `broken-import` on."""
     with started_plugins(units, clock, "parrot", "broken-import") as plugins:
-        app = create_app(Services(accounts, catalog, plugins), allowed_hosts=[TEST_HOST])
+        app = create_app(Services(accounts, catalog, plugins, jobs), allowed_hosts=[TEST_HOST])
         with TestClient(app, base_url=f"http://{TEST_HOST}") as test_client:
             yield test_client
 
