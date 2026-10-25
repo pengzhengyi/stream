@@ -236,7 +236,7 @@ def test_the_login_check_keeps_the_session_and_its_expiry() -> None:
     assert checked.expires_at is not None
 
 
-def test_a_file_without_a_session_isnt_a_login() -> None:
+def test_a_file_without_a_session_is_not_a_login() -> None:
     checked = BilibiliLogin().check(CheckLogin(text="# Netscape HTTP Cookie File\n"))
 
     assert (checked.valid, checked.login) == (False, "")

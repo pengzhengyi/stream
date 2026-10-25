@@ -8,7 +8,7 @@ The video id says how the plugin behaves:
 | `BV17x411w7KC` | *Mixtape*, three parts | `audio.m4a` |
 | `BVgone` | gone | gone |
 | `BVmembers` | needs a login | an `AuthError` without a login |
-| `BVsignedin` | one part | `audio.m4a` with a login, an `AuthError` without |
+| `BVSignedIn` | one part | `audio.m4a` with a login, an `AuthError` without |
 | `BVremoved` | one part | gone: removed after it was added |
 | `BVrefused` | one part | an `AuthError`: the site refuses the login |
 | `BVdown` | a `NetworkError` | a `NetworkError` |
@@ -112,7 +112,7 @@ class Downloader:
         if video == "BVleaky" and request.login is not None:
             message = f"Failed with {Path(request.login).read_text(encoding='utf-8')}"
             raise ValueError(message)
-        if video == "BVrefused" or (video in {"BVmembers", "BVsignedin"} and request.login is None):
+        if video == "BVrefused" or (video in {"BVmembers", "BVSignedIn"} and request.login is None):
             message = "Bilibili refused the login."
             raise AuthError(message)
         report_progress(0.5, "Downloading")

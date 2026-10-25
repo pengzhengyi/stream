@@ -97,7 +97,7 @@ def test_a_site_no_plugin_reads_logins_for_is_not_found(
         linked.save(alice, "youtube", _cookies())
 
 
-def test_a_keychain_that_doesnt_answer_fails_the_save_and_keeps_no_row(
+def test_a_keychain_that_does_not_answer_fails_the_save_and_keeps_no_row(
     linked: LinkedAccountService, secrets: MemorySecrets, alice: Account
 ) -> None:
     secrets.unavailable = True
@@ -144,7 +144,7 @@ def test_a_valid_login_is_lent_with_its_revision(
     assert linked.has_valid(alice.id, "bilibili")
 
 
-def test_a_refused_login_needs_sign_in_and_isnt_lent(
+def test_a_refused_login_needs_sign_in_and_is_not_lent(
     linked: LinkedAccountService, alice: Account
 ) -> None:
     linked.save(alice, "bilibili", _cookies())

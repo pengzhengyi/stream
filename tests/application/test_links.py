@@ -68,7 +68,7 @@ def test_a_short_link_looks_up_the_video_it_leads_to(site: Site, alice: Account)
     ],
     ids=["another site", "a short link off the site", "a plugin naming another site", "no video"],
 )
-def test_a_link_that_isnt_a_bilibili_video_is_refused(
+def test_a_link_that_is_not_a_bilibili_video_is_refused(
     site: Site, alice: Account, link: str
 ) -> None:
     with pytest.raises(InvalidInputError):
@@ -145,7 +145,7 @@ def test_a_lookup_shows_a_part_already_added(site: Site, alice: Account) -> None
     ],
     ids=["no such part", "no such quality", "a part twice", "no parts", "no title", "long title"],
 )
-def test_a_choice_the_video_doesnt_offer_is_refused_and_adds_nothing(
+def test_a_choice_the_video_does_not_offer_is_refused_and_adds_nothing(
     site: Site,
     alice: Account,
     units: sessionmaker[Session],

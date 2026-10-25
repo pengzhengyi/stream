@@ -79,7 +79,7 @@ def test_a_short_link_without_a_code_leads_nowhere(link: str) -> None:
     assert web.asked == []
 
 
-def test_a_short_link_that_doesnt_redirect_names_itself() -> None:
+def test_a_short_link_that_does_not_redirect_names_itself() -> None:
     assert follow_short_link("https://b23.tv/abc123", Redirects({})) == "https://b23.tv/abc123"
 
 
@@ -113,7 +113,7 @@ def test_fetching_reads_the_redirect_without_following_it(server: str) -> None:
     assert fetch_redirect(f"{server}/moved") == VIDEO
 
 
-def test_fetching_a_page_that_doesnt_redirect_answers_none(server: str) -> None:
+def test_fetching_a_page_that_does_not_redirect_answers_none(server: str) -> None:
     assert fetch_redirect(f"{server}/page") is None
 
 

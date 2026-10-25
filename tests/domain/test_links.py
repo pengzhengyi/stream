@@ -60,7 +60,7 @@ def test_a_part_locator_names_the_video_and_its_part() -> None:
 
 
 @pytest.mark.parametrize(("video", "part"), [("BV1Xx41117Tz", 0), ("../etc", 1), ("", 1)])
-def test_a_part_locator_refuses_what_isnt_a_video_and_a_part(video: str, part: int) -> None:
+def test_a_part_locator_refuses_what_is_not_a_video_and_a_part(video: str, part: int) -> None:
     with pytest.raises(InvalidInputError):
         part_locator(video, part)
 

@@ -111,7 +111,7 @@ def test_deleting_an_account_forgets_its_logins(
     assert secrets.items == {}
 
 
-def test_a_keychain_that_doesnt_answer_is_unavailable(
+def test_a_keychain_that_does_not_answer_is_unavailable(
     site_client: TestClient, secrets: MemorySecrets
 ) -> None:
     set_up_as_alice(site_client)

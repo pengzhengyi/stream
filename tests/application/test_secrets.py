@@ -64,11 +64,11 @@ def test_a_secret_is_kept_replaced_and_forgotten() -> None:
     assert secrets.get("3:bilibili") is None
 
 
-def test_forgetting_a_secret_that_isnt_there_is_fine() -> None:
+def test_forgetting_a_secret_that_is_not_there_is_fine() -> None:
     KeychainSecrets(backend=MemoryKeyring()).delete("3:bilibili")
 
 
-def test_a_keychain_that_doesnt_answer_fails_within_the_limit() -> None:
+def test_a_keychain_that_does_not_answer_fails_within_the_limit() -> None:
     backend = StalledKeyring()
     secrets = KeychainSecrets(backend=backend, timeout=timedelta(seconds=0.05))
 

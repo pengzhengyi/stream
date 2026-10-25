@@ -79,7 +79,7 @@ def test_an_extractor_that_no_longer_understands_the_page_is_a_fault() -> None:
     assert "initial state" in str(failure)
 
 
-def test_yt_dlp_refuses_a_url_bilibilis_extractor_doesnt_handle_without_fetching_it() -> None:
+def test_yt_dlp_refuses_a_url_the_bilibili_extractor_does_not_handle_without_fetching_it() -> None:
     # example.invalid can't resolve, so a fetch would fail as a network failure.
     with pytest.raises(RuntimeError, match="No suitable extractor"):
         extract("https://example.invalid/video/1", playlist=False)

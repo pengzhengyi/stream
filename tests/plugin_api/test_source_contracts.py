@@ -162,7 +162,7 @@ def test_a_spec_that_keeps_the_contract_keeps_its_login_unchanged_when_checked_a
     assert check_credential_spec(Spec(), "cookies").login == "SESSDATA=1"
 
 
-def test_a_login_that_isnt_valid_keeps_nothing() -> None:
+def test_a_login_that_is_not_valid_keeps_nothing() -> None:
     assert check_credential_spec(Spec(valid=False), "cookies").login == ""
 
 

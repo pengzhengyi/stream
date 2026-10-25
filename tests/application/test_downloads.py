@@ -103,18 +103,18 @@ def test_a_download_gets_a_copy_of_the_valid_login_only_its_owner_reads(
 ) -> None:
     site.linked.save(alice, "bilibili", COOKIES)
 
-    added = _added(site, alice, "BVsignedin")
+    added = _added(site, alice, "BVSignedIn")
     view = _finished(site, added)
 
     said = _read(site.data_dir / "downloads" / f"{added.source_id}.m4a")
-    assert said == f"BVsignedin/p1 quality=30280 login={SESSION} mode=0o600"
+    assert said == f"BVSignedIn/p1 quality=30280 login={SESSION} mode=0o600"
     assert not (site.data_dir / "jobs" / str(view.job.id)).exists()
 
 
 def test_a_download_that_needs_a_login_fails_without_one_saying_so(
     site: Site, alice: Account
 ) -> None:
-    view = _failed(site, _added(site, alice, "BVsignedin"))
+    view = _failed(site, _added(site, alice, "BVSignedIn"))
 
     assert (view.job.failure_kind, "refused the login" in view.job.failure_message) == (
         "auth",
