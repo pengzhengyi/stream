@@ -5,11 +5,13 @@ from pathlib import Path
 
 import pytest
 from alembic.autogenerate import compare_metadata
+from alembic.config import Config
 from alembic.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
-from medleyplay.persistence.database import database_url, make_engine, migrate
+from medleyplay.persistence.database import MIGRATIONS, database_url, make_engine, migrate
 from medleyplay.persistence.schema import Base, UtcDateTime
 
 
@@ -32,7 +34,13 @@ def test_migrating_a_current_database_again_changes_nothing(
     migrate(engine)
 
     with engine.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0001"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == _head()
+
+
+def _head() -> str | None:
+    config = Config()
+    config.set_main_option("script_location", MIGRATIONS)
+    return ScriptDirectory.from_config(config).get_current_head()
 
 
 @pytest.mark.parametrize(

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
+from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
 from medleyplay.web.app import create_app
@@ -54,7 +55,15 @@ def catalog(units: sessionmaker[Session], clock: FakeClock) -> CatalogService:
 
 
 @pytest.fixture
-def client(accounts: AccountService, catalog: CatalogService) -> Iterator[TestClient]:
-    app = create_app(Services(accounts, catalog), allowed_hosts=[TEST_HOST])
+def plugins(units: sessionmaker[Session], clock: FakeClock) -> PluginService:
+    # No plugins and no host; suites that need plugins start a host of test plugins.
+    return PluginService(units, clock, Lineup(), host=None)
+
+
+@pytest.fixture
+def client(
+    accounts: AccountService, catalog: CatalogService, plugins: PluginService
+) -> Iterator[TestClient]:
+    app = create_app(Services(accounts, catalog, plugins), allowed_hosts=[TEST_HOST])
     with TestClient(app, base_url=f"http://{TEST_HOST}") as test_client:
         yield test_client

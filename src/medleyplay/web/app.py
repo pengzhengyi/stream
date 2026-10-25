@@ -17,10 +17,12 @@ from medleyplay.domain.errors import (
     MedleyplayError,
     NotFoundError,
     NotSignedInError,
+    PluginCallError,
+    PluginUnavailableError,
     SignInRefusedError,
     SignInThrottledError,
 )
-from medleyplay.web import accounts, catalog
+from medleyplay.web import accounts, catalog, plugins
 from medleyplay.web.deps import Services
 
 _STATUS_OF: Final[tuple[tuple[type[MedleyplayError], int], ...]] = (
@@ -31,6 +33,8 @@ _STATUS_OF: Final[tuple[tuple[type[MedleyplayError], int], ...]] = (
     (NotSignedInError, status.HTTP_401_UNAUTHORIZED),
     (SignInRefusedError, status.HTTP_401_UNAUTHORIZED),
     (SignInThrottledError, status.HTTP_429_TOO_MANY_REQUESTS),
+    (PluginUnavailableError, status.HTTP_503_SERVICE_UNAVAILABLE),
+    (PluginCallError, status.HTTP_502_BAD_GATEWAY),
 )
 _DETAIL_OF: Final[dict[type[MedleyplayError], str]] = {
     NotSignedInError: "Sign in first.",
@@ -54,6 +58,7 @@ def create_app(
     app.state.services = services
     app.include_router(accounts.router)
     app.include_router(catalog.router)
+    app.include_router(plugins.router)
     app.add_exception_handler(MedleyplayError, _handle_domain_error)  # type: ignore[arg-type] # Starlette types handlers for any Exception
     app.middleware("http")(_refuse_cross_origin_writes)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts))

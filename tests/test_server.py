@@ -5,7 +5,10 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from medleyplay.server import Settings, build_app, default_data_dir, local_host_names
+from medleyplay.config import ConfigError
+from medleyplay.server import PluginSource, Settings, build_app, default_data_dir, local_host_names
+from tests.support.api import set_up_as_alice
+from tests.support.hosts import TEST_COMMAND, TEST_PLUGINS
 
 
 def test_the_data_folder_comes_from_medleyplay_data_dir(tmp_path: Path) -> None:
@@ -52,14 +55,62 @@ def test_the_built_app_creates_its_database_and_answers(tmp_path: Path) -> None:
     assert data_dir.stat().st_mode & 0o777 == 0o700
 
 
-def test_one_account_is_the_default() -> None:
-    assert not Settings.from_environment({}).multiple_accounts
+def _data_dir_with_config(tmp_path: Path, config: str) -> Path:
+    (tmp_path / "medleyplay.toml").write_text(config, encoding="utf-8")
+    return tmp_path
 
 
-@pytest.mark.parametrize(("value", "expected"), [("1", True), ("true", True), ("0", False)])
-def test_several_accounts_are_turned_on_by_medleyplay_multiple_accounts(
-    value: str, *, expected: bool
-) -> None:
-    settings = Settings.from_environment({"MEDLEYPLAY_MULTIPLE_ACCOUNTS": value})
+TEST_SOURCE = PluginSource(TEST_PLUGINS, TEST_COMMAND)
+# Every test plugin but `parrot` is off, so the server starts quickly.
+ONLY_PARROT = "\n".join(
+    f"[plugins.{name}]\nenabled = false"
+    for name in ("broken-import", "crashes-on-import", "future-version", "hangs-on-import",
+                 "mute", "mynah", "not-a-plugin", "squatter", "stutter")
+)  # fmt: skip
 
-    assert settings.multiple_accounts is expected
+
+def test_one_account_is_the_default(tmp_path: Path) -> None:
+    app = build_app(Settings(data_dir=tmp_path, allowed_hosts=("testserver",)))
+
+    with TestClient(app) as client:
+        assert not client.get("/api/setup").json()["multiple_accounts"]
+
+
+def test_the_config_file_turns_several_accounts_on(tmp_path: Path) -> None:
+    data_dir = _data_dir_with_config(tmp_path, "multiple_accounts = true")
+    app = build_app(Settings(data_dir=data_dir, allowed_hosts=("testserver",)))
+
+    with TestClient(app) as client:
+        assert client.get("/api/setup").json()["multiple_accounts"]
+
+
+def test_a_config_file_with_an_invalid_setting_stops_the_server(tmp_path: Path) -> None:
+    data_dir = _data_dir_with_config(tmp_path, 'multiple_accounts = "maybe"')
+
+    with pytest.raises(ConfigError):
+        build_app(Settings(data_dir=data_dir, allowed_hosts=("testserver",)))
+
+
+def test_the_built_app_starts_the_plugins_the_config_file_leaves_on(tmp_path: Path) -> None:
+    data_dir = _data_dir_with_config(tmp_path, ONLY_PARROT)
+    app = build_app(Settings(data_dir=data_dir, allowed_hosts=("testserver",)), TEST_SOURCE)
+
+    with TestClient(app, base_url="http://testserver") as client:
+        set_up_as_alice(client)
+        providers = client.get("/api/features").json()["providers"]
+        states = {p["name"]: p["state"] for p in client.get("/api/plugins").json()}
+
+    assert providers == {"echo": ["parrot"]}
+    assert states["parrot"] == "on"
+    assert states["mynah"] == "off"
+
+
+def test_in_safe_mode_the_built_app_starts_no_plugins(tmp_path: Path) -> None:
+    settings = Settings(data_dir=tmp_path, allowed_hosts=("testserver",), safe_mode=True)
+    app = build_app(settings, TEST_SOURCE)
+
+    with TestClient(app, base_url="http://testserver") as client:
+        set_up_as_alice(client)
+        providers = client.get("/api/features").json()["providers"]
+
+    assert providers == {}

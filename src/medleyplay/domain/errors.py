@@ -1,5 +1,7 @@
 """The errors the core raises, rooted in one type so callers can catch them together."""
 
+from typing import Literal
+
 
 class MedleyplayError(Exception):
     """A failure the core reports to its caller."""
@@ -36,3 +38,20 @@ class SignInThrottledError(MedleyplayError):
         """Record how long the caller should wait."""
         super().__init__(f"Too many failed sign-ins; retry in {retry_after_seconds} s.")
         self.retry_after_seconds = retry_after_seconds
+
+
+class PluginUnavailableError(MedleyplayError):
+    """No plugin can answer now: none is on for the key, or the plugin host is busy."""
+
+
+type PluginFailureKind = Literal["network", "auth", "plugin"]
+"""Why a plugin call failed: the site's network, its login, or the plugin itself."""
+
+
+class PluginCallError(MedleyplayError):
+    """A plugin call failed; `kind` says why."""
+
+    def __init__(self, kind: PluginFailureKind, message: str) -> None:
+        """Record why the call failed."""
+        super().__init__(message)
+        self.kind: PluginFailureKind = kind

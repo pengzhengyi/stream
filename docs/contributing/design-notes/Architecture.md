@@ -1,7 +1,7 @@
 # Architecture
 
 > [!IMPORTANT]
-> **Status: approved, not yet implemented.** This note describes how medleyplay is
+> **Status: approved; the core's Accounts, catalog, and plugin host are implemented.** This note describes how medleyplay is
 > built: a small core that is reviewed closely, and features that arrive as
 > plugins behind feature toggles. What the MVP delivers, and in what order, is in
 > [MVP](MVP.md).
@@ -107,8 +107,9 @@ and the core never imports a plugin.
 
 **The registry** is our own, typed one. Each plugin exposes
 `register(registry)` and adds providers by key, for example
-`registry.add_source_resolver("bilibili", resolver)`, so mypy checks a plugin's
-shape where it registers. Every call goes through one guarded path: deadline,
+`registry.add(SOURCE_RESOLVER, "bilibili", resolver)`, so mypy checks a plugin's
+shape where it registers. How plugins load and are called is in
+[Plugin host](Plugin%20host.md). Every call goes through one guarded path: deadline,
 circuit breaker, and validation. pluggy was considered and not chosen: it is
 built for many plugins on one hook, while every extension point here has one
 provider per key. Its results are untyped, and isolation would have to wrap each

@@ -10,6 +10,7 @@ dependencies = [
     "alembic>=1.20.1",
     "fastapi>=0.162.0",
     "pwdlib[argon2]>=0.3.1",
+    "pydantic>=2.14.1",
     "sqlalchemy>=2.1.6",
     "uvicorn>=0.54.0",
 ]
@@ -64,6 +65,8 @@ ignore = [
     "ANN401",  # fixtures may be generic
     "S105",    # test passwords are fixtures, not secrets
     "S106",
+    "ARG001",  # a fake keeps the signature its caller expects, used or not
+    "ARG002",
 ]
 # Alembic loads migration scripts by path; they are not an importable package.
 "src/medleyplay/persistence/migrations/**" = ["INP001"]
@@ -104,6 +107,7 @@ type = "layers"
 layers = [
     "medleyplay.__main__",
     "medleyplay.server",
+    "medleyplay.config",
     "medleyplay.web",
     "medleyplay.application",
     "medleyplay.persistence",
@@ -121,6 +125,77 @@ name = "Only the web layer and the composition root use the web framework"
 type = "forbidden"
 source_modules = ["medleyplay.application", "medleyplay.persistence"]
 forbidden_modules = ["fastapi", "starlette", "uvicorn"]
+
+[[tool.importlinter.contracts]]
+name = "The plugin API stands alone: a plugin importing it gets nothing of the core"
+type = "forbidden"
+source_modules = ["medleyplay.plugin_api"]
+forbidden_modules = [
+    "medleyplay.__main__",
+    "medleyplay.server",
+    "medleyplay.config",
+    "medleyplay.web",
+    "medleyplay.application",
+    "medleyplay.persistence",
+    "medleyplay.domain",
+    "medleyplay.plugin_host",
+    "medleyplay.plugins",
+    "fastapi",
+    "starlette",
+    "sqlalchemy",
+    "alembic",
+    "uvicorn",
+]
+
+[[tool.importlinter.contracts]]
+name = "The plugin host never touches the database or the web"
+type = "forbidden"
+source_modules = ["medleyplay.plugin_host"]
+forbidden_modules = [
+    "medleyplay.__main__",
+    "medleyplay.server",
+    "medleyplay.config",
+    "medleyplay.web",
+    "medleyplay.application",
+    "medleyplay.persistence",
+    "medleyplay.domain",
+    "fastapi",
+    "starlette",
+    "sqlalchemy",
+    "alembic",
+    "uvicorn",
+]
+
+[[tool.importlinter.contracts]]
+name = "A plugin imports only the plugin API"
+type = "forbidden"
+source_modules = ["medleyplay.plugins"]
+forbidden_modules = [
+    "medleyplay.__main__",
+    "medleyplay.server",
+    "medleyplay.config",
+    "medleyplay.web",
+    "medleyplay.application",
+    "medleyplay.persistence",
+    "medleyplay.domain",
+    "medleyplay.plugin_host",
+]
+
+[[tool.importlinter.contracts]]
+name = "The core never imports a plugin; only the plugin host loads them, by name"
+type = "forbidden"
+source_modules = [
+    "medleyplay.__main__",
+    "medleyplay.server",
+    "medleyplay.config",
+    "medleyplay.web",
+    "medleyplay.application",
+    "medleyplay.persistence",
+    "medleyplay.domain",
+    "medleyplay.plugin_host",
+    "medleyplay.plugin_api",
+]
+forbidden_modules = ["medleyplay.plugins"]
 
 # ── bandit ──────────────────────────────────────────────────────────────────
 # Runs over `src` in CI (`bandit -c pyproject.toml -r src`). Tests are excluded
@@ -142,6 +217,9 @@ filterwarnings = ["error"]
 [tool.coverage.run]
 branch = true
 source = ["medleyplay"]
+# Plugin hosts run in their own processes; measure them too, including those that
+# end with `os._exit`.
+patch = ["subprocess", "_exit"]
 
 [tool.coverage.report]
 show_missing = true
