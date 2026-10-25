@@ -203,8 +203,11 @@ valid linked accounts, the limit, the free space, and the time.
    [removal order](#removal-order), only as much as this candidate needs. A
    candidate that can't fit even so is skipped, and the next, smaller one may
    still fit.
-3. **Over the limit with nothing to start,** removable files are removed in the
-   same order until use is back under the limit, as when an admin lowers it.
+3. **Over the limit after that,** as when an admin lowers it, removable files
+   are removed in the same order until use is back under the limit. When even
+   removing all of them wouldn't get there, because what may not be removed is
+   over the limit alone, nothing is removed: removing would cost files and still
+   not meet the limit.
 4. **At most two policy Downloads are active at once,** counting those already
    running or queued; the rest wait for the next evaluation, which a finishing
    Download requests. So a large Playlist never floods the queue, and a Track
@@ -313,9 +316,10 @@ first:
   - applying a plan exactly, then planning again, plans nothing more;
   - applying it, completing its Downloads at sizes other than estimated, and
     planning until nothing changes, ends;
-  - the plan doesn't depend on the order of the snapshot's rows;
-  - raising the limit never removes more, and wanting one more Track never
-    removes a wanted Download.
+  - the plan doesn't depend on the order of the snapshot's rows.
+- **Not a property:** raising the limit can remove more, since a large wanted
+  Track that couldn't fit under the lower limit may fit under the higher one by
+  making room.
 - **Rules:** each field, operator, and `negate` by example, with the table of
   untouched Tracks; rules round-trip through JSON; a newer version, an unknown
   field, and too many conditions are refused.
