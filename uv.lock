@@ -1034,6 +1034,7 @@ dependencies = [
     { name = "alembic" },
     { name = "fastapi" },
     { name = "pwdlib", extra = ["argon2"] },
+    { name = "pydantic" },
     { name = "sqlalchemy" },
     { name = "uvicorn" },
 ]
@@ -1057,6 +1058,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.20.1" },
     { name = "fastapi", specifier = ">=0.162.0" },
     { name = "pwdlib", extras = ["argon2"], specifier = ">=0.3.1" },
+    { name = "pydantic", specifier = ">=2.14.1" },
     { name = "sqlalchemy", specifier = ">=2.1.6" },
     { name = "uvicorn", specifier = ">=0.54.0" },
 ]

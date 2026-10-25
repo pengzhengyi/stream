@@ -1,4 +1,4 @@
-"""The composition root: settings from the environment, and the app wired from them."""
+"""The composition root: settings from the environment and the config file, and the app."""
 
 import contextlib
 import os
@@ -6,7 +6,7 @@ import socket
 import sys
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
@@ -19,24 +19,30 @@ from sqlalchemy import Engine
 from medleyplay.application import Clock
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
+from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.throttle import SignInThrottle
+from medleyplay.config import CONFIG_FILE, Config, load_config
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
+from medleyplay.plugin_host.client import HostCommand, PluginHost
+from medleyplay.plugin_host.loader import BUILT_IN_PLUGINS, plugin_names
 from medleyplay.web.app import create_app
 from medleyplay.web.deps import Services
 
 DEFAULT_PORT: Final = 8000
 DATA_DIR_VARIABLE: Final = "MEDLEYPLAY_DATA_DIR"
 ALLOWED_HOSTS_VARIABLE: Final = "MEDLEYPLAY_ALLOWED_HOSTS"
-MULTIPLE_ACCOUNTS_VARIABLE: Final = "MEDLEYPLAY_MULTIPLE_ACCOUNTS"
 
 
 @dataclass(frozen=True)
 class Settings:
-    """Where the server keeps its data, which host names it answers to, and its Accounts."""
+    """Where the server keeps its data, which host names it answers to, and safe mode.
+
+    Everything else is in the config file in the data folder.
+    """
 
     data_dir: Path
     allowed_hosts: tuple[str, ...]
-    multiple_accounts: bool = False
+    safe_mode: bool = False
 
     @classmethod
     def from_environment(cls, environ: Mapping[str, str]) -> "Settings":
@@ -44,17 +50,19 @@ class Settings:
 
         `MEDLEYPLAY_DATA_DIR` overrides the data folder. `MEDLEYPLAY_ALLOWED_HOSTS`
         adds comma-separated host names, such as a router's DNS name for the server.
-        `MEDLEYPLAY_MULTIPLE_ACCOUNTS=1` lets an admin create more Accounts.
         """
         configured = environ.get(DATA_DIR_VARIABLE)
         data_dir = Path(configured) if configured else default_data_dir(environ)
         extra = tuple(h.strip() for h in environ.get(ALLOWED_HOSTS_VARIABLE, "").split(",") if h)
-        multiple = environ.get(MULTIPLE_ACCOUNTS_VARIABLE, "").lower() in {"1", "true", "yes"}
-        return cls(
-            data_dir=data_dir,
-            allowed_hosts=(*local_host_names(), *extra),
-            multiple_accounts=multiple,
-        )
+        return cls(data_dir=data_dir, allowed_hosts=(*local_host_names(), *extra))
+
+
+@dataclass(frozen=True)
+class PluginSource:
+    """Where plugins come from, and how to start the host that runs them."""
+
+    package: str = BUILT_IN_PLUGINS
+    command: HostCommand = field(default_factory=HostCommand)
 
 
 def default_data_dir(environ: Mapping[str, str], platform: str = sys.platform) -> Path:
@@ -101,33 +109,50 @@ def open_database(data_dir: Path) -> Engine:
 
 
 def build_services(
-    engine: Engine, clock: Clock = utc_now, *, multiple_accounts: bool = False
+    engine: Engine,
+    clock: Clock = utc_now,
+    *,
+    config: Config = Config(),  # noqa: B008 -- a frozen value
+    safe_mode: bool = False,
+    source: PluginSource = PluginSource(),  # noqa: B008 -- a frozen value
 ) -> Services:
-    """Return the services over the database `engine` opens."""
+    """Return the services over the database `engine` opens, configured by `config`."""
     units = make_sessionmaker(engine)
     hasher = PasswordHash((Argon2Hasher(),))
+    available = plugin_names(source.package)
+    enabled = () if safe_mode else config.enabled_plugins(available)
+    lineup = Lineup(available, enabled, config.unknown_plugins(available), safe_mode)
+    host = PluginHost(enabled, package=source.package, command=source.command) if enabled else None
     return Services(
         accounts=AccountService(
-            units, hasher, clock, SignInThrottle(clock), multiple_accounts=multiple_accounts
+            units, hasher, clock, SignInThrottle(clock), multiple_accounts=config.multiple_accounts
         ),
         catalog=CatalogService(units, clock),
+        plugins=PluginService(units, clock, lineup, host),
     )
 
 
-def build_app(settings: Settings) -> FastAPI:
-    """Return the server's app for `settings`; it closes the database when it shuts down."""
+def build_app(settings: Settings, source: PluginSource = PluginSource()) -> FastAPI:  # noqa: B008 -- a frozen value
+    """Return the server's app for `settings`.
+
+    The app starts the plugin host when it starts, and stops it and closes the
+    database when it shuts down. A config file that doesn't parse raises
+    `ConfigError`.
+    """
+    config = load_config(settings.data_dir / CONFIG_FILE)
     engine = open_database(settings.data_dir)
+    services = build_services(engine, config=config, safe_mode=settings.safe_mode, source=source)
 
     @asynccontextmanager
-    async def close_database_on_shutdown(_: FastAPI) -> AsyncIterator[None]:
-        yield
-        engine.dispose()
+    async def run_plugins(_: FastAPI) -> AsyncIterator[None]:
+        services.plugins.start()
+        try:
+            yield
+        finally:
+            services.plugins.close()
+            engine.dispose()
 
-    return create_app(
-        build_services(engine, multiple_accounts=settings.multiple_accounts),
-        settings.allowed_hosts,
-        lifespan=close_database_on_shutdown,
-    )
+    return create_app(services, settings.allowed_hosts, lifespan=run_plugins)
 
 
 def environment() -> Mapping[str, str]:

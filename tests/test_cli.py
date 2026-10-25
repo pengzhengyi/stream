@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from medleyplay.__main__ import main
-from medleyplay.server import Settings, build_services, open_database
+from medleyplay.server import Settings, build_app, build_services, open_database
 from tests.support.factories import PASSWORD, NewAccountFactory
 
 
@@ -83,6 +83,34 @@ def test_serve_listens_on_every_interface_at_port_8000_by_default() -> None:
     main(["serve"], serve=lambda _, host, port: started.append((host, port)))
 
     assert started == [("0.0.0.0", 8000)]  # noqa: S104 -- the default under test
+
+
+@pytest.mark.parametrize(("arguments", "safe_mode"), [([], False), (["--safe-mode"], True)])
+@pytest.mark.usefixtures("data_dir")
+def test_serve_starts_in_safe_mode_only_when_asked(
+    arguments: list[str], *, safe_mode: bool
+) -> None:
+    started: list[Settings] = []
+
+    main(["serve", *arguments], serve=lambda settings, _, __: started.append(settings))
+
+    assert [settings.safe_mode for settings in started] == [safe_mode]
+
+
+def _build_only(settings: Settings, host: str, port: int) -> None:
+    """Build the app as `serve` does, without listening."""
+    build_app(settings)
+
+
+def test_serve_with_an_invalid_config_file_fails_with_the_reason(
+    data_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (data_dir / "medleyplay.toml").write_text("multiple_accounts = = 1", encoding="utf-8")
+
+    exit_code = main(["serve"], serve=_build_only)
+
+    assert exit_code == 1
+    assert "isn't valid TOML" in capsys.readouterr().err
 
 
 def test_reset_password_sets_the_new_password(

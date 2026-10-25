@@ -25,6 +25,11 @@ class AccountFactory:
     """Builds Accounts that exist only in memory, for checks that need no database."""
 
     @staticmethod
+    def admin(account_id: int = 98) -> Account:
+        """Return an admin Account."""
+        return Account(AccountId(account_id), Username("admin"), "Admin", Role.ADMIN)
+
+    @staticmethod
     def member(account_id: int = 99) -> Account:
         """Return a member Account."""
         return Account(AccountId(account_id), Username("member"), "Member", Role.MEMBER)

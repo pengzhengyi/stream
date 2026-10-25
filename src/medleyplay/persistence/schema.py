@@ -159,3 +159,13 @@ class PlaylistEntryRow(Base):
     )
     position: Mapped[int] = mapped_column(primary_key=True)
     track_id: Mapped[int] = mapped_column(ForeignKey("track.id", ondelete="CASCADE"), index=True)
+
+
+class PluginStateRow(Base):
+    """What the core keeps about one plugin across restarts: whether it is faulted."""
+
+    __tablename__ = "plugin_state"
+
+    name: Mapped[str] = mapped_column(String(64), primary_key=True)
+    faulted_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    fault_reason: Mapped[str] = mapped_column(String(2048), default="")

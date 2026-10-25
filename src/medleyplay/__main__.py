@@ -1,11 +1,13 @@
 """Command-line entry point: `python -m medleyplay`."""
 
 import argparse
+import dataclasses
 import getpass
 import sys
 from collections.abc import Callable, Sequence
 
 from medleyplay import __version__
+from medleyplay.config import CONFIG_FILE, ConfigError, load_config
 from medleyplay.domain.errors import MedleyplayError
 from medleyplay.server import (
     DEFAULT_PORT,
@@ -29,11 +31,16 @@ def main(
     parser = _parser()
     args = parser.parse_args(argv)
     settings = Settings.from_environment(environment())
-    match args.command:
-        case "serve":
-            (serve or _run_server)(settings, args.host, args.port)
-        case "reset-password":
-            return _reset_password(settings, args.username, read_password)
+    try:
+        match args.command:
+            case "serve":
+                settings = dataclasses.replace(settings, safe_mode=args.safe_mode)
+                (serve or _run_server)(settings, args.host, args.port)
+            case "reset-password":
+                return _reset_password(settings, args.username, read_password)
+    except ConfigError as error:
+        sys.stderr.write(f"{error}\n")
+        return 1
     return 0
 
 
@@ -48,6 +55,9 @@ def _parser() -> argparse.ArgumentParser:
     # Every interface by default: devices on the LAN must reach it.
     serve.add_argument("--host", default="0.0.0.0", help="address to listen on")  # noqa: S104  # nosec B104
     serve.add_argument("--port", type=int, default=DEFAULT_PORT, help="port to listen on")
+    serve.add_argument(
+        "--safe-mode", action="store_true", help="start with every plugin off, for this run"
+    )
     reset = commands.add_parser(
         "reset-password", help="set an Account's password and sign it out everywhere"
     )
@@ -66,9 +76,10 @@ def _reset_password(settings: Settings, username: str, read_password: ReadPasswo
     if read_password("Repeat it: ") != password:
         sys.stderr.write("The passwords don't match; nothing changed.\n")
         return 1
+    config = load_config(settings.data_dir / CONFIG_FILE)
     engine = open_database(settings.data_dir)
     try:
-        build_services(engine).accounts.reset_password(username, password)
+        build_services(engine, config=config).accounts.reset_password(username, password)
     except MedleyplayError as error:
         sys.stderr.write(f"{error}\n")
         return 1
