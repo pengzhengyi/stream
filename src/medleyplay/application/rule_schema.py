@@ -134,6 +134,11 @@ def read_rules(document: object) -> Rules:
         where = ".".join(str(part) for part in first["loc"])
         message = f"The rules aren't valid at {where}: {first['msg']}"
         raise InvalidInputError(message) from None
+    return to_rules(parsed)
+
+
+def to_rules(parsed: RulesIn) -> Rules:
+    """Return the rules a checked document spells out."""
     return Rules(parsed.match, tuple(_negated(each) for each in parsed.conditions))
 
 

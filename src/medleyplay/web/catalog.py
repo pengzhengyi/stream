@@ -6,6 +6,7 @@ from datetime import datetime
 from fastapi import APIRouter, Response, status
 from pydantic import AwareDatetime, BaseModel, Field
 
+from medleyplay.application.rule_schema import RulesIn, rules_document, to_rules
 from medleyplay.domain.catalog import (
     MAX_PLAYLIST_LENGTH,
     MAX_RATING,
@@ -78,18 +79,25 @@ class PlayIn(BaseModel):
 
 
 class PlaylistIn(BaseModel):
-    """A whole Playlist: its name and its Tracks in order."""
+    """A whole Playlist: its name, and its Tracks in order or its rules, never both."""
 
     name: str = Field(examples=["Morning"])
-    track_ids: list[int] = Field(max_length=MAX_PLAYLIST_LENGTH)
+    track_ids: list[int] | None = Field(default=None, max_length=MAX_PLAYLIST_LENGTH)
+    rules: RulesIn | None = None
+    keep_downloaded: bool = False
+    """Keep every Track the Playlist holds downloaded on the server."""
 
 
 class PlaylistOut(BaseModel):
-    """A Playlist."""
+    """A Playlist; a smart one's Tracks are the ones its rules match now, newest added first."""
 
     id: uuid.UUID
     name: str
     track_ids: list[int]
+    rules: dict[str, object] | None
+    keep_downloaded: bool
+    unreadable: str
+    """Why the server can't read the Playlist's stored rules, or empty."""
     updated_at: datetime
 
     @classmethod
@@ -99,6 +107,9 @@ class PlaylistOut(BaseModel):
             id=playlist.id,
             name=playlist.name,
             track_ids=list(playlist.track_ids),
+            rules=None if playlist.rules is None else rules_document(playlist.rules),
+            keep_downloaded=playlist.keep_downloaded,
+            unreadable=playlist.unreadable,
             updated_at=playlist.updated_at,
         )
 
@@ -160,8 +171,16 @@ def put_playlist(
     catalog: CatalogDep,
 ) -> PlaylistOut:
     """Create or replace a Playlist under an id you choose; 201 when new, 200 when replaced."""
+    track_ids = None if body.track_ids is None else [TrackId(i) for i in body.track_ids]
+    if track_ids is None and body.rules is None:
+        track_ids = []
     playlist, created = catalog.put_playlist(
-        me.id, PlaylistId(playlist_id), body.name, [TrackId(i) for i in body.track_ids]
+        me.id,
+        PlaylistId(playlist_id),
+        body.name,
+        track_ids,
+        rules=None if body.rules is None else to_rules(body.rules),
+        keep_downloaded=body.keep_downloaded,
     )
     response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
     return PlaylistOut.of(playlist)
