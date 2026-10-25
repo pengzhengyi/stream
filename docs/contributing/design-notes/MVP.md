@@ -71,6 +71,8 @@
 - `session`: account, token hash, created, last seen.
 - `track`: title, artist, album, album artist, duration, added.
 - `track_state`: account, track, favorite, rating, play count, last played.
+- `play`: account, a client-chosen id, track, played at; recording one again
+  changes nothing.
 - `source`: track, kind, a unique canonical locator per kind (a path in a
   Library, or a BV id and part), a quick fingerprint (size plus a hash of the
   first and last 64 KB), state (`ok`, `missing`, `unavailable`, `can't play`),
@@ -135,6 +137,7 @@
   it when the Job finishes; Offline, it shows *available when online*. No
   request waits on a Job.
 - Playing records the play in that Account's history.
+- How the core serves audio and records plays is in [Playback](Playback.md).
 
 ### Enforce the policy
 
@@ -214,7 +217,8 @@
   or crashes, against the host and the Job runner.
 - **Web API:** httpx tests for sign-in and for Range: `bytes=0-1`, open-ended,
   suffix (`bytes=-N`), unsatisfiable (416), multiple ranges (answered with the
-  first), `HEAD`, `ETag` with `If-Range`, and `audio/mp4` for `.m4a`.
+  first satisfiable one), `HEAD`, `ETag` with `If-Range`, and the media types;
+  see [Playback](Playback.md#testing).
 - **Client:** Vitest for components and Playwright for sign-in, playback,
   seeking, and the queue.
 - **iOS by hand:** a short checklist per release for the lock screen,

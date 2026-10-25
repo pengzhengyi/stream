@@ -28,6 +28,11 @@ Register a folder or a zip archive of your music with `POST /api/libraries`,
 such as `{"name": "Music", "kind": "folder", "path": "~/Music"}`; its scan shows
 in `GET /api/jobs`, and its songs in `GET /api/tracks`.
 
+To play a song, `POST /api/tracks/{id}/playback` answers its audio URL, which
+serves the file with Range, so a browser can seek in it. A song compressed in a
+zip archive is copied once into the cache in the data folder; until the copy is
+made, the answer says *preparing* with its Job.
+
 The config file is optional; a missing setting takes its default, and a change
 applies on restart. This one lets the admin add Accounts beyond the first, and
 turns one plugin off:

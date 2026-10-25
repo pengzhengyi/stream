@@ -1,7 +1,7 @@
 # Architecture
 
 > [!IMPORTANT]
-> **Status: approved; the core's Accounts, catalog, plugin host, Jobs, and Libraries are implemented.** This note describes how medleyplay is
+> **Status: approved; the core's Accounts, catalog, plugin host, Jobs, Libraries, and audio serving are implemented.** This note describes how medleyplay is
 > built: a small core that is reviewed closely, and features that arrive as
 > plugins behind feature toggles. What the MVP delivers, and in what order, is in
 > [MVP](MVP.md).
