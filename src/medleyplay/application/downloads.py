@@ -6,6 +6,7 @@ Job. A crash between the two leaves a file no row names, which the sweep at
 startup removes, and the Job runs again.
 """
 
+from datetime import timedelta
 from pathlib import Path, PurePosixPath
 from typing import Final
 
@@ -16,7 +17,7 @@ from medleyplay.application import Clock
 from medleyplay.application.jobs import JobKind, JobService
 from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.plugins import PluginService
-from medleyplay.domain.accounts import Account
+from medleyplay.domain.accounts import Account, AccountId
 from medleyplay.domain.catalog import SourceId, SourceState
 from medleyplay.domain.downloads import (
     DOWNLOAD_EXTENSIONS,
@@ -37,6 +38,8 @@ from medleyplay.programs.download_source import (
 )
 
 DOWNLOAD_KIND: Final = "download_source"
+SERVED_EVERY: Final = timedelta(minutes=1)
+"""How often a Download's last served time is written, since a player asks for many ranges."""
 QUALITY_DETAIL: Final = "quality"
 """Where a site's Source keeps the quality its Downloads ask for, in its details."""
 
@@ -96,14 +99,38 @@ class DownloadService:
         kind: DownloadKind,
         linked: LinkedAccountService,
         data_dir: Path,
+        clock: Clock,
     ) -> None:
         """Create a service keeping Downloads in `downloads/` in `data_dir`."""
+        self._clock = clock
         self._units = units
         self._plugins = plugins
         self._jobs = jobs
         self._kind = kind
         self._linked = linked
         self.folder = data_dir / DOWNLOADS_FOLDER
+
+    def start_for(self, account_id: AccountId, source_id: SourceId) -> Job | None:
+        """Start downloading the Source for the policy, as `account_id`, even after a failure.
+
+        As `start`, but a failed last download is tried again: the policy decides
+        when that is due.
+        """
+        return self._start(account_id, source_id, retry_failed=True)
+
+    def served(self, source_id: SourceId) -> None:
+        """Record that the Source's Download was served now, at most once a minute."""
+        now = self._clock()
+        with self._units.begin() as db:
+            db.execute(
+                update(DownloadRow)
+                .where(
+                    DownloadRow.source_id == source_id,
+                    (DownloadRow.last_served_at.is_(None))
+                    | (DownloadRow.last_served_at <= now - SERVED_EVERY),
+                )
+                .values(last_served_at=now)
+            )
 
     def start(self, caller: Account, source_id: SourceId) -> Job | None:
         """Start downloading the Source, or return the Job already doing it.
@@ -114,6 +141,11 @@ class DownloadService:
         answer is that Job: the household retries it, so playing a Track again
         and again doesn't ask the site again and again.
         """
+        return self._start(caller.id, source_id, retry_failed=False)
+
+    def _start(
+        self, account_id: AccountId, source_id: SourceId, *, retry_failed: bool
+    ) -> Job | None:
         with self._units() as db:
             row = db.get(SourceRow, source_id)
             if row is None or row.kind != BILIBILI_SOURCE:
@@ -136,10 +168,10 @@ class DownloadService:
         )
         target = download_target(source_id)
         latest = self._jobs.latest(DOWNLOAD_KIND, target)
-        if latest is not None and latest.state is JobState.FAILED:
+        if not retry_failed and latest is not None and latest.state is JobState.FAILED:
             return latest
-        login = caller.id if self._linked.has_valid(caller.id, site) else None
-        return self._jobs.submit(self._kind, target, request, caller.id, login_account=login)
+        login = account_id if self._linked.has_valid(account_id, site) else None
+        return self._jobs.submit(self._kind, target, request, account_id, login_account=login)
 
     def sweep(self) -> None:
         """Remove every file in `downloads/` that no Download names."""

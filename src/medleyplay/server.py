@@ -167,7 +167,7 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
     )
     jobs = JobService(units, clock, job_kinds, runner, events)
     catalog = CatalogService(units, clock)
-    downloads = DownloadService(units, plugins, jobs, download, linked, data_dir)
+    downloads = DownloadService(units, plugins, jobs, download, linked, data_dir, clock)
     return Services(
         accounts=AccountService(
             units, hasher, clock, SignInThrottle(clock), multiple_accounts=config.multiple_accounts

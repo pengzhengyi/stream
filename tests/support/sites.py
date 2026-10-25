@@ -76,7 +76,7 @@ def running_site(
         )
         jobs = JobService(units, clock, kinds, runner)
         catalog = CatalogService(units, clock)
-        downloads = DownloadService(units, plugins, jobs, download, linked, data_dir)
+        downloads = DownloadService(units, plugins, jobs, download, linked, data_dir, clock)
         jobs.start()
         try:
             yield Site(

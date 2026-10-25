@@ -114,7 +114,7 @@ def downloads(
 ) -> DownloadService:
     data_dir = tmp_path / "data"
     kind = download_source_kind(data_dir, tmp_path / "jobs", clock)
-    return DownloadService(units, plugins, jobs, kind, linked, data_dir)
+    return DownloadService(units, plugins, jobs, kind, linked, data_dir, clock)
 
 
 @pytest.fixture

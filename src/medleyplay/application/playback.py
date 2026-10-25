@@ -320,6 +320,7 @@ class PlaybackService:
         if not stat.S_ISREG(info.st_mode):
             os.close(descriptor)
             return None
+        self._downloads.served(source_id)
         return AudioFile(descriptor, 0, info.st_size, media_type(name))
 
     def sweep_downloads(self) -> None:
