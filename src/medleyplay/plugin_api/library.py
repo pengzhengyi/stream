@@ -14,7 +14,7 @@ No operation writes to a Library.
 from datetime import timedelta
 from typing import Annotated, Protocol
 
-from pydantic import AfterValidator, BaseModel, ConfigDict
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
 from medleyplay.plugin_api.extension import ExtensionPoint
 
@@ -100,8 +100,8 @@ class FileLocation(_Model):
     """
 
     local_path: str | None
-    offset: int = 0
-    length: int
+    offset: int = Field(default=0, ge=0)
+    length: int = Field(ge=0)
     compressed: bool = False
     missing: bool = False
 

@@ -26,8 +26,9 @@ def running(units: sessionmaker[Session], clock: FakeClock, tmp_path: Path) -> I
 
 @pytest.fixture
 def library_client(running: Libraries, accounts: AccountService) -> Iterator[TestClient]:
-    plugins = running.service._plugins  # noqa: SLF001 -- the plugin service the Libraries use
-    services = Services(accounts, running.catalog, plugins, running.jobs, running.service)
+    services = Services(
+        accounts, running.catalog, running.plugins, running.jobs, running.service, running.playback
+    )
     with TestClient(
         create_app(services, allowed_hosts=[TEST_HOST]), base_url=f"http://{TEST_HOST}"
     ) as client:
