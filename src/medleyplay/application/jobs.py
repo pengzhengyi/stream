@@ -35,7 +35,9 @@ class JobKind(Generic[I, R]):  # noqa: UP046 -- invariant, so `submit` checks it
     `program` names a `JobProgram` as `module:attribute`. `complete` applies the
     result to the database in the transaction that marks the Job succeeded, and
     must tolerate finding its work already applied. `points` are the extension
-    points the program calls; its Job process loads only their plugins.
+    points the program calls; its Job process loads only their plugins. A kind
+    with a `login_site` gets a copy of the submitting Account's login on that site,
+    when it has a valid one.
     """
 
     name: str
@@ -46,6 +48,7 @@ class JobKind(Generic[I, R]):  # noqa: UP046 -- invariant, so `submit` checks it
     points: tuple[str, ...] = ()
     idle_timeout: timedelta = IDLE_TIMEOUT
     max_attempts: int = MAX_ATTEMPTS
+    login_site: str | None = None
 
 
 # Any: each kind has its own request and result models.
@@ -101,9 +104,18 @@ class JobService:
         self._runner.stop()
 
     def submit(
-        self, kind: JobKind[I, R], target: str, request: I, requested_by: AccountId | None
+        self,
+        kind: JobKind[I, R],
+        target: str,
+        request: I,
+        requested_by: AccountId | None,
+        *,
+        login_account: AccountId | None = None,
     ) -> Job:
-        """Queue a Job of `kind` for `target`, or return the active one that already exists."""
+        """Queue a Job of `kind` for `target`, or return the active one that already exists.
+
+        `login_account` names whose login the Job uses, for a kind with a login site.
+        """
         if self._kinds.get(kind.name) is not kind:
             message = f"The Job kind {kind.name!r} isn't one this server runs."
             raise ValueError(message)
@@ -118,6 +130,7 @@ class JobService:
                     state=JobState.QUEUED,
                     request=request.model_dump(mode="json"),
                     requested_by=requested_by,
+                    login_account_id=login_account if kind.login_site else None,
                     attempts=0,
                     interruptions=0,
                     failure_message="",

@@ -23,8 +23,10 @@ from medleyplay.application.catalog import CatalogService
 from medleyplay.application.job_runner import JobProcesses, JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.libraries import LibraryService, scan_library_kind
+from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
+from medleyplay.application.secrets import KeychainSecrets, Secrets
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.config import CONFIG_FILE, Config, load_config
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
@@ -115,7 +117,7 @@ def open_database(data_dir: Path) -> Engine:
     return engine
 
 
-def build_services(
+def build_services(  # noqa: PLR0913 -- the database and folder, then settings with defaults
     engine: Engine,
     data_dir: Path,
     clock: Clock = utc_now,
@@ -124,11 +126,12 @@ def build_services(
     safe_mode: bool = False,
     source: PluginSource = PluginSource(),  # noqa: B008 -- a frozen value
     kinds: Mapping[str, AnyJobKind] | None = None,
+    secrets: Secrets | None = None,
 ) -> Services:
     """Return the services over the database in `data_dir`, configured by `config`.
 
     `kinds` are the Job kinds the server runs; Jobs keep their working folders in
-    `jobs` in the data folder.
+    `jobs` in the data folder. Logins are kept in `secrets`, by default the Keychain.
     """
     units = make_sessionmaker(engine)
     hasher = PasswordHash((Argon2Hasher(),))
@@ -137,12 +140,19 @@ def build_services(
     lineup = Lineup(available, enabled, config.unknown_plugins(available), safe_mode)
     host = PluginHost(enabled, package=source.package, command=source.command) if enabled else None
     plugins = PluginService(units, clock, lineup, host)
+    linked = LinkedAccountService(units, clock, plugins, secrets or KeychainSecrets())
     scan = scan_library_kind(clock)
     cache = cache_source_kind(data_dir)
     job_kinds: dict[str, AnyJobKind] = {scan.name: scan, cache.name: cache, **(kinds or {})}
     processes = JobProcesses(source.command, source.package)
     runner = JobRunner(
-        units, clock, job_kinds, plugins, data_dir / JOBS_FOLDER, processes=processes
+        units,
+        clock,
+        job_kinds,
+        plugins,
+        data_dir / JOBS_FOLDER,
+        processes=processes,
+        logins=linked,
     )
     jobs = JobService(units, clock, job_kinds, runner)
     return Services(
@@ -154,6 +164,7 @@ def build_services(
         jobs=jobs,
         libraries=LibraryService(units, clock, plugins, jobs, scan, data_dir),
         playback=PlaybackService(units, plugins, jobs, cache, data_dir),
+        linked=linked,
     )
 
 

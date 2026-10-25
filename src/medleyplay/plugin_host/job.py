@@ -70,6 +70,8 @@ class JobContext:
     work_dir: Path
     _endpoints: Mapping[Address, Endpoint]
     _send: Callable[[JobProgress], None]
+    login: Path | None = None
+    """A copy of the login the Job was given, readable by its owner alone, or `None`."""
     _keys: dict[str, _KeyRecord] = field(default_factory=dict)
 
     def report(self, fraction: float | None = None, message: str = "") -> None:
@@ -154,7 +156,9 @@ def run_job(start: JobStart, send: Callable[[JobProgress], None]) -> JobFinished
     """Run `start`'s program and return its outcome, writing its result to the working folder."""
     work_dir = Path(start.work_dir)
     endpoints = load_plugins(start.package, start.plugins, lambda _: None)
-    context = JobContext(work_dir, endpoints, send)
+    context = JobContext(
+        work_dir, endpoints, send, login=Path(start.login) if start.login else None
+    )
     try:
         program = _program(start.program)
         result = program.run(program.request.model_validate(start.request), context)

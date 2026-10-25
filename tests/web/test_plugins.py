@@ -1,16 +1,12 @@
 """The plugins API: features for every signed-in Account, plugin states for admins."""
 
+import dataclasses
 from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
-from medleyplay.application.accounts import AccountService
-from medleyplay.application.catalog import CatalogService
-from medleyplay.application.jobs import JobService
-from medleyplay.application.libraries import LibraryService
-from medleyplay.application.playback import PlaybackService
 from medleyplay.web.app import create_app
 from medleyplay.web.deps import Services
 from tests.conftest import TEST_HOST
@@ -21,20 +17,11 @@ from tests.support.hosts import started_plugins
 
 @pytest.fixture
 def plugin_client(
-    units: sessionmaker[Session],
-    clock: FakeClock,
-    accounts: AccountService,
-    catalog: CatalogService,
-    jobs: JobService,
-    libraries: LibraryService,
-    playback: PlaybackService,
+    units: sessionmaker[Session], clock: FakeClock, services: Services
 ) -> Iterator[TestClient]:
     """A client of a server with the test plugins `parrot` and `broken-import` on."""
     with started_plugins(units, clock, "parrot", "broken-import") as plugins:
-        app = create_app(
-            Services(accounts, catalog, plugins, jobs, libraries, playback),
-            allowed_hosts=[TEST_HOST],
-        )
+        app = create_app(dataclasses.replace(services, plugins=plugins), allowed_hosts=[TEST_HOST])
         with TestClient(app, base_url=f"http://{TEST_HOST}") as test_client:
             yield test_client
 

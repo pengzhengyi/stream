@@ -5,12 +5,6 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from medleyplay.application.accounts import AccountService
-from medleyplay.application.catalog import CatalogService
-from medleyplay.application.jobs import JobService
-from medleyplay.application.libraries import LibraryService
-from medleyplay.application.playback import PlaybackService
-from medleyplay.application.plugins import PluginService
 from medleyplay.web.app import create_app
 from medleyplay.web.deps import Services
 from tests.conftest import TEST_HOST
@@ -27,17 +21,8 @@ def _built(folder: Path) -> Path:
 
 
 @pytest.fixture
-def pages(
-    accounts: AccountService,
-    catalog: CatalogService,
-    plugins: PluginService,
-    jobs: JobService,
-    libraries: LibraryService,
-    playback: PlaybackService,
-    tmp_path: Path,
-) -> TestClient:
+def pages(services: Services, tmp_path: Path) -> TestClient:
     """A client of a server whose web client is built."""
-    services = Services(accounts, catalog, plugins, jobs, libraries, playback)
     app = create_app(services, [TEST_HOST], client_dir=_built(tmp_path / "built"))
     return TestClient(app, base_url=f"http://{TEST_HOST}")
 

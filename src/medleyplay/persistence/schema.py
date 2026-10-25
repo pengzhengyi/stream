@@ -217,6 +217,8 @@ class JobRow(Base):
     interruptions: Mapped[int] = mapped_column(Integer, default=0)
     not_before: Mapped[datetime | None] = mapped_column(UtcDateTime)
     pid: Mapped[int | None]
+    login_account_id: Mapped[int | None]
+    """Whose login the Job uses; not a foreign key, so a removed Account just has none."""
     failure_kind: Mapped[str | None] = mapped_column(String(16))
     failure_message: Mapped[str] = mapped_column(String(2048), default="")
     created_at: Mapped[datetime] = mapped_column(UtcDateTime)
@@ -244,3 +246,22 @@ class LibraryRow(Base):
     file_count: Mapped[int] = mapped_column(Integer, default=0)
     added_at: Mapped[datetime] = mapped_column(UtcDateTime)
     last_scanned_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+
+
+class LinkedAccountRow(Base):
+    """An Account's login on a site; the login itself is in the Keychain, never here."""
+
+    __tablename__ = "linked_account"
+    __table_args__ = (
+        CheckConstraint("state IN ('valid', 'needs_sign_in')", name="state"),
+        CheckConstraint("revision >= 1", name="revision"),
+    )
+
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("account.id", ondelete="CASCADE"), primary_key=True
+    )
+    site: Mapped[str] = mapped_column(String(64), primary_key=True)
+    state: Mapped[str] = mapped_column(String(16))
+    expires_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    saved_at: Mapped[datetime] = mapped_column(UtcDateTime)
+    revision: Mapped[int] = mapped_column(Integer)

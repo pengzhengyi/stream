@@ -40,6 +40,10 @@ class SignInThrottledError(MedleyplayError):
         self.retry_after_seconds = retry_after_seconds
 
 
+class KeychainUnavailableError(MedleyplayError):
+    """The Keychain didn't answer in time, or refused: it may be locked or asking for access."""
+
+
 class PluginUnavailableError(MedleyplayError):
     """No plugin can answer now: none is on for the key, or the plugin host is busy."""
 

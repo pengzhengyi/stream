@@ -14,13 +14,14 @@ from medleyplay.application.catalog import CatalogService
 from medleyplay.application.job_runner import JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.libraries import LibraryService, scan_library_kind
+from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
 from medleyplay.web.app import create_app
 from medleyplay.web.deps import Services
-from tests.support.fakes import FakeClock
+from tests.support.fakes import FakeClock, MemorySecrets
 
 TEST_HOST = "testserver"
 
@@ -95,16 +96,41 @@ def playback(
 
 
 @pytest.fixture
-def client(
+def secrets() -> MemorySecrets:
+    return MemorySecrets()
+
+
+@pytest.fixture
+def linked(
+    units: sessionmaker[Session], clock: FakeClock, plugins: PluginService, secrets: MemorySecrets
+) -> LinkedAccountService:
+    return LinkedAccountService(units, clock, plugins, secrets)
+
+
+@pytest.fixture
+def services(
     accounts: AccountService,
     catalog: CatalogService,
     plugins: PluginService,
     jobs: JobService,
     libraries: LibraryService,
     playback: PlaybackService,
-    tmp_path: Path,
-) -> Iterator[TestClient]:
-    services = Services(accounts, catalog, plugins, jobs, libraries, playback)
+    linked: LinkedAccountService,
+) -> Services:
+    """The services of a server with no plugins on; a suite replaces what it runs for real."""
+    return Services(
+        accounts=accounts,
+        catalog=catalog,
+        plugins=plugins,
+        jobs=jobs,
+        libraries=libraries,
+        playback=playback,
+        linked=linked,
+    )
+
+
+@pytest.fixture
+def client(services: Services, tmp_path: Path) -> Iterator[TestClient]:
     # No client is built there, so the suites never depend on a local build.
     app = create_app(services, allowed_hosts=[TEST_HOST], client_dir=tmp_path / "client")
     with TestClient(app, base_url=f"http://{TEST_HOST}") as test_client:

@@ -9,6 +9,7 @@ from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.jobs import JobService
 from medleyplay.application.libraries import LibraryService
+from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.playback import PlaybackService
 from medleyplay.application.plugins import PluginService
 from medleyplay.domain.accounts import Account
@@ -27,6 +28,7 @@ class Services:
     jobs: JobService
     libraries: LibraryService
     playback: PlaybackService
+    linked: LinkedAccountService
 
 
 def _services(request: Request) -> Services:
@@ -61,12 +63,17 @@ def _playback(services: Annotated[Services, Depends(_services)]) -> PlaybackServ
     return services.playback
 
 
+def _linked(services: Annotated[Services, Depends(_services)]) -> LinkedAccountService:
+    return services.linked
+
+
 AccountsDep = Annotated[AccountService, Depends(_accounts)]
 CatalogDep = Annotated[CatalogService, Depends(_catalog)]
 PluginsDep = Annotated[PluginService, Depends(_plugins)]
 JobsDep = Annotated[JobService, Depends(_jobs)]
 LibrariesDep = Annotated[LibraryService, Depends(_libraries)]
 PlaybackDep = Annotated[PlaybackService, Depends(_playback)]
+LinkedDep = Annotated[LinkedAccountService, Depends(_linked)]
 SessionToken = Annotated[str | None, Cookie(alias=SESSION_COOKIE, include_in_schema=False)]
 
 

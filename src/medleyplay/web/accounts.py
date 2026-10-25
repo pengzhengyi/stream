@@ -5,7 +5,13 @@ from pydantic import BaseModel, Field
 
 from medleyplay.application.accounts import SESSION_IDLE_TIMEOUT, NewAccount, SignedIn
 from medleyplay.domain.accounts import MAX_PASSWORD_LENGTH, Account, AccountId, Role
-from medleyplay.web.deps import SESSION_COOKIE, AccountsDep, SessionToken, SignedInAccount
+from medleyplay.web.deps import (
+    SESSION_COOKIE,
+    AccountsDep,
+    LinkedDep,
+    SessionToken,
+    SignedInAccount,
+)
 
 router = APIRouter(prefix="/api", tags=["accounts"])
 
@@ -123,9 +129,15 @@ def set_role(
 
 
 @router.delete("/accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_account(account_id: int, me: SignedInAccount, accounts: AccountsDep) -> None:
-    """Delete an Account and everything that is its own; admins only. Never the last admin."""
+def delete_account(
+    account_id: int, me: SignedInAccount, accounts: AccountsDep, linked: LinkedDep
+) -> None:
+    """Delete an Account and everything that is its own; admins only. Never the last admin.
+
+    Its logins on sites are forgotten too, from the Keychain as well as the catalog.
+    """
     accounts.delete_account(me, AccountId(account_id))
+    linked.forget(AccountId(account_id))
 
 
 def _with_cookie(response: Response, signed_in: SignedIn) -> AccountOut:
