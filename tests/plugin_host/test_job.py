@@ -41,6 +41,12 @@ def test_a_finished_program_writes_its_result_and_reports_each_keys_calls(tmp_pa
     assert [(p.fraction, p.message) for p in progress] == [(0.5, "Step 1"), (1.0, "Step 2")]
 
 
+def test_progress_a_plugin_reports_during_a_call_is_the_jobs_progress(tmp_path: Path) -> None:
+    _, progress = _run(tmp_path, EchoJob(text="x", steps=1, say=Say(text="hi", progress=0.3)))
+
+    assert [(p.fraction, p.message) for p in progress] == [(1.0, "Step 1"), (0.3, "Saying")]
+
+
 def test_a_plugin_fault_the_program_does_not_catch_fails_it_naming_the_provider(
     tmp_path: Path,
 ) -> None:

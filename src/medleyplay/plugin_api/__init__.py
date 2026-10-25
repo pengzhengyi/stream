@@ -43,6 +43,7 @@ from medleyplay.plugin_api.library import (
     RootCheck,
     check_library_path,
 )
+from medleyplay.plugin_api.progress import report_progress
 from medleyplay.plugin_api.sources import (
     BEST_QUALITY,
     CANONICALIZE,
@@ -132,4 +133,5 @@ __all__ = [
     "VideoStatus",
     "check_key",
     "check_library_path",
+    "report_progress",
 ]
