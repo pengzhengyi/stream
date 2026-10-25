@@ -26,7 +26,7 @@ from medleyplay.domain.downloads import (
     download_target,
 )
 from medleyplay.domain.errors import NotFoundError
-from medleyplay.domain.jobs import Job
+from medleyplay.domain.jobs import Job, JobState
 from medleyplay.domain.links import BILIBILI_SOURCE, parse_part_locator
 from medleyplay.persistence.schema import DownloadRow, SourceRow
 from medleyplay.plugin_api import BEST_QUALITY, SOURCE_DOWNLOADER
@@ -110,7 +110,9 @@ class DownloadService:
 
         The Job uses the caller's login on the site when it is valid. An
         *unavailable* Source, or one no plugin that is on downloads, isn't
-        downloaded: the answer is `None`.
+        downloaded: the answer is `None`. When the last download failed, the
+        answer is that Job: the household retries it, so playing a Track again
+        and again doesn't ask the site again and again.
         """
         with self._units() as db:
             row = db.get(SourceRow, source_id)
@@ -132,10 +134,12 @@ class DownloadService:
             extensions=DOWNLOAD_EXTENSIONS,
             max_bytes=MAX_DOWNLOAD_BYTES,
         )
+        target = download_target(source_id)
+        latest = self._jobs.latest(DOWNLOAD_KIND, target)
+        if latest is not None and latest.state is JobState.FAILED:
+            return latest
         login = caller.id if self._linked.has_valid(caller.id, site) else None
-        return self._jobs.submit(
-            self._kind, download_target(source_id), request, caller.id, login_account=login
-        )
+        return self._jobs.submit(self._kind, target, request, caller.id, login_account=login)
 
     def sweep(self) -> None:
         """Remove every file in `downloads/` that no Download names."""

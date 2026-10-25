@@ -110,6 +110,7 @@ ECHO = JobKind(
 | Failure | Next state | Counts as an attempt |
 | --- | --- | --- |
 | `NetworkError` | *waiting*, for a minute | No |
+| A Keychain that doesn't answer as the Job starts | *waiting*, for a minute | No |
 | `AuthError` | *failed* | — |
 | A plugin's fault, an idle timeout, too much memory, or a crashed process | *queued* after a delay, or *failed* on the third attempt | Yes |
 | A fault in the program or the completion | *failed* | — |
@@ -122,7 +123,8 @@ ECHO = JobKind(
 - **Attempts and faulting differ on purpose:** three attempts bound one Job,
   while five faults in a row bound a plugin across every Job and call.
 - **Retry** submits a failed or cancelled Job again as a new Job, or returns the
-  one already active for that target.
+  one already active for that target. The new Job uses the login of the Account
+  that retries.
 
 ## Recovery after a restart
 

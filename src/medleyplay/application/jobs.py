@@ -202,7 +202,19 @@ class JobService:
                 message = f"This server no longer runs Jobs of the kind {row.kind!r}."
                 raise ConflictError(message)
             target, request = row.target, kind.request.model_validate(row.request)
-        return self.submit(kind, target, request, caller.id)
+        # The runner lends the login only if it is valid when the Job starts.
+        return self.submit(kind, target, request, caller.id, login_account=caller.id)
+
+    def latest(self, kind: str, target: str) -> Job | None:
+        """Return the newest Job of `kind` for `target`, in any state, if any."""
+        with self._units() as db:
+            row = db.scalar(
+                select(JobRow)
+                .where(JobRow.kind == kind, JobRow.target == target)
+                .order_by(JobRow.id.desc())
+                .limit(1)
+            )
+            return None if row is None else to_job(row)
 
     def active(self, kind: str, target: str) -> Job | None:
         """Return the waiting, queued, or running Job of `kind` for `target`, if any."""

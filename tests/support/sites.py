@@ -10,7 +10,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.catalog import CatalogService
-from medleyplay.application.downloads import DownloadService, download_source_kind
+from medleyplay.application.downloads import DownloadKind, DownloadService, download_source_kind
 from medleyplay.application.job_runner import JobProcesses, JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.linked_accounts import LinkedAccountService
@@ -30,6 +30,7 @@ class Site:
 
     links: LinkService
     downloads: DownloadService
+    download_kind: DownloadKind
     playback: PlaybackService
     linked: LinkedAccountService
     catalog: CatalogService
@@ -81,6 +82,7 @@ def running_site(
             yield Site(
                 links=LinkService(units, clock, plugins, catalog, downloads),
                 downloads=downloads,
+                download_kind=download,
                 playback=PlaybackService(units, plugins, jobs, cache, data_dir, downloads),
                 linked=linked,
                 catalog=catalog,

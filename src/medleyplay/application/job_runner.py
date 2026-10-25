@@ -28,6 +28,7 @@ from medleyplay.domain.errors import KeychainUnavailableError
 from medleyplay.domain.jobs import JobId, JobState, Progress
 from medleyplay.domain.linked_accounts import redact
 from medleyplay.persistence.schema import JobRow
+from medleyplay.plugin_api.progress import MAX_MESSAGE as MAX_PROGRESS_MESSAGE
 from medleyplay.plugin_host.job_wire import (
     FROM_JOB,
     RESULT_FILE,
@@ -50,6 +51,7 @@ MAX_RUNNING: Final = 2
 POLL: Final = timedelta(seconds=1)
 FIRST_RETRY: Final = timedelta(seconds=30)
 NETWORK_RETRY: Final = timedelta(minutes=1)
+"""How long a Job waits after a network failure, or a Keychain that didn't answer."""
 MAX_INTERRUPTIONS: Final = 3
 JOB_MEMORY_LIMIT: Final = 2 * 1024**3
 LOCK_FILE: Final = "lock"
@@ -259,7 +261,11 @@ class JobRunner:
                 .values(state=JobState.RUNNING, started_at=now, finished_at=None)
             )
             job_id, kind_name, request = JobId(row.id), row.kind, row.request
-            login_account = row.login_account_id
+            # Only the Account that asked lends its login: once it is deleted, its id
+            # may be taken by a new Account, whose login the Job was never meant to have.
+            login_account = (
+                row.login_account_id if row.login_account_id == row.requested_by else None
+            )
         if claimed.rowcount != 1:
             return True
         self._publish(job_id)
@@ -281,14 +287,27 @@ class JobRunner:
         try:
             login = self._lend(kind, login_account, work_dir)
             process = self._spawn(work_dir)
-        except (OSError, KeychainUnavailableError) as error:
+        except KeychainUnavailableError as error:
+            # The Keychain can be locked or prompting; it usually answers again soon.
+            shutil.rmtree(work_dir, ignore_errors=True)
+            failure = ("keychain", f"Its login couldn't be read: {error}")
+            self._set(
+                job_id,
+                JobState.WAITING,
+                failure=failure,
+                not_before=self._clock() + NETWORK_RETRY,
+            )
+            return
+        except OSError as error:
             self._settle_failure(job_id, "program", f"Its process didn't start: {error}")
             shutil.rmtree(work_dir, ignore_errors=True)
             return
         running = _Running(job_id, kind, work_dir, process, login)
         with self._lock:
             self._running[job_id] = running
-        self._set_pid(job_id, process.pid)
+        # A cancel that landed while the process was starting found nothing to kill.
+        if not self._set_pid(job_id, process.pid):
+            process.kill()
         with contextlib.suppress(ChildExitedError):
             process.send(
                 JobStart(
@@ -357,21 +376,18 @@ class JobRunner:
                 case JobProgress(fraction=fraction, message=text, peak_memory=peak):
                     if peak > self._memory_limit:
                         return _Fault(f"It used {peak // 1024**2} MiB of memory.")
+                    shown = running.redact(text)[:MAX_PROGRESS_MESSAGE]
                     with self._lock:
-                        self._progress[running.job_id] = Progress(fraction, text)
+                        self._progress[running.job_id] = Progress(fraction, shown)
                     self._publish(running.job_id, progress=True)
                 case JobFinished() | JobFailed():
                     return message
 
     def _settle(self, running: _Running, outcome: _Outcome) -> None:
-        # A failure message never keeps a login, whatever printed it.
-        if isinstance(outcome, JobFailed):
-            outcome = outcome.model_copy(update={"message": running.redact(outcome.message)})
-            if outcome.kind == "auth" and running.login is not None and self._logins is not None:
-                login = running.login
-                self._logins.refused(login.account_id, login.site, login.lent.revision)
-        elif isinstance(outcome, _Fault):
-            outcome = _Fault(running.redact(outcome.message))
+        outcome = _redacted(running, outcome)
+        login, refused = running.login, isinstance(outcome, JobFailed) and outcome.kind == "auth"
+        if refused and login is not None and self._logins is not None:
+            self._logins.refused(login.account_id, login.site, login.lent.revision)
         match outcome:
             case JobFinished(outcomes=outcomes):
                 self._plugins.record_outcomes(outcomes)
@@ -434,13 +450,15 @@ class JobRunner:
     def _settle_failure(self, job_id: JobId, kind: str, message: str) -> None:
         self._set(job_id, JobState.FAILED, failure=(kind, message))
 
-    def _set_pid(self, job_id: JobId, pid: int) -> None:
+    def _set_pid(self, job_id: JobId, pid: int) -> bool:
+        """Record the Job's process; return whether the Job is still running."""
         with self._units.begin() as db:
-            db.execute(
+            recorded = db.connection().execute(
                 update(JobRow)
                 .where(JobRow.id == job_id, JobRow.state == JobState.RUNNING)
                 .values(pid=pid)
             )
+        return recorded.rowcount == 1
 
     def _set(self, job_id: JobId, state: JobState, **changes: Any) -> bool:  # noqa: ANN401 -- column values
         with self._units.begin() as db:
@@ -491,6 +509,23 @@ def lock_is_held(path: Path) -> bool:
     finally:
         os.close(lock)
     return False
+
+
+def _redacted(running: _Running, outcome: _Outcome) -> _Outcome:
+    """Return the outcome with the login taken out of every message, whatever printed it."""
+    if isinstance(outcome, _Fault):
+        return _Fault(running.redact(outcome.message))
+    if not isinstance(outcome, JobFinished | JobFailed):
+        return outcome
+    outcomes = [
+        each.model_copy(update={"last_failure": running.redact(each.last_failure)})
+        for each in outcome.outcomes
+    ]
+    if isinstance(outcome, JobFailed):
+        return outcome.model_copy(
+            update={"outcomes": outcomes, "message": running.redact(outcome.message)}
+        )
+    return outcome.model_copy(update={"outcomes": outcomes})
 
 
 def _due(now: datetime) -> ColumnElement[bool]:
