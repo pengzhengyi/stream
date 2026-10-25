@@ -69,3 +69,8 @@ def path_of_locator(locator: str) -> str:
 def scan_target(library_id: LibraryId) -> str:
     """Return the Job target of the Library's scans."""
     return f"library:{library_id}"
+
+
+def library_of_locator(locator: str) -> LibraryId:
+    """Return the id of the Library holding the Source with `locator`."""
+    return LibraryId(int(locator.partition("/")[0]))

@@ -138,6 +138,19 @@ class TrackStateRow(Base):
     last_played_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
 
 
+class PlayRow(Base):
+    """One play of a Track by an Account, under an id the Account's client chose."""
+
+    __tablename__ = "play"
+
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("account.id", ondelete="CASCADE"), primary_key=True
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    track_id: Mapped[int] = mapped_column(ForeignKey("track.id", ondelete="CASCADE"), index=True)
+    played_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
 class PlaylistRow(Base):
     """An Account's Playlist; the id is chosen by the client, so creating it is retry-safe."""
 

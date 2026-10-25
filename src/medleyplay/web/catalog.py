@@ -1,20 +1,22 @@
-"""The catalog API: Tracks with your favorites and ratings, and your Playlists."""
+"""The catalog API: Tracks with your favorites, ratings, and plays, and your Playlists."""
 
 import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Response, status
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field
 
 from medleyplay.domain.catalog import (
     MAX_PLAYLIST_LENGTH,
     MAX_RATING,
     MIN_RATING,
+    Availability,
     Playlist,
     PlaylistId,
     Track,
     TrackId,
 )
+from medleyplay.domain.playback import PlayId
 from medleyplay.web.deps import CatalogDep, SignedInAccount
 
 router = APIRouter(prefix="/api", tags=["catalog"])
@@ -34,6 +36,7 @@ class TrackOut(BaseModel):
     rating: int | None
     play_count: int
     last_played_at: datetime | None
+    availability: Availability
 
     @classmethod
     def of(cls, track: Track) -> "TrackOut":
@@ -51,6 +54,7 @@ class TrackOut(BaseModel):
             rating=track.rating,
             play_count=track.play_count,
             last_played_at=track.last_played_at,
+            availability=track.availability,
         )
 
 
@@ -64,6 +68,13 @@ class RatingIn(BaseModel):
     """A rating in stars, or `null` to clear it."""
 
     rating: int | None = Field(ge=MIN_RATING, le=MAX_RATING)
+
+
+class PlayIn(BaseModel):
+    """A play of a Track, and when it started; a time in the future is taken as now."""
+
+    track_id: int
+    played_at: AwareDatetime
 
 
 class PlaylistIn(BaseModel):
@@ -117,6 +128,15 @@ def set_favorite(
 def set_rating(track_id: int, body: RatingIn, me: SignedInAccount, catalog: CatalogDep) -> TrackOut:
     """Rate a Track 1-5 stars, or clear your rating."""
     return TrackOut.of(catalog.set_rating(me.id, TrackId(track_id), body.rating))
+
+
+@router.put("/plays/{play_id}")
+def record_play(
+    play_id: uuid.UUID, body: PlayIn, me: SignedInAccount, catalog: CatalogDep
+) -> TrackOut:
+    """Record a play under an id you choose; sending it again changes nothing."""
+    track = catalog.record_play(me.id, PlayId(play_id), TrackId(body.track_id), body.played_at)
+    return TrackOut.of(track)
 
 
 @router.get("/playlists")

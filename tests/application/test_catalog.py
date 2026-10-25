@@ -9,8 +9,9 @@ import pytest
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
 from medleyplay.domain.accounts import Account
-from medleyplay.domain.catalog import PlaylistId, TrackId
+from medleyplay.domain.catalog import Availability, PlaylistId, TrackId
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
+from medleyplay.domain.playback import PlayId
 from tests.support.factories import NewAccountFactory, SourceKeyFactory, TrackDetailsFactory
 from tests.support.fakes import FakeClock
 
@@ -220,3 +221,95 @@ def test_deleting_an_account_deletes_its_playlists_and_track_state(
     assert catalog.list_playlists(bob.id) == []
     assert not catalog.get_track(bob.id, track_id).favorite
     catalog.put_playlist(alice.id, MORNING, "Reused id", [])
+
+
+FIRST_PLAY = PlayId(uuid.UUID("00000000-0000-4000-8000-0000000000a1"))
+
+
+def test_a_play_raises_the_play_count_and_sets_the_last_played_time(
+    catalog: CatalogService, accounts: AccountService, clock: FakeClock
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+    [track_id, *_] = _three_tracks(catalog)
+
+    track = catalog.record_play(alice.id, FIRST_PLAY, track_id, clock.now)
+
+    assert (track.play_count, track.last_played_at) == (1, clock.now)
+
+
+def test_sending_a_play_again_counts_it_once(
+    catalog: CatalogService, accounts: AccountService, clock: FakeClock
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+    [track_id, *_] = _three_tracks(catalog)
+    catalog.record_play(alice.id, FIRST_PLAY, track_id, clock.now)
+
+    again = catalog.record_play(alice.id, FIRST_PLAY, track_id, clock.now)
+
+    assert again.play_count == 1
+
+
+def test_a_play_id_sent_with_another_track_is_refused(
+    catalog: CatalogService, accounts: AccountService, clock: FakeClock
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+    first, second, _ = _three_tracks(catalog)
+    catalog.record_play(alice.id, FIRST_PLAY, first, clock.now)
+
+    with pytest.raises(ConflictError, match="was of another Track"):
+        catalog.record_play(alice.id, FIRST_PLAY, second, clock.now)
+
+
+def test_each_account_has_its_own_play_ids_and_counts(
+    catalog: CatalogService, accounts: AccountService, clock: FakeClock
+) -> None:
+    alice, bob = _alice_and_bob(accounts)
+    first, second, _ = _three_tracks(catalog)
+    catalog.record_play(alice.id, FIRST_PLAY, first, clock.now)
+
+    bobs = catalog.record_play(bob.id, FIRST_PLAY, second, clock.now)
+
+    assert bobs.play_count == 1
+    assert catalog.get_track(bob.id, first).play_count == 0
+
+
+def test_a_play_from_the_future_is_recorded_as_now(
+    catalog: CatalogService, accounts: AccountService, clock: FakeClock
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+    [track_id, *_] = _three_tracks(catalog)
+
+    track = catalog.record_play(alice.id, FIRST_PLAY, track_id, clock.now + timedelta(days=1))
+
+    assert track.last_played_at == clock.now
+
+
+def test_a_play_recorded_late_keeps_the_later_play_the_latest(
+    catalog: CatalogService, accounts: AccountService, clock: FakeClock
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+    [track_id, *_] = _three_tracks(catalog)
+    catalog.record_play(alice.id, FIRST_PLAY, track_id, clock.now)
+    earlier = PlayId(uuid.UUID("00000000-0000-4000-8000-0000000000a2"))
+
+    track = catalog.record_play(alice.id, earlier, track_id, clock.now - timedelta(hours=2))
+
+    assert (track.play_count, track.last_played_at) == (2, clock.now)
+
+
+def test_a_play_of_a_track_that_does_not_exist_is_not_found(
+    catalog: CatalogService, accounts: AccountService, clock: FakeClock
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+
+    with pytest.raises(NotFoundError):
+        catalog.record_play(alice.id, FIRST_PLAY, TrackId(404), clock.now)
+
+
+def test_a_track_from_a_site_is_available(
+    catalog: CatalogService, accounts: AccountService
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+    [track_id, *_] = _three_tracks(catalog)
+
+    assert catalog.get_track(alice.id, track_id).availability is Availability.OK
