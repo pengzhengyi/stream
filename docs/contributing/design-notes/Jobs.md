@@ -148,9 +148,12 @@ server that stopped.
 | `GET /api/jobs/{id}` | Signed in | One Job |
 | `POST /api/jobs/{id}/cancel` | The Account that asked, or an admin | Cancels it; idempotent |
 | `POST /api/jobs/{id}/retry` | The Account that asked, or an admin | Submits a failed or cancelled Job again |
+| `GET /api/events` | Signed in | A `job` event each time a Job changes, over SSE; see [Bilibili](Bilibili.md#progress-over-sse) |
 
 Jobs are shared by the household, so every Account sees them. Each Job kind adds
-its own route to submit one, such as scanning a Library.
+its own route to submit one, such as scanning a Library. A kind that needs a
+site's login gets a copy of the submitting Account's; see
+[Bilibili](Bilibili.md#linked-accounts).
 
 ## Testing
 

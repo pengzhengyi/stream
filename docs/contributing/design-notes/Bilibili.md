@@ -1,7 +1,8 @@
 # Bilibili
 
 > [!NOTE]
-> **Status: proposed.** This note describes how medleyplay adds music from
+> **Status: implemented up to the tools (step 5a); the tools wait on yt-dlp.**
+> This note describes how medleyplay adds music from
 > Bilibili: linking an Account's login, turning a link into Tracks, downloading
 > their audio, playing the Downloads, and reporting progress to every browser.
 > What adding must do is in [MVP](MVP.md#add-from-bilibili); why the plugin has
@@ -31,8 +32,8 @@ can't read the sample video either. So step 5 is built in two parts:
 
 - **Step 5a** builds everything up to the tools: the extension points, linked
   accounts, links, adding, Downloads, playing them, SSE progress, and the yt-dlp
-  backend, written against yt-dlp's documented info fields and tested against a
-  fixture made from them.
+  backend, written against yt-dlp's Bilibili extractor and tested against a
+  fixture made from its source.
 - **Step 5b**, once yt-dlp is fixed, raises the pinned version, records a real
   video's info as the fixture in place of the made one, checks a real download
   by hand, and adds the yutto fallback.
@@ -77,9 +78,10 @@ Each is keyed by Source kind, `bilibili`.
   a file already played locates nothing, so the cost is a first play during a
   lookup waiting a few seconds, which suits one household. yt-dlp's own socket
   timeout is set below the deadlines.
-- **`download` reports progress** as bytes arrive, so the idle timeout catches a
-  stalled download, and returns the file's name in the folder, the quality it
-  got, and which backend made it.
+- **`download` reports progress** as bytes arrive, through the plugin API's
+  `report_progress`, which inside a Job becomes the Job's progress, so the idle
+  timeout catches a stalled download. It returns the file's name in the folder,
+  the quality it got, and which backend made it.
 - **`check` makes no network call.** It parses the file and returns only the
   cookies the plugin names, for its own domains, with the session cookie's
   expiry. Whether the login still works is learned from real Jobs.
@@ -110,14 +112,16 @@ sequenceDiagram
   The Keychain is written first and the row second, so a crash between them
   leaves a secret with no row, which the next save replaces.
 - **Keychain calls are bounded:** macOS can prompt for access or be locked, so
-  each call runs off the event loop and the runner's thread, with a 5-second
-  limit. A call that fails or times out fails what asked, with a message saying
-  the Keychain didn't answer.
+  each call runs in a thread of its own, and its caller, a request or the Job
+  runner, waits at most 5 seconds. A call that fails or times out fails what
+  asked, with a message saying the Keychain didn't answer: a 503, or a Job that
+  fails without starting.
 - **States:** *valid*, and *needs sign-in* after a Job's `AuthError`, once the
   expiry passes, or when the Keychain no longer holds it. Saving a login again
   makes it valid and raises its revision.
 - **Reaching a Job:** a Job kind that needs a login names its site, and its Job
-  names whose login to use and the revision it saw. The runner writes the login
+  names whose login to use. The runner copies that login, if it is valid, as it
+  starts the Job, and remembers the revision it copied. It writes the login
   into `login.txt` in the Job's working folder, readable by its owner alone, and
   passes the path to the program. The working folder is removed after the Job,
   and at startup. So a login lives in the data folder only for a Job's length.
@@ -129,7 +133,8 @@ sequenceDiagram
   A Job without a login fails with *this video needs a Bilibili login*.
 - **Removing** a linked account deletes the Keychain item and the row; a Job
   already running keeps its copy until it ends. Deleting an Account removes its
-  logins.
+  logins on every site a plugin reads logins for, as well as those the catalog
+  knows of.
 - **The login never leaves the core:** no route returns it, nothing logs it, and
   a failure message that holds a cookie's value, as written or URL-decoded, has
   it replaced before it is stored.
@@ -188,7 +193,7 @@ sequenceDiagram
 - **Adding** doesn't trust the client: it canonicalizes the link again, and
   checks each part and the quality against the video's details, from the
   lookup's ten-minute memory or a fresh `read`. At most 50 parts are added at
-  once, and a title or an artist is 1 to 512 characters.
+  once, a title is 1 to 512 characters, and an artist at most 512.
 - **Each part is one transaction:** it creates a Track and a Source, or finds
   the existing Source by its natural key and keeps its Track. Two adds racing for
   one part meet at the Source's unique key; the loser rolls back and reads the
@@ -210,13 +215,15 @@ A *Download* is the one copy of a Bilibili Source on the server's disk.
   `source:<id>`, so one Source has at most one active download.
 - **The program** calls `download` with the Source's locator, its quality, the
   working folder, and the login file, if any. It then checks the file the plugin
-  named, or the Job fails as a plugin fault: a bare name directly in the folder,
-  opened without following links, a regular file, not empty, at most 1 GiB, and
-  with an extension of an AAC audio type (`m4a`). It fsyncs the file.
+  named: a bare name directly in the folder, opened without following links, a
+  regular file, not empty, at most 1 GiB, and with an extension of an AAC audio
+  type (`m4a`). It fsyncs the file. A file that fails a check fails the attempt
+  as a plugin fault, which retries; it doesn't count toward the circuit breaker,
+  since the call itself succeeded.
 - **The completion** renames the file over `downloads/<source id>.<ext>` in the
   data folder and records it in `download` with the quality it got, its backend,
-  size, and time, in the transaction that ends the Job. A Source has one file.
-  After the commit, a file of the Source with another extension is removed.
+  size, and time, in the transaction that ends the Job. A Source has one file,
+  so a new Download replaces the old one in the same rename.
 - **A crash between the rename and the commit** leaves a file with no row. The
   Job runs again and its file replaces that one, and at startup the core removes
   every file in `downloads/` that no row names.
@@ -243,7 +250,8 @@ A *Download* is the one copy of a Bilibili Source on the server's disk.
   with Range.
 - **One without a Download** answers *preparing* with its Download Job, using
   the caller's login when it is valid. A file that vanished is downloaded again.
-  An *unavailable* Source without a Download is unplayable and starts no Job.
+  An *unavailable* Source without a Download is unplayable and starts no Job, as
+  is one that no plugin that is on downloads.
 - **A Library Source still wins** over a Bilibili one that must be downloaded,
   as a ready Source wins over one being prepared.
 
@@ -254,14 +262,20 @@ A *Download* is the one copy of a Bilibili Source on the server's disk.
   holding the Job as `GET /api/jobs` shows it.
 - **An event is sent** when a Job is submitted, changes state, or reports
   progress; progress is sent at most four times a second per Job.
-- **No replay:** a browser that reconnects asks `GET /api/jobs` again, so events
-  carry no ids. A comment every 15 seconds keeps the connection open.
+- **The stream starts with a `ready` event** once it hears every change: the
+  connection opens before the stream subscribes, so a browser asks
+  `GET /api/jobs` after `ready`, and misses nothing.
+- **No replay:** a browser that reconnects waits for `ready` and asks again, so
+  events carry no ids. FastAPI's own comment every 15 seconds keeps a quiet
+  connection open.
+- **Each event is the Job as it stands when sent,** so a quick Job may skip a
+  state between two events; its last event is always its last state.
 - **A slow browser can't hold the server back:** each connection has a bounded
   queue. A progress event that doesn't fit is dropped, since the next one
   replaces it; a change of state that doesn't fit closes the connection, so that
   browser reconnects and asks again.
-- **A stream ends with its session:** the comment every 15 seconds checks the
-  session first, so signing out ends the stream.
+- **A stream ends with its session:** after 15 quiet seconds the stream checks
+  its session, so signing out ends it.
 - **One stream per page.** Over plain HTTP a browser opens about six connections
   per server, so a page holds one stream; sharing it between tabs is step 7.
 - **The runner and the services publish after their commit,** from any thread,
@@ -299,30 +313,34 @@ A *Download* is the one copy of a Bilibili Source on the server's disk.
 | `DELETE /api/me/linked-accounts/{site}` | Signed in | Removes the login; 204, also when there is none |
 | `POST /api/links/lookup` | Signed in | A link's video: title, uploader, parts with any existing Track, qualities |
 | `POST /api/links` | Signed in | Adds the chosen parts as Tracks and starts their Downloads |
-| `GET /api/events` | Signed in | Job events over SSE |
+| `GET /api/events` | Signed in | `ready`, then a `job` event each time a Job changes, over SSE |
 | `POST /api/tracks/{id}/playback` | Signed in | Now also plays a Download, or answers *preparing* with its Job |
 
 ## Testing
 
-- **The core, with a fake plugin:** the allowlist, canonicalizing, looking up,
-  adding twice, a part already in the catalog, Download completions, playing a
-  Download, and a plugin that returns a host outside the allowlist, a locator
-  that isn't one, or a file outside its folder.
+- **The core, through the test plugin `tube`,** which answers for `bilibili`
+  with scripted videos, in a real plugin host and real Job processes: the
+  allowlist, short links, looking up, adding twice, a part already in the
+  catalog, choices the video doesn't offer, Download completions, playing a
+  Download, and a plugin that names a link off the site or a file outside its
+  folder. The plugin API's models refuse a video id that is a path or a link.
 - **Linked accounts** against an in-memory stand-in for the Keychain: saving,
   replacing, removing, a Keychain that doesn't answer, a login copy in a real
   Job process that is owner-only and gone afterwards, an `AuthError` marking the
-  login *needs sign-in*, and a late one leaving a newer login valid. One test,
-  skipped off macOS, saves to and removes from the real Keychain.
+  login *needs sign-in*, a late one leaving a newer login valid, and a failure
+  message with the login redacted. One test saves to and removes from the real
+  Keychain, run by hand on macOS with `MEDLEYPLAY_KEYCHAIN_TEST=1`.
 - **Downloads:** a file the plugin names outside its folder, behind a link,
-  empty, or of another type fails the Job; a crash between the rename and the
-  commit is swept at startup; a Download still plays when its Source is
-  unavailable or its plugin is off.
-- **SSE:** a submitted, progressing, and finished Job each reach a subscriber;
-  a full queue closes its connection.
+  empty, or of another type fails the attempt; files no Download names are swept
+  at startup; a Download still plays when its Source is unavailable since.
+- **SSE:** a published change reaches every subscriber from another thread;
+  progress is paced; a full queue drops progress and ends on a change of state;
+  a stream hears a Job until it succeeds, and ends with its session.
 - **The plugin:** canonicalizing every link shape, `av` to `BV` on known pairs,
-  short links against a stub server, cookies files with and without a session,
-  and the yt-dlp module against a fixture of yt-dlp's documented info fields,
-  with its failures sorted. The contract kits run against it.
+  short links against a stand-in for the web and the fetch against a local
+  server, cookies files with and without a session, and the yt-dlp module
+  against a fixture made from yt-dlp's extractor, with its failures sorted by
+  yt-dlp's real exception types. The contract kits run against it.
 - **Never live:** no test contacts Bilibili; a live check is an opt-in marker
   run by hand, in step 5b.
 

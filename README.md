@@ -33,6 +33,14 @@ controls work through the Media Session API. Add a host name the server should
 answer to, such as a router's DNS name, with
 `MEDLEYPLAY_ALLOWED_HOSTS=music.home`.
 
+To add music from Bilibili, turn its plugin on in `medleyplay.toml`, as below.
+It is off by default because yt-dlp
+can't read Bilibili until an upstream fix ships. Then save your Bilibili login
+from an exported cookies file with `PUT /api/me/linked-accounts/bilibili`, and
+add a video's parts with `POST /api/links/lookup` and `POST /api/links`; each
+part downloads in the background and plays like any other song. The login stays
+in the macOS Keychain.
+
 Until the Libraries view arrives, register a folder or a zip archive of your
 music through the API at `http://<this machine>:8000/docs` with
 `POST /api/libraries`, such as
@@ -42,13 +50,16 @@ is copied once into the cache in the data folder, and shows *Preparing* until
 then.
 
 The config file is optional; a missing setting takes its default, and a change
-applies on restart. This one lets the admin add Accounts beyond the first, and
-turns one plugin off:
+applies on restart. This one lets the admin add Accounts beyond the first,
+turns the `bilibili` plugin on, and turns the tag reader off:
 
 ```toml
 multiple_accounts = true
 
 [plugins.bilibili]
+enabled = true
+
+[plugins.tinytag-tags]
 enabled = false
 ```
 

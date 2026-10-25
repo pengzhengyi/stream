@@ -47,6 +47,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and position across reloads, and counts a play as Last.fm does. Build it with
   `npm run build` in `web/`. See the
   [Playback](docs/contributing/design-notes/Playback.md#the-web-client) note.
+- **Bilibili** — save an Account's Bilibili login from a cookies file, kept in
+  the macOS Keychain and lent to its downloads; look a video up by any link,
+  short links included, and add its parts as Tracks, which download in the
+  background and play even after the video is removed. The `bilibili` plugin is
+  off by default until yt-dlp can read Bilibili again. See the
+  [Bilibili](docs/contributing/design-notes/Bilibili.md) note.
+- **Job progress over SSE** — `GET /api/events` tells every open browser each
+  time a Job changes.
 
 ### Changed
 
