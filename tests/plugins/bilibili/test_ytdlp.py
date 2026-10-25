@@ -5,7 +5,7 @@ import io
 import pytest
 from yt_dlp.networking import Response  # type: ignore[import-untyped]
 from yt_dlp.networking.exceptions import HTTPError, TransportError  # type: ignore[import-untyped]
-from yt_dlp.utils import ExtractorError  # type: ignore[import-untyped]
+from yt_dlp.utils import ExtractorError, GeoRestrictedError  # type: ignore[import-untyped]
 
 from medleyplay.plugin_api import AuthError, NetworkError
 from medleyplay.plugins.bilibili._ytdlp import (
@@ -47,11 +47,7 @@ def test_a_refusal_of_the_client_is_a_fault_not_a_wait(status: int) -> None:
 
 @pytest.mark.parametrize(
     "message",
-    [
-        "This video is only available for registered users",
-        "This video is for premium members only",
-        "This is a supporter-only video: x",
-    ],
+    ["This video is only available for registered users", "Please log in to watch this video"],
 )
 def test_an_expected_login_refusal_needs_a_login_or_fails_the_one_sent(message: str) -> None:
     error = ExtractorError(message, expected=True)
@@ -60,16 +56,42 @@ def test_an_expected_login_refusal_needs_a_login_or_fails_the_one_sent(message: 
     assert isinstance(sort_failure(error, signed_in=True), AuthError)
 
 
+@pytest.mark.parametrize(
+    "message",
+    ["This video is for premium members only", "This is a supporter-only video: x"],
+)
+def test_a_video_for_members_needs_a_login_but_never_refuses_the_one_sent(message: str) -> None:
+    error = ExtractorError(message, expected=True)
+
+    assert isinstance(sort_failure(error, signed_in=False), NeedsLoginError)
+    assert type(sort_failure(error, signed_in=True)) is RuntimeError
+
+
 def test_an_expected_rate_limit_is_a_fault() -> None:
     error = ExtractorError("You have exceeded the rate limit. Try again later", expected=True)
 
     assert type(sort_failure(error, signed_in=True)) is RuntimeError
 
 
-def test_an_expected_removal_is_gone() -> None:
-    error = ExtractorError("This video may be deleted or geo-restricted.", expected=True)
-
+@pytest.mark.parametrize(
+    "error",
+    [
+        ExtractorError("This video may be deleted or geo-restricted.", expected=True),
+        GeoRestrictedError("This video is not available from your location"),
+    ],
+)
+def test_an_expected_removal_is_gone(error: ExtractorError) -> None:
     assert isinstance(sort_failure(error, signed_in=False), GoneError)
+
+
+def test_an_expected_error_it_does_not_recognize_is_a_fault_not_gone() -> None:
+    # A Source that is gone stays unavailable, so only a sure removal is gone.
+    error = ExtractorError("视频不见了", expected=True)
+
+    failure = sort_failure(error, signed_in=False)
+
+    assert type(failure) is RuntimeError
+    assert "视频不见了" in str(failure)
 
 
 def test_an_extractor_that_no_longer_understands_the_page_is_a_fault() -> None:

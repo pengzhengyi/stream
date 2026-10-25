@@ -24,7 +24,8 @@ type Fetch = Callable[[str], str | None]
 
 HOSTS: Final = frozenset({"bilibili.com", "www.bilibili.com", "m.bilibili.com", SHORT_LINK_HOST})
 MAX_HOPS: Final = 3
-TIMEOUT_SECONDS: Final = 3
+TIMEOUT_SECONDS: Final = 1
+"""Each hop's wait, so every hop together stays well inside the call's deadline."""
 USER_AGENT: Final = "medleyplay"
 _CODE: Final = re.compile(r"/(?P<code>[A-Za-z0-9]{1,32})/?")
 _REDIRECTS: Final = frozenset({301, 302, 303, 307, 308})

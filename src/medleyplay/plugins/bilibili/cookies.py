@@ -44,13 +44,27 @@ def keep_login(text: str) -> Login:
         if len(fields) != _FIELDS or (line.startswith("#") and not line.startswith(_HTTP_ONLY)):
             continue
         domain, _, _, _, expiry, name, _ = fields
-        if domain.lower() not in DOMAINS or name not in KEPT_COOKIES or not expiry.isdecimal():
+        if domain.lower() not in DOMAINS or name not in KEPT_COOKIES or not _is_number(expiry):
             continue
         kept.append(line)
         if name == SESSION_COOKIE:
             has_session = True
-            expires_at = datetime.fromtimestamp(int(expiry), UTC) if int(expiry) else None
+            expires_at = _expiry(int(expiry))
     if not has_session:
         message = "The file holds no Bilibili session; export the cookies while signed in."
         raise NoSessionError(message)
     return Login("\n".join([HEADER, *kept]) + "\n", expires_at)
+
+
+def _is_number(text: str) -> bool:
+    return text.isascii() and text.isdigit()
+
+
+def _expiry(seconds: int) -> datetime | None:
+    """Return when a cookie expires; `0`, or a time too far off to be real, says nothing."""
+    if not seconds:
+        return None
+    try:
+        return datetime.fromtimestamp(seconds, UTC)
+    except (ValueError, OverflowError, OSError):
+        return None

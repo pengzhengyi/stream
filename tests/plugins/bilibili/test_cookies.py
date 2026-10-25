@@ -44,9 +44,18 @@ def test_a_session_cookie_with_no_expiry_lasts_as_long_as_the_site_allows() -> N
     assert login.expires_at is None
 
 
+@pytest.mark.parametrize("expiry", ["1807142400000", "1" + "0" * 30])
+def test_an_expiry_out_of_range_is_read_as_none(expiry: str) -> None:
+    # Some exporters write milliseconds; no date that far off is a real expiry.
+    login = keep_login(_exported(SESSION.replace("1807142400", expiry)))
+
+    assert login.expires_at is None
+
+
 @pytest.mark.parametrize(
     "text",
     [
+        _exported(".bilibili.com\tTRUE\t/\tTRUE\t\u0661\u0662\tSESSDATA\tabc"),
         _exported(DEVICE, TOKEN),
         _exported(ELSEWHERE),
         "SESSDATA=abc123",

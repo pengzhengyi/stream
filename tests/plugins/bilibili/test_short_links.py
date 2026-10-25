@@ -6,8 +6,13 @@ from collections.abc import Iterator
 
 import pytest
 
-from medleyplay.plugin_api import NetworkError
-from medleyplay.plugins.bilibili.short_links import fetch_redirect, follow_short_link
+from medleyplay.plugin_api import CANONICALIZE, NetworkError
+from medleyplay.plugins.bilibili.short_links import (
+    MAX_HOPS,
+    TIMEOUT_SECONDS,
+    fetch_redirect,
+    follow_short_link,
+)
 
 VIDEO = "https://www.bilibili.com/video/BV1Xx41117Tz?p=2"
 
@@ -63,6 +68,12 @@ def test_short_links_are_followed_through_at_most_three_hops() -> None:
 
     assert follow_short_link("https://b23.tv/a0", web) == "https://b23.tv/a3"
     assert len(web.asked) == 3
+
+
+def test_every_hop_together_waits_less_than_the_deadline_for_a_link() -> None:
+    every_hop = MAX_HOPS * TIMEOUT_SECONDS
+
+    assert every_hop < CANONICALIZE.deadline.total_seconds() - 1
 
 
 def test_a_relative_redirect_is_resolved_against_the_short_link() -> None:

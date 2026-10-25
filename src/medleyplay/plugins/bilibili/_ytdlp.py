@@ -17,7 +17,11 @@ from yt_dlp.networking.exceptions import (  # type: ignore[import-untyped]
     HTTPError,
     TransportError,
 )
-from yt_dlp.utils import DownloadError, ExtractorError  # type: ignore[import-untyped]
+from yt_dlp.utils import (  # type: ignore[import-untyped]
+    DownloadError,
+    ExtractorError,
+    GeoRestrictedError,
+)
 
 from medleyplay.plugin_api import AuthError, NetworkError
 
@@ -29,10 +33,10 @@ SOCKET_TIMEOUT_SECONDS: Final = 4
 """Below the plugin API's deadlines, so a stalled read fails as a network failure first."""
 OUTPUT_NAME: Final = "audio.%(ext)s"
 
-_LOGIN: Final = re.compile(
-    r"registered users|log ?in|premium members|supporter-only|purchase", re.IGNORECASE
-)
+_LOGIN: Final = re.compile(r"registered users|log ?in|sign ?in", re.IGNORECASE)
+_MEMBERS: Final = re.compile(r"premium members|supporter-only|members only|purchase", re.IGNORECASE)
 _REFUSED: Final = re.compile(r"rate limit|blocked by server|rejected by server", re.IGNORECASE)
+_REMOVED: Final = re.compile(r"deleted or geo-restricted", re.IGNORECASE)
 _RETRY_LATER: Final = frozenset({429, 500, 502, 503, 504})
 _GONE: Final = frozenset({404, 410})
 
@@ -116,17 +120,23 @@ def sort_failure(error: BaseException, *, signed_in: bool) -> Exception:
     """Return the failure the plugin raises for one of yt-dlp's errors.
 
     By type first: a connection failure or a timeout, a 429, or a 5xx is a
-    `NetworkError`; a 404 is gone; a 403 or a 412 is Bilibili refusing the client,
-    a fault, so it isn't retried every minute. An error yt-dlp marks *expected*
-    is a refused login, a rate limit, or gone, by yt-dlp's own fixed messages.
-    Anything else, such as an extractor that no longer understands the page, is
-    a fault.
+    `NetworkError`; a 404, a 410, or a geo-restriction is gone; a 403 or a 412 is
+    Bilibili refusing the client, a fault, so it isn't retried every minute. An
+    error yt-dlp marks *expected* is sorted by yt-dlp's own fixed messages: a
+    login refused, a video for members, a rate limit, or a removal.
+
+    Anything else is a fault, such as an extractor that no longer understands
+    the page or a message it doesn't recognize: a fault is retried and shows, while
+    gone makes the Source unavailable for good. A video for members never marks a
+    login refused, since the account may simply not be a member.
     """
     cause = getattr(error, "cause", None) or error
     if isinstance(cause, HTTPError):
         return _sort_status(cause.status)
     if isinstance(cause, TransportError):
         return NetworkError(f"Bilibili couldn't be reached: {cause}")
+    if isinstance(error, GeoRestrictedError):
+        return GoneError(f"Bilibili doesn't offer the video here: {error}")
     if isinstance(error, ExtractorError) and error.expected:
         return _sort_expected(str(getattr(error, "orig_msg", None) or error), signed_in=signed_in)
     return RuntimeError(f"yt-dlp failed: {error}")
@@ -145,7 +155,11 @@ def _sort_expected(text: str, *, signed_in: bool) -> Exception:
         return RuntimeError(f"Bilibili refused the request: {text}")
     if _LOGIN.search(text):
         return AuthError(text) if signed_in else NeedsLoginError(text)
-    return GoneError(text)
+    if _MEMBERS.search(text) and not signed_in:
+        return NeedsLoginError(text)
+    if _REMOVED.search(text):
+        return GoneError(text)
+    return RuntimeError(f"yt-dlp failed: {text}")
 
 
 class _Quiet:
