@@ -36,9 +36,16 @@ def test_the_file_sets_the_core_settings_and_plugin_toggles(tmp_path: Path) -> N
 
 
 def test_every_plugin_is_on_unless_the_file_turns_it_off() -> None:
-    config = Config(plugins={"bilibili": PluginConfig(enabled=False)})
+    config = Config(plugins={"fsspec-library": PluginConfig(enabled=False)})
 
-    assert config.enabled_plugins(["bilibili", "tinytag-tags"]) == ("tinytag-tags",)
+    assert config.enabled_plugins(["fsspec-library", "tinytag-tags"]) == ("tinytag-tags",)
+
+
+def test_a_plugin_that_is_off_by_default_is_on_only_when_the_file_turns_it_on() -> None:
+    assert Config().enabled_plugins(["bilibili", "tinytag-tags"]) == ("tinytag-tags",)
+    assert Config(plugins={"bilibili": PluginConfig(enabled=True)}).enabled_plugins(
+        ["bilibili"]
+    ) == ("bilibili",)
 
 
 def test_plugins_the_file_names_but_that_dont_exist_are_unknown() -> None:

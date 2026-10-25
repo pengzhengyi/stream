@@ -16,6 +16,8 @@ from typing import Final
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 CONFIG_FILE: Final = "medleyplay.toml"
+OFF_BY_DEFAULT: Final = frozenset({"bilibili"})
+"""Plugins that are on only when the file turns them on: `bilibili` until yt-dlp reads it again."""
 
 
 class ConfigError(Exception):
@@ -27,7 +29,8 @@ class PluginConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    enabled: bool = True
+    enabled: bool | None = None
+    """`None` leaves the plugin as it is by default."""
 
 
 class Config(BaseModel):
@@ -39,8 +42,16 @@ class Config(BaseModel):
     plugins: dict[str, PluginConfig] = Field(default_factory=dict)
 
     def enabled_plugins(self, available: Iterable[str]) -> tuple[str, ...]:
-        """Return the plugins of `available` that are on; a plugin is on unless turned off."""
-        return tuple(name for name in available if self.plugins.get(name, PluginConfig()).enabled)
+        """Return the plugins of `available` that are on.
+
+        A plugin is on unless the file turns it off, or, for one in `OFF_BY_DEFAULT`,
+        off unless the file turns it on.
+        """
+        return tuple(name for name in available if self._enabled(name))
+
+    def _enabled(self, name: str) -> bool:
+        enabled = self.plugins.get(name, PluginConfig()).enabled
+        return name not in OFF_BY_DEFAULT if enabled is None else enabled
 
     def unknown_plugins(self, available: Iterable[str]) -> tuple[str, ...]:
         """Return the plugins the file names that aren't in `available`."""
