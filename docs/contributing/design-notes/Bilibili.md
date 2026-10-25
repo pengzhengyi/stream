@@ -115,7 +115,7 @@ sequenceDiagram
   each call runs in a thread of its own, and its caller, a request or the Job
   runner, waits at most 5 seconds. A call that fails or times out fails what
   asked, with a message saying the Keychain didn't answer: a 503, or a Job that
-  fails without starting.
+  waits a minute without starting, as after a network failure.
 - **States:** *valid*, and *needs sign-in* after a Job's `AuthError`, once the
   expiry passes, or when the Keychain no longer holds it. Saving a login again
   makes it valid and raises its revision.
@@ -125,6 +125,10 @@ sequenceDiagram
   into `login.txt` in the Job's working folder, readable by its owner alone, and
   passes the path to the program. The working folder is removed after the Job,
   and at startup. So a login lives in the data folder only for a Job's length.
+- **Only the Account that asked lends its login.** A Job whose Account was
+  deleted runs without one, since a new Account may take the deleted one's id.
+  Retrying a Job uses the login of the Account that retries, if it is valid
+  when the Job starts.
 - **A Job's copy is read-only and thrown away.** yt-dlp doesn't refresh a
   Bilibili session, so nothing comes back: an expired session is pasted again.
 - **An `AuthError` marks the login *needs sign-in*** only when the plugin says
@@ -136,8 +140,8 @@ sequenceDiagram
   logins on every site a plugin reads logins for, as well as those the catalog
   knows of.
 - **The login never leaves the core:** no route returns it, nothing logs it, and
-  a failure message that holds a cookie's value, as written or URL-decoded, has
-  it replaced before it is stored.
+  a Job's failure or progress message, or a plugin's fault reason, that holds a
+  cookie's value, as written or URL-decoded, has it replaced before it is stored.
 - **Plain HTTP:** the pasted file crosses the LAN in the clear, as the session
   cookie does; see [Architecture](Architecture.md#deliberately-left-out).
 
@@ -158,7 +162,8 @@ sequenceDiagram
   request as `https://b23.tv/<code>` from a code of letters and digits, never
   fetching the pasted text, and follows one redirect at a time, at most three,
   checking each hop against its own copy of the allowlist before fetching it,
-  with no cookies, no proxy, and no body read. The plugin returns the link it
+  with no cookies, no proxy, and no body read. Each hop waits at most a second,
+  so the three stay inside the call's 5-second deadline. The plugin returns the link it
   ended on, and the core checks that link with its full rules again.
 - **yt-dlp is handed a URL the plugin builds** from the `BV` id and the part,
   with only Bilibili's extractors allowed, so its generic extractor never runs.
@@ -228,10 +233,15 @@ A *Download* is the one copy of a Bilibili Source on the server's disk.
   Job runs again and its file replaces that one, and at startup the core removes
   every file in `downloads/` that no row names.
 - **Failures** follow [Jobs](Jobs.md#failures-and-retries). The plugin sorts
-  yt-dlp's errors by their types, not their text: a connection error, a
-  timeout, a 429, or a 5xx is a `NetworkError`, which waits; a refused login is
-  an `AuthError`; a video the site says is gone is the reply *gone*, which makes
-  its Source *unavailable*; and anything else is a fault, which retries.
+  yt-dlp's errors by their types first: a connection error, a timeout, a 429,
+  or a 5xx is a `NetworkError`, which waits; a refused login is an `AuthError`;
+  and a 404, a 410, or a geo-restriction is the reply *gone*, which makes its
+  Source *unavailable* for good. Anything else is a fault, which retries,
+  including an error whose message the plugin doesn't recognize: a fault shows
+  and can be reset, while *gone* can't be undone.
+- **A video for members** needs a login when none was sent. With a login it is
+  a fault, not an `AuthError`, since the account may simply not be a member, and
+  a working login shouldn't need signing in again.
 - **A 403 or a 412 is a fault,** since it is Bilibili refusing the request,
   usually to a client it suspects. So it is never retried every minute: it uses
   the Job's three attempts, and five in a row fault the plugin until an admin
@@ -250,6 +260,9 @@ A *Download* is the one copy of a Bilibili Source on the server's disk.
   with Range.
 - **One without a Download** answers *preparing* with its Download Job, using
   the caller's login when it is valid. A file that vanished is downloaded again.
+  When its last download failed, the answer is that failed Job, which the
+  household retries, so playing a Track again and again doesn't ask the site
+  again and again.
   An *unavailable* Source without a Download is unplayable and starts no Job, as
   is one that no plugin that is on downloads.
 - **A Library Source still wins** over a Bilibili one that must be downloaded,
@@ -274,8 +287,8 @@ A *Download* is the one copy of a Bilibili Source on the server's disk.
   queue. A progress event that doesn't fit is dropped, since the next one
   replaces it; a change of state that doesn't fit closes the connection, so that
   browser reconnects and asks again.
-- **A stream ends with its session:** after 15 quiet seconds the stream checks
-  its session, so signing out ends it.
+- **A stream ends with its session:** the stream checks its session every 15
+  seconds, busy or quiet, so signing out ends it.
 - **One stream per page.** Over plain HTTP a browser opens about six connections
   per server, so a page holds one stream; sharing it between tabs is step 7.
 - **The runner and the services publish after their commit,** from any thread,
@@ -291,9 +304,9 @@ A *Download* is the one copy of a Bilibili Source on the server's disk.
 - **The yt-dlp module is thin and marked unverified** until 5b: it maps yt-dlp's
   info into the plugin API's models, and nothing else knows yt-dlp's shape.
 - **Its failures are sorted** by yt-dlp's error types as in
-  [Downloads](#downloads). An error yt-dlp marks *expected*, such as a removed or
-  region-locked video, is an answer; the extractor failure seen today is not
-  expected, so it is a fault.
+  [Downloads](#downloads). An error yt-dlp marks *expected* is an answer only
+  when the plugin recognizes it, such as a removed or region-locked video; the
+  extractor failure seen today is not expected, so it is a fault.
 - **The format** is the best audio-only AAC stream at or below the chosen
   quality; a video without one, such as an old one with only a muxed stream, is
   *gone* for the MVP, with the codec in the message.
