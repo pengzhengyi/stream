@@ -24,7 +24,16 @@ from medleyplay.domain.errors import (
     SignInRefusedError,
     SignInThrottledError,
 )
-from medleyplay.web import accounts, catalog, jobs, libraries, linked_accounts, playback, plugins
+from medleyplay.web import (
+    accounts,
+    catalog,
+    jobs,
+    libraries,
+    linked_accounts,
+    links,
+    playback,
+    plugins,
+)
 from medleyplay.web.deps import Services
 from medleyplay.web.pages import CLIENT_DIR, client_app
 
@@ -73,6 +82,7 @@ def create_app(
     app.include_router(libraries.router)
     app.include_router(playback.router)
     app.include_router(linked_accounts.router)
+    app.include_router(links.router)
     app.mount("/", client_app(client_dir))
     app.add_exception_handler(MedleyplayError, _handle_domain_error)  # type: ignore[arg-type] # Starlette types handlers for any Exception
     app.middleware("http")(_refuse_cross_origin_writes)

@@ -7,10 +7,13 @@ The video id says how the plugin behaves:
 | `BV1Xx41117Tz` | *Night Drive* by *Blue Room*, one part | `audio.m4a` |
 | `BV17x411w7KC` | *Mixtape*, three parts | `audio.m4a` |
 | `BVgone` | gone | gone |
-| `BVmembers` | needs a login | `audio.m4a` with a login, an `AuthError` without |
+| `BVmembers` | needs a login | an `AuthError` without a login |
+| `BVsignedin` | one part | `audio.m4a` with a login, an `AuthError` without |
+| `BVremoved` | one part | gone: removed after it was added |
 | `BVrefused` | one part | an `AuthError`: the site refuses the login |
 | `BVdown` | a `NetworkError` | a `NetworkError` |
 | `BVbroken` | a fault | a fault |
+| `BVleaky` | one part | a fault whose message holds the login |
 | `BVescape`, `BVtext` | one part | a file outside the folder, or of another type |
 | `BVempty`, `BVlink` | one part | an empty file, or a link |
 
@@ -104,9 +107,12 @@ class Downloader:
     def download(self, request: DownloadPart) -> Downloaded:
         video, folder = request.video, Path(request.folder)
         _fail_as(video)
-        if video == "BVgone":
+        if video in {"BVgone", "BVremoved"}:
             return Downloaded(file=None, gone=True, message="The video was removed.")
-        if video == "BVrefused" or (video == "BVmembers" and request.login is None):
+        if video == "BVleaky" and request.login is not None:
+            message = f"Failed with {Path(request.login).read_text(encoding='utf-8')}"
+            raise ValueError(message)
+        if video == "BVrefused" or (video in {"BVmembers", "BVsignedin"} and request.login is None):
             message = "Bilibili refused the login."
             raise AuthError(message)
         report_progress(0.5, "Downloading")

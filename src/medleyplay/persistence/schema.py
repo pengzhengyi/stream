@@ -265,3 +265,19 @@ class LinkedAccountRow(Base):
     expires_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
     saved_at: Mapped[datetime] = mapped_column(UtcDateTime)
     revision: Mapped[int] = mapped_column(Integer)
+
+
+class DownloadRow(Base):
+    """A Source's Download: its file in the data folder's `downloads`, at the quality it got."""
+
+    __tablename__ = "download"
+    __table_args__ = (CheckConstraint("size >= 0", name="size"),)
+
+    source_id: Mapped[int] = mapped_column(
+        ForeignKey("source.id", ondelete="CASCADE"), primary_key=True
+    )
+    file_name: Mapped[str] = mapped_column(String(64))
+    quality: Mapped[str] = mapped_column(String(32))
+    backend: Mapped[str] = mapped_column(String(64))
+    size: Mapped[int] = mapped_column(Integer)
+    downloaded_at: Mapped[datetime] = mapped_column(UtcDateTime)

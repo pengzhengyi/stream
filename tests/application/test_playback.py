@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
+from medleyplay.application.downloads import DownloadService
 from medleyplay.application.jobs import JobService
 from medleyplay.application.playback import (
     AudioFile,
@@ -232,11 +233,17 @@ def test_sweeping_the_cache_keeps_only_current_copies(
 
 @pytest.fixture
 def liar(
-    units: sessionmaker[Session], clock: FakeClock, tmp_path: Path, jobs: JobService
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    tmp_path: Path,
+    jobs: JobService,
+    downloads: DownloadService,
 ) -> Iterator[PlaybackService]:
     data_dir = tmp_path / "data"
     with started_plugins(units, clock, "liar") as plugins:
-        yield PlaybackService(units, plugins, jobs, cache_source_kind(data_dir), data_dir)
+        yield PlaybackService(
+            units, plugins, jobs, cache_source_kind(data_dir), data_dir, downloads
+        )
 
 
 def _lied_about(

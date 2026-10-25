@@ -20,10 +20,12 @@ from sqlalchemy import Engine
 from medleyplay.application import Clock
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
+from medleyplay.application.downloads import DownloadService, download_source_kind
 from medleyplay.application.job_runner import JobProcesses, JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.libraries import LibraryService, scan_library_kind
 from medleyplay.application.linked_accounts import LinkedAccountService
+from medleyplay.application.links import LinkService
 from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.secrets import KeychainSecrets, Secrets
@@ -143,7 +145,13 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
     linked = LinkedAccountService(units, clock, plugins, secrets or KeychainSecrets())
     scan = scan_library_kind(clock)
     cache = cache_source_kind(data_dir)
-    job_kinds: dict[str, AnyJobKind] = {scan.name: scan, cache.name: cache, **(kinds or {})}
+    download = download_source_kind(data_dir, data_dir / JOBS_FOLDER, clock)
+    job_kinds: dict[str, AnyJobKind] = {
+        scan.name: scan,
+        cache.name: cache,
+        download.name: download,
+        **(kinds or {}),
+    }
     processes = JobProcesses(source.command, source.package)
     runner = JobRunner(
         units,
@@ -155,16 +163,19 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         logins=linked,
     )
     jobs = JobService(units, clock, job_kinds, runner)
+    catalog = CatalogService(units, clock)
+    downloads = DownloadService(units, plugins, jobs, download, linked, data_dir)
     return Services(
         accounts=AccountService(
             units, hasher, clock, SignInThrottle(clock), multiple_accounts=config.multiple_accounts
         ),
-        catalog=CatalogService(units, clock),
+        catalog=catalog,
         plugins=plugins,
         jobs=jobs,
         libraries=LibraryService(units, clock, plugins, jobs, scan, data_dir),
-        playback=PlaybackService(units, plugins, jobs, cache, data_dir),
+        playback=PlaybackService(units, plugins, jobs, cache, data_dir, downloads),
         linked=linked,
+        links=LinkService(units, clock, plugins, catalog, downloads),
     )
 
 
@@ -188,6 +199,7 @@ def build_app(settings: Settings, source: PluginSource = PluginSource()) -> Fast
             with hold_instance_lock(settings.data_dir):
                 services.plugins.start()
                 services.playback.sweep_cache()
+                services.playback.sweep_downloads()
                 services.jobs.start()
                 try:
                     yield

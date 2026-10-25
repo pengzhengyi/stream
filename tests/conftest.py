@@ -11,10 +11,12 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
+from medleyplay.application.downloads import DownloadService, download_source_kind
 from medleyplay.application.job_runner import JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.libraries import LibraryService, scan_library_kind
 from medleyplay.application.linked_accounts import LinkedAccountService
+from medleyplay.application.links import LinkService
 from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.throttle import SignInThrottle
@@ -71,7 +73,8 @@ def jobs(
 ) -> JobService:
     # A runner that isn't started; suites that run Jobs start their own.
     scan, cache = scan_library_kind(clock), cache_source_kind(tmp_path / "data")
-    kinds: dict[str, AnyJobKind] = {scan.name: scan, cache.name: cache}
+    download = download_source_kind(tmp_path / "data", tmp_path / "jobs", clock)
+    kinds: dict[str, AnyJobKind] = {scan.name: scan, cache.name: cache, download.name: download}
     runner = JobRunner(units, clock, kinds, plugins, tmp_path / "jobs")
     return JobService(units, clock, kinds, runner)
 
@@ -88,11 +91,40 @@ def libraries(
 
 
 @pytest.fixture
+def downloads(
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    plugins: PluginService,
+    jobs: JobService,
+    linked: LinkedAccountService,
+    tmp_path: Path,
+) -> DownloadService:
+    data_dir = tmp_path / "data"
+    kind = download_source_kind(data_dir, tmp_path / "jobs", clock)
+    return DownloadService(units, plugins, jobs, kind, linked, data_dir)
+
+
+@pytest.fixture
 def playback(
-    units: sessionmaker[Session], plugins: PluginService, jobs: JobService, tmp_path: Path
+    units: sessionmaker[Session],
+    plugins: PluginService,
+    jobs: JobService,
+    downloads: DownloadService,
+    tmp_path: Path,
 ) -> PlaybackService:
     data_dir = tmp_path / "data"
-    return PlaybackService(units, plugins, jobs, cache_source_kind(data_dir), data_dir)
+    return PlaybackService(units, plugins, jobs, cache_source_kind(data_dir), data_dir, downloads)
+
+
+@pytest.fixture
+def links(
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    plugins: PluginService,
+    catalog: CatalogService,
+    downloads: DownloadService,
+) -> LinkService:
+    return LinkService(units, clock, plugins, catalog, downloads)
 
 
 @pytest.fixture
@@ -108,7 +140,7 @@ def linked(
 
 
 @pytest.fixture
-def services(
+def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     accounts: AccountService,
     catalog: CatalogService,
     plugins: PluginService,
@@ -116,6 +148,7 @@ def services(
     libraries: LibraryService,
     playback: PlaybackService,
     linked: LinkedAccountService,
+    links: LinkService,
 ) -> Services:
     """The services of a server with no plugins on; a suite replaces what it runs for real."""
     return Services(
@@ -126,6 +159,7 @@ def services(
         libraries=libraries,
         playback=playback,
         linked=linked,
+        links=links,
     )
 
 

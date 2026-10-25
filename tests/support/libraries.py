@@ -10,15 +10,17 @@ from pathlib import Path
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.catalog import CatalogService
+from medleyplay.application.downloads import DownloadService, download_source_kind
 from medleyplay.application.job_runner import JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.libraries import LibraryService, scan_library_kind
+from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.domain.jobs import JobId, JobState, JobView
 from medleyplay.plugin_host.client import PluginHost
 from medleyplay.plugin_host.loader import plugin_names
-from tests.support.fakes import FakeClock
+from tests.support.fakes import FakeClock, MemorySecrets
 
 LIBRARY_PLUGINS = ("fsspec-library", "tinytag-tags")
 
@@ -53,7 +55,9 @@ def running_libraries(
     lineup = Lineup(plugin_names(), LIBRARY_PLUGINS)
     plugins = PluginService(units, clock, lineup, PluginHost(LIBRARY_PLUGINS))
     scan, cache = scan_library_kind(clock), cache_source_kind(data_dir)
-    kinds: dict[str, AnyJobKind] = {scan.name: scan, cache.name: cache}
+    download = download_source_kind(data_dir, data_dir / "jobs", clock)
+    kinds: dict[str, AnyJobKind] = {scan.name: scan, cache.name: cache, download.name: download}
+    linked = LinkedAccountService(units, clock, plugins, MemorySecrets())
     runner = JobRunner(units, clock, kinds, plugins, data_dir / "jobs", poll=timedelta(seconds=0.1))
     jobs = JobService(units, clock, kinds, runner)
     plugins.start()
@@ -64,7 +68,14 @@ def running_libraries(
             plugins,
             jobs,
             CatalogService(units, clock),
-            PlaybackService(units, plugins, jobs, cache, data_dir),
+            PlaybackService(
+                units,
+                plugins,
+                jobs,
+                cache,
+                data_dir,
+                DownloadService(units, plugins, jobs, download, linked, data_dir),
+            ),
         )
     finally:
         jobs.stop()
