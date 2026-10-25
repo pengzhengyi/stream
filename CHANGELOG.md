@@ -41,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are recorded under ids the client chooses, so a retry counts once, and each
   Track says whether it can play now. See the
   [Playback](docs/contributing/design-notes/Playback.md) note.
+- **Web player** — the server serves a web player at `/`: sign in, or create the
+  first Account on a new server; the Track list; a queue you can reorder; and a
+  player with seeking and lock-screen controls. Each browser keeps its own queue
+  and position across reloads, and counts a play as Last.fm does. Build it with
+  `npm run build` in `web/`. See the
+  [Playback](docs/contributing/design-notes/Playback.md#the-web-client) note.
 
 ### Changed
 

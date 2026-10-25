@@ -1,8 +1,8 @@
 # Playback
 
 > [!NOTE]
-> **Status: approved; the server's half is implemented.** This note describes how a browser plays a Track: how the
-> core picks a Source and serves its audio, how a compressed zip member is
+> **Status: implemented; the iOS lock-screen check is still to do by hand.** This
+> note describes how a browser plays a Track: how the core picks a Source and serves its audio, how a compressed zip member is
 > prepared, how plays are recorded, and the bare web client that plays them. What
 > playback must do is in [MVP](MVP.md#play); how Libraries locate files is in
 > [Libraries](Libraries.md).

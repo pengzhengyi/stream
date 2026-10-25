@@ -42,14 +42,17 @@
     "medleyplay",
     "mkfifo",
     "mypy",
+    "nexttrack",
     "NONBLOCK",
     "nosniff",
+    "nums",
     "ondelete",
     "outerjoin",
     "pengzhengyi",
     "playwright",
     "pluggy",
     "pread",
+    "previoustrack",
     "pwdlib ",
     "Pydantic",
     "pydocstyle",
@@ -68,6 +71,7 @@
     "RUSAGE",
     "scrobble",
     "seekable",
+    "seekto",
     "sessionmaker",
     "sqlalchemy",
     "starlette",
@@ -80,6 +84,7 @@
     "typecheck",
     "unintrusive",
     "unreviewed",
+    "unstub",
     "usefixtures",
     "uvicorn",
     "venv",
@@ -100,6 +105,7 @@
     "uv.lock",
     "htmlcov/**",
     "playwright-report/**",
-    "**/.cache/**"
+    "**/.cache/**",
+    "src/medleyplay/web/client/**"
   ]
 }

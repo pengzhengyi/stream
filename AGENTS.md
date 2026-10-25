@@ -34,7 +34,7 @@ uv run pip-audit -r <(uv export --locked --format requirements-txt --no-emit-pro
 # Web client
 cd web && npm ci && npm run check && npm run build
 npx playwright install chromium   # once, for e2e
-cd web && npm run e2e
+cd web && npm run e2e             # builds the client and drives the real server; needs uv sync
 ```
 
 > [!IMPORTANT]

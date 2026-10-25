@@ -53,3 +53,6 @@ coverage.json
 dist/
 build/
 *.egg-info/
+
+# ── The built web client, which `npm run build` writes into the package ──
+/src/medleyplay/web/client/

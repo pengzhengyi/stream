@@ -72,6 +72,8 @@ ignore = [
 ]
 # Alembic loads migration scripts by path; they are not an importable package.
 "src/medleyplay/persistence/migrations/**" = ["INP001"]
+# The end-to-end server is a script Playwright runs by path, not a package.
+"web/e2e/**" = ["INP001"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -92,7 +94,7 @@ docstring-code-format = true
 # ── mypy ────────────────────────────────────────────────────────────────────
 [tool.mypy]
 strict = true
-files = ["src", "tests"]
+files = ["src", "tests", "web/e2e"]
 python_version = "3.13"
 warn_unreachable = true
 enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]

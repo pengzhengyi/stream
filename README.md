@@ -19,19 +19,27 @@ uv run medleyplay serve --safe-mode        # with every plugin off, for this run
 uv run medleyplay reset-password <name>    # a lost password; signs the Account out
 ```
 
-Open `http://<this machine>:8000/docs` to sign in and try the API. The first
-Account, created through `POST /api/setup`, is the admin. Add a host name the
-server should answer to, such as a router's DNS name, with
+The server serves the web player, which you build once, and again after
+changing it; it needs Node 24+:
+
+```bash
+cd web && npm ci && npm run build          # writes the player into the package
+```
+
+Open `http://<this machine>:8000/` on any device on the network. On a new
+server, the first page creates the first Account, which is the admin. Each
+device plays in its own browser, with its own queue, and the lock screen's
+controls work through the Media Session API. Add a host name the server should
+answer to, such as a router's DNS name, with
 `MEDLEYPLAY_ALLOWED_HOSTS=music.home`.
 
-Register a folder or a zip archive of your music with `POST /api/libraries`,
-such as `{"name": "Music", "kind": "folder", "path": "~/Music"}`; its scan shows
-in `GET /api/jobs`, and its songs in `GET /api/tracks`.
-
-To play a song, `POST /api/tracks/{id}/playback` answers its audio URL, which
-serves the file with Range, so a browser can seek in it. A song compressed in a
-zip archive is copied once into the cache in the data folder; until the copy is
-made, the answer says *preparing* with its Job.
+Until the Libraries view arrives, register a folder or a zip archive of your
+music through the API at `http://<this machine>:8000/docs` with
+`POST /api/libraries`, such as
+`{"name": "Music", "kind": "folder", "path": "~/Music"}`; its scan shows in
+`GET /api/jobs`, and its songs in the player. A song compressed in a zip archive
+is copied once into the cache in the data folder, and shows *Preparing* until
+then.
 
 The config file is optional; a missing setting takes its default, and a change
 applies on restart. This one lets the admin add Accounts beyond the first, and
