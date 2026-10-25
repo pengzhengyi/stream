@@ -34,10 +34,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   take an unplugged drive offline without forgetting it. The `fsspec-library`
   and `tinytag-tags` plugins read the files. See the
   [Libraries](docs/contributing/design-notes/Libraries.md) note.
+- **Playing audio** — `POST /api/tracks/{id}/playback` picks the Source a
+  Track plays from, and its audio is served with Range, `If-Range`, and `HEAD`,
+  so browsers, Safari included, can seek. A song compressed in a zip archive is
+  copied into the cache once by a Job and answers *preparing* until then. Plays
+  are recorded under ids the client chooses, so a retry counts once, and each
+  Track says whether it can play now. See the
+  [Playback](docs/contributing/design-notes/Playback.md) note.
 
 ### Changed
 
 - Renamed the project from stream to medleyplay.
+- A Library backend's `locate` answers *missing* for a file that is gone,
+  instead of raising, so an unplugged drive can't fault its plugin.
 
 ### Removed
 

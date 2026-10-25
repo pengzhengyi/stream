@@ -96,3 +96,51 @@ def test_deleting_a_playlist_answers_204_every_time(client: TestClient) -> None:
 
     assert (first.status_code, second.status_code) == (204, 204)
     assert client.get("/api/playlists").json() == []
+
+
+FIRST_PLAY = "00000000-0000-4000-8000-0000000000a1"
+
+
+def test_a_play_is_put_once_under_your_id_and_answers_the_track(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    track_id = _one_track(catalog)
+    play = {"track_id": track_id, "played_at": "2026-10-25T08:00:00+00:00"}
+
+    first = client.put(f"/api/plays/{FIRST_PLAY}", json=play)
+    again = client.put(f"/api/plays/{FIRST_PLAY}", json=play)
+
+    assert (first.status_code, again.status_code) == (200, 200)
+    assert again.json()["play_count"] == 1
+    assert again.json()["availability"] == "ok"
+
+
+def test_a_play_id_put_with_another_track_answers_409(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    first = _one_track(catalog)
+    second = catalog.add_track(SourceKeyFactory.bilibili(part=2), TrackDetailsFactory.song("P2"))
+    client.put(
+        f"/api/plays/{FIRST_PLAY}", json={"track_id": first, "played_at": "2026-10-25T08:00:00Z"}
+    )
+
+    response = client.put(
+        f"/api/plays/{FIRST_PLAY}", json={"track_id": second, "played_at": "2026-10-25T08:00:00Z"}
+    )
+
+    assert response.status_code == 409
+
+
+def test_a_play_without_a_time_zone_answers_422(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    track_id = _one_track(catalog)
+
+    response = client.put(
+        f"/api/plays/{FIRST_PLAY}", json={"track_id": track_id, "played_at": "2026-10-25T08:00:00"}
+    )
+
+    assert response.status_code == 422

@@ -7,7 +7,10 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from medleyplay.application.catalog import CatalogService
 from medleyplay.application.libraries import apply_scan
+from medleyplay.domain.accounts import AccountId
+from medleyplay.domain.catalog import Availability
 from medleyplay.domain.libraries import LibraryId, LibraryState
 from medleyplay.persistence.schema import LibraryRow, SourceRow, TrackRow
 from medleyplay.plugin_api import Tags
@@ -249,3 +252,32 @@ def test_a_file_whose_tags_failed_is_listed_by_its_name_with_the_error(
         source = db.scalars(select(SourceRow)).one()
     assert (source.state, source.details["error"]) == ("ok", "ValueError: odd")
     assert _catalog(units)["odd.wav"].title == "odd"
+
+
+def _availability(catalog: CatalogService) -> dict[str, Availability]:
+    # Availability is the same for every Account; any id reads it.
+    return {track.details.title: track.availability for track in catalog.list_tracks(AccountId(1))}
+
+
+def test_tracks_of_an_offline_library_are_listed_offline(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId, catalog: CatalogService
+) -> None:
+    _scan(units, clock, library, ScannedFileFactory.song("a.wav", "A"))
+
+    with units.begin() as db:
+        apply_scan(db, library, LibraryScan(readable=False, message="unplugged"), clock)
+
+    assert _availability(catalog) == {"A": Availability.OFFLINE}
+
+
+def test_tracks_of_missing_and_protected_files_are_listed_as_such(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId, catalog: CatalogService
+) -> None:
+    protected = ScannedFileFactory.song("b.m4p").model_copy(
+        update={"tags": Tags(title="B", protected=True)}
+    )
+    _scan(units, clock, library, ScannedFileFactory.song("a.wav", "A"), protected)
+
+    _scan(units, clock, library, protected)
+
+    assert _availability(catalog) == {"A": Availability.MISSING, "B": Availability.CANT_PLAY}

@@ -30,13 +30,16 @@
   A file in it is a path relative to the root, with `/` between folders.
 - **A location** is where the core finds a file's bytes: a local path, with an
   offset and a length for a member stored uncompressed in a zip archive. A
-  compressed member has no location of its own; it is fetched first. A location
-  can go stale when an archive changes, so the core locates a file each time it
-  needs its bytes.
+  compressed member has no location of its own; it is fetched first. A file that
+  isn't there, or an archive that can't be read now, is *missing*: an ordinary
+  answer, so an unplugged drive can't fault the plugin. A location can go stale
+  when an archive changes, so the core asks again whenever the file it points
+  into has changed; see [Playback](Playback.md#serving-audio).
 - **Paths can't leave their root.** The plugin API refuses a file path that is
   absolute or holds `..`, both in a request and in a listing, and the backends
-  check that a resolved path stays inside its root. A fetched copy must land in
-  the folder the program gave, which the program checks.
+  check that a resolved path stays inside its root. The core checks every
+  location again before it serves a byte, and a fetched copy must land in the
+  folder the program gave, which the program checks.
 - **No operation writes to a Library.**
 
 ## Plugins

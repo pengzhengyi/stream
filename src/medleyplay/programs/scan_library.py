@@ -112,8 +112,10 @@ def _read(root: LibraryRoot, file: LibraryFile, context: JobContext) -> ScannedF
     request = FileRequest(root=root, path=file.path)
     extension = PurePosixPath(file.path).suffix.lower().removeprefix(".")
     try:
-        fingerprint = context.call(FINGERPRINT_FILE, root.kind, request).value
         location = context.call(LOCATE_FILE, root.kind, request)
+        if location.missing:  # pragma: no cover -- a file removed between listing and reading
+            return _file(file, changed=True).model_copy(update={"error": "The file is gone."})
+        fingerprint = context.call(FINGERPRINT_FILE, root.kind, request).value
         if location.compressed or location.local_path is None:
             tags = _read_fetched(root, file, extension, context)
         else:

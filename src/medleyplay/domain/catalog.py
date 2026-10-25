@@ -1,6 +1,7 @@
 """The catalog: Tracks, the Sources their audio comes from, and each Account's view of them."""
 
 import uuid
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -25,6 +26,37 @@ class SourceState(StrEnum):
     MISSING = "missing"
     UNAVAILABLE = "unavailable"
     CANT_PLAY = "cant_play"
+
+
+class Availability(StrEnum):
+    """Whether a Track can play now, best first."""
+
+    OK = "ok"
+    OFFLINE = "offline"
+    """Its file is in a Library whose drive is unplugged."""
+    UNAVAILABLE = "unavailable"
+    MISSING = "missing"
+    CANT_PLAY = "cant_play"
+
+
+_RANK: Final = {availability: rank for rank, availability in enumerate(Availability)}
+_OF_STATE: Final = {
+    SourceState.OK: Availability.OK,
+    SourceState.UNAVAILABLE: Availability.UNAVAILABLE,
+    SourceState.MISSING: Availability.MISSING,
+    SourceState.CANT_PLAY: Availability.CANT_PLAY,
+}
+
+
+def source_availability(state: SourceState, *, online: bool) -> Availability:
+    """Return whether a Source can play, given whether the place holding it is online."""
+    found = _OF_STATE[state]
+    return Availability.OFFLINE if found is Availability.OK and not online else found
+
+
+def track_availability(sources: Iterable[Availability]) -> Availability:
+    """Return the best availability of a Track's Sources; a Track without any is missing."""
+    return min(sources, key=_RANK.__getitem__, default=Availability.MISSING)
 
 
 @dataclass(frozen=True)
@@ -72,6 +104,7 @@ class Track:
     rating: int | None
     play_count: int
     last_played_at: datetime | None
+    availability: Availability
 
 
 @dataclass(frozen=True)

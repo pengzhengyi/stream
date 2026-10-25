@@ -23,6 +23,7 @@ from medleyplay.application.catalog import CatalogService
 from medleyplay.application.job_runner import JobProcesses, JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.libraries import LibraryService, scan_library_kind
+from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.config import CONFIG_FILE, Config, load_config
@@ -137,7 +138,8 @@ def build_services(
     host = PluginHost(enabled, package=source.package, command=source.command) if enabled else None
     plugins = PluginService(units, clock, lineup, host)
     scan = scan_library_kind(clock)
-    job_kinds = {scan.name: scan, **(kinds or {})}
+    cache = cache_source_kind(data_dir)
+    job_kinds: dict[str, AnyJobKind] = {scan.name: scan, cache.name: cache, **(kinds or {})}
     processes = JobProcesses(source.command, source.package)
     runner = JobRunner(
         units, clock, job_kinds, plugins, data_dir / JOBS_FOLDER, processes=processes
@@ -151,16 +153,17 @@ def build_services(
         plugins=plugins,
         jobs=jobs,
         libraries=LibraryService(units, clock, plugins, jobs, scan, data_dir),
+        playback=PlaybackService(units, plugins, jobs, cache, data_dir),
     )
 
 
 def build_app(settings: Settings, source: PluginSource = PluginSource()) -> FastAPI:  # noqa: B008 -- a frozen value
     """Return the server's app for `settings`.
 
-    The app starts the plugin host and the Job runner when it starts, and stops
-    them and closes the database when it shuts down. A config file that doesn't
-    parse raises `ConfigError`; another server using the same data folder raises
-    `AlreadyRunningError` as the app starts.
+    The app starts the plugin host, removes stale cache copies, and starts the Job
+    runner when it starts; it stops them and closes the database when it shuts
+    down. A config file that doesn't parse raises `ConfigError`; another server
+    using the same data folder raises `AlreadyRunningError` as the app starts.
     """
     config = load_config(settings.data_dir / CONFIG_FILE)
     engine = open_database(settings.data_dir)
@@ -173,6 +176,7 @@ def build_app(settings: Settings, source: PluginSource = PluginSource()) -> Fast
         try:
             with hold_instance_lock(settings.data_dir):
                 services.plugins.start()
+                services.playback.sweep_cache()
                 services.jobs.start()
                 try:
                     yield

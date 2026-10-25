@@ -1,4 +1,4 @@
-"""The built-in Library plugins, a Job runner, and the Library service, for end-to-end tests."""
+"""The built-in Library plugins, a Job runner, and the Library and playback services."""
 
 import time
 from collections.abc import Iterator
@@ -11,8 +11,9 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.job_runner import JobRunner
-from medleyplay.application.jobs import JobService
+from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.libraries import LibraryService, scan_library_kind
+from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.domain.jobs import JobId, JobState, JobView
 from medleyplay.plugin_host.client import PluginHost
@@ -24,11 +25,13 @@ LIBRARY_PLUGINS = ("fsspec-library", "tinytag-tags")
 
 @dataclass(frozen=True)
 class Libraries:
-    """A running Library service, with the Jobs and catalog it works through."""
+    """A running Library service, with the plugins, Jobs, catalog, and playback around it."""
 
     service: LibraryService
+    plugins: PluginService
     jobs: JobService
     catalog: CatalogService
+    playback: PlaybackService
 
     def wait_for(self, job_id: JobId, *states: JobState) -> JobView:
         """Wait until the Job is in one of `states`, and return it."""
@@ -46,21 +49,22 @@ class Libraries:
 def running_libraries(
     units: sessionmaker[Session], clock: FakeClock, data_dir: Path
 ) -> Iterator[Libraries]:
-    """Run the Library plugins, the scan Job kind, and the Library service over `data_dir`."""
+    """Run the Library plugins, the scan and cache Job kinds, and the services over `data_dir`."""
     lineup = Lineup(plugin_names(), LIBRARY_PLUGINS)
     plugins = PluginService(units, clock, lineup, PluginHost(LIBRARY_PLUGINS))
-    kind = scan_library_kind(clock)
-    runner = JobRunner(
-        units, clock, {kind.name: kind}, plugins, data_dir / "jobs", poll=timedelta(seconds=0.1)
-    )
-    jobs = JobService(units, clock, {kind.name: kind}, runner)
+    scan, cache = scan_library_kind(clock), cache_source_kind(data_dir)
+    kinds: dict[str, AnyJobKind] = {scan.name: scan, cache.name: cache}
+    runner = JobRunner(units, clock, kinds, plugins, data_dir / "jobs", poll=timedelta(seconds=0.1))
+    jobs = JobService(units, clock, kinds, runner)
     plugins.start()
     jobs.start()
     try:
         yield Libraries(
-            LibraryService(units, clock, plugins, jobs, kind, data_dir),
+            LibraryService(units, clock, plugins, jobs, scan, data_dir),
+            plugins,
             jobs,
             CatalogService(units, clock),
+            PlaybackService(units, plugins, jobs, cache, data_dir),
         )
     finally:
         jobs.stop()

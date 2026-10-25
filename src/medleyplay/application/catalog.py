@@ -3,9 +3,11 @@
 Every command here is idempotent: repeating it leaves the same state as doing it once.
 """
 
+from collections import defaultdict
 from collections.abc import Sequence
+from datetime import datetime
 
-from sqlalchemy import Select, delete, select
+from sqlalchemy import Select, case, delete, select
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
@@ -13,20 +15,28 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application import Clock
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.catalog import (
+    Availability,
     Playlist,
     PlaylistId,
     SourceKey,
+    SourceState,
     Track,
     TrackDetails,
     TrackId,
     check_playlist_length,
     check_rating,
     parse_playlist_name,
+    source_availability,
+    track_availability,
 )
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
+from medleyplay.domain.libraries import LIBRARY_SOURCE, LibraryState, library_of_locator
+from medleyplay.domain.playback import PlayId
 from medleyplay.persistence.schema import (
+    LibraryRow,
     PlaylistEntryRow,
     PlaylistRow,
+    PlayRow,
     SourceRow,
     TrackRow,
     TrackStateRow,
@@ -74,16 +84,18 @@ class CatalogService:
     def list_tracks(self, account_id: AccountId) -> list[Track]:
         """Return every Track, oldest first, with `account_id`'s own state."""
         with self._units() as db:
-            rows = db.execute(_tracks_for(account_id).order_by(TrackRow.id))
-            return [_to_track(track, state) for track, state in rows]
+            rows = db.execute(_tracks_for(account_id).order_by(TrackRow.id)).all()
+            available = _availability(db, select(SourceRow))
+            return [_to_track(track, state, available[track.id]) for track, state in rows]
 
     def get_track(self, account_id: AccountId, track_id: TrackId) -> Track:
         """Return one Track with `account_id`'s own state."""
         with self._units() as db:
             found = db.execute(_tracks_for(account_id).where(TrackRow.id == track_id)).one_or_none()
-        if found is None:
-            raise _no_track(track_id)
-        return _to_track(*found)
+            if found is None:
+                raise _no_track(track_id)
+            available = _availability(db, select(SourceRow).where(SourceRow.track_id == track_id))
+        return _to_track(*found, available[track_id])
 
     def set_favorite(self, account_id: AccountId, track_id: TrackId, *, favorite: bool) -> Track:
         """Mark or unmark a Track as one of `account_id`'s favorites."""
@@ -94,6 +106,40 @@ class CatalogService:
         """Give a Track 1-5 stars from `account_id`, or clear the rating with `None`."""
         check_rating(rating)
         self._upsert_state(account_id, track_id, rating=rating)
+        return self.get_track(account_id, track_id)
+
+    def record_play(
+        self, account_id: AccountId, play_id: PlayId, track_id: TrackId, played_at: datetime
+    ) -> Track:
+        """Record that `account_id` played a Track at `played_at`, no later than now.
+
+        The id is the client's own choice, so sending a play again changes nothing;
+        sending its id with another Track is refused.
+        """
+        when = min(played_at, self._clock())
+        try:
+            with self._units.begin() as db:
+                if db.get(TrackRow, track_id) is None:
+                    raise _no_track(track_id)
+                recorded = db.get(PlayRow, (account_id, play_id))
+                if recorded is None:
+                    db.add(
+                        PlayRow(
+                            account_id=account_id, id=play_id, track_id=track_id, played_at=when
+                        )
+                    )
+                    db.flush()
+                    _count_play(db, account_id, track_id, when)
+                elif recorded.track_id != track_id:
+                    raise _another_track(play_id)
+        except IntegrityError:
+            # The same play arrived twice at once, and the other request recorded it.
+            with self._units() as db:
+                raced = db.get(PlayRow, (account_id, play_id))
+            if raced is None:
+                raise
+            if raced.track_id != track_id:
+                raise _another_track(play_id) from None
         return self.get_track(account_id, track_id)
 
     def put_playlist(
@@ -190,7 +236,45 @@ def _tracks_for(account_id: AccountId) -> Select[TrackRow, TrackStateRow]:
     )
 
 
-def _to_track(track: TrackRow, state: TrackStateRow | None) -> Track:
+def _count_play(db: Session, account_id: AccountId, track_id: TrackId, when: datetime) -> None:
+    played = insert(TrackStateRow).values(
+        account_id=account_id, track_id=track_id, play_count=1, last_played_at=when
+    )
+    # A play recorded late, such as from a device that was away, keeps a later play the latest.
+    latest = case(
+        (
+            TrackStateRow.last_played_at.is_(None)
+            | (TrackStateRow.last_played_at < played.excluded.last_played_at),
+            played.excluded.last_played_at,
+        ),
+        else_=TrackStateRow.last_played_at,
+    )
+    db.execute(
+        played.on_conflict_do_update(
+            index_elements=["account_id", "track_id"],
+            set_={"play_count": TrackStateRow.play_count + 1, "last_played_at": latest},
+        )
+    )
+
+
+def _availability(db: Session, sources: Select[SourceRow]) -> defaultdict[int, Availability]:
+    # A Library's Source can play only while its Library is online; other kinds don't
+    # depend on a drive.
+    online = {row.id: row.state == LibraryState.ONLINE for row in db.scalars(select(LibraryRow))}
+    per_track: defaultdict[int, list[Availability]] = defaultdict(list)
+    for source in db.scalars(sources):
+        reachable = source.kind != LIBRARY_SOURCE or online.get(
+            library_of_locator(source.locator), False
+        )
+        per_track[source.track_id].append(
+            source_availability(SourceState(source.state), online=reachable)
+        )
+    found: defaultdict[int, Availability] = defaultdict(lambda: Availability.MISSING)
+    found.update({track: track_availability(each) for track, each in per_track.items()})
+    return found
+
+
+def _to_track(track: TrackRow, state: TrackStateRow | None, availability: Availability) -> Track:
     return Track(
         id=TrackId(track.id),
         details=TrackDetails(
@@ -205,7 +289,12 @@ def _to_track(track: TrackRow, state: TrackStateRow | None) -> Track:
         rating=None if state is None else state.rating,
         play_count=0 if state is None else state.play_count,
         last_played_at=None if state is None else state.last_played_at,
+        availability=availability,
     )
+
+
+def _another_track(play_id: PlayId) -> ConflictError:
+    return ConflictError(f"The play {play_id} was of another Track.")
 
 
 def _no_track(track_id: TrackId) -> NotFoundError:

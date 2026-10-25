@@ -10,6 +10,7 @@ from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.jobs import JobService
 from medleyplay.application.libraries import LibraryService
+from medleyplay.application.playback import PlaybackService
 from medleyplay.web.app import create_app
 from medleyplay.web.deps import Services
 from tests.conftest import TEST_HOST
@@ -26,11 +27,13 @@ def plugin_client(
     catalog: CatalogService,
     jobs: JobService,
     libraries: LibraryService,
+    playback: PlaybackService,
 ) -> Iterator[TestClient]:
     """A client of a server with the test plugins `parrot` and `broken-import` on."""
     with started_plugins(units, clock, "parrot", "broken-import") as plugins:
         app = create_app(
-            Services(accounts, catalog, plugins, jobs, libraries), allowed_hosts=[TEST_HOST]
+            Services(accounts, catalog, plugins, jobs, libraries, playback),
+            allowed_hosts=[TEST_HOST],
         )
         with TestClient(app, base_url=f"http://{TEST_HOST}") as test_client:
             yield test_client

@@ -12,8 +12,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.job_runner import JobRunner
-from medleyplay.application.jobs import JobService
+from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.libraries import LibraryService, scan_library_kind
+from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
@@ -68,9 +69,10 @@ def jobs(
     units: sessionmaker[Session], clock: FakeClock, plugins: PluginService, tmp_path: Path
 ) -> JobService:
     # A runner that isn't started; suites that run Jobs start their own.
-    kind = scan_library_kind(clock)
-    runner = JobRunner(units, clock, {kind.name: kind}, plugins, tmp_path / "jobs")
-    return JobService(units, clock, {kind.name: kind}, runner)
+    scan, cache = scan_library_kind(clock), cache_source_kind(tmp_path / "data")
+    kinds: dict[str, AnyJobKind] = {scan.name: scan, cache.name: cache}
+    runner = JobRunner(units, clock, kinds, plugins, tmp_path / "jobs")
+    return JobService(units, clock, kinds, runner)
 
 
 @pytest.fixture
@@ -85,14 +87,23 @@ def libraries(
 
 
 @pytest.fixture
+def playback(
+    units: sessionmaker[Session], plugins: PluginService, jobs: JobService, tmp_path: Path
+) -> PlaybackService:
+    data_dir = tmp_path / "data"
+    return PlaybackService(units, plugins, jobs, cache_source_kind(data_dir), data_dir)
+
+
+@pytest.fixture
 def client(
     accounts: AccountService,
     catalog: CatalogService,
     plugins: PluginService,
     jobs: JobService,
     libraries: LibraryService,
+    playback: PlaybackService,
 ) -> Iterator[TestClient]:
-    services = Services(accounts, catalog, plugins, jobs, libraries)
+    services = Services(accounts, catalog, plugins, jobs, libraries, playback)
     app = create_app(services, allowed_hosts=[TEST_HOST])
     with TestClient(app, base_url=f"http://{TEST_HOST}") as test_client:
         yield test_client

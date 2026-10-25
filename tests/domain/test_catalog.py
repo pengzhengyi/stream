@@ -1,13 +1,17 @@
-"""The catalog's value rules: Source keys, ratings, and Playlists."""
+"""The catalog's value rules: Source keys, availability, ratings, and Playlists."""
 
 import pytest
 
 from medleyplay.domain.catalog import (
+    Availability,
     SourceKey,
+    SourceState,
     TrackId,
     check_playlist_length,
     check_rating,
     parse_playlist_name,
+    source_availability,
+    track_availability,
 )
 from medleyplay.domain.errors import InvalidInputError
 
@@ -42,3 +46,21 @@ def test_an_empty_or_overlong_playlist_name_is_refused(raw: str) -> None:
 def test_a_playlist_of_more_than_10000_entries_is_refused() -> None:
     with pytest.raises(InvalidInputError, match="at most 10000"):
         check_playlist_length((TrackId(1),) * 10_001)
+
+
+def test_an_ok_source_in_an_offline_library_is_offline() -> None:
+    assert source_availability(SourceState.OK, online=False) is Availability.OFFLINE
+
+
+def test_a_missing_source_stays_missing_whether_or_not_its_library_is_online() -> None:
+    assert source_availability(SourceState.MISSING, online=False) is Availability.MISSING
+
+
+def test_a_track_is_as_available_as_its_best_source() -> None:
+    sources = [Availability.CANT_PLAY, Availability.OFFLINE, Availability.MISSING]
+
+    assert track_availability(sources) is Availability.OFFLINE
+
+
+def test_a_track_without_sources_is_missing() -> None:
+    assert track_availability([]) is Availability.MISSING
