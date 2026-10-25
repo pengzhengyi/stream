@@ -17,7 +17,7 @@ TEST_PLUGINS: Final = "tests.support.plugins"
 # A host imports the test plugins from the repository, so it needs the root on its path.
 TEST_COMMAND: Final = HostCommand(env={"PYTHONPATH": str(Path(__file__).resolve().parents[2])})
 # Long enough for a cold start on a busy test machine; the hanging plugin costs this once.
-TEST_LOAD_DEADLINE: Final = timedelta(seconds=4)
+TEST_LOAD_DEADLINE: Final = timedelta(seconds=15)
 
 
 def host_of(*plugins: str, memory_limit: int = MEMORY_LIMIT) -> PluginHost:

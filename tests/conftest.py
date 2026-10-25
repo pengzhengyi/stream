@@ -13,6 +13,7 @@ from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.job_runner import JobRunner
 from medleyplay.application.jobs import JobService
+from medleyplay.application.libraries import LibraryService, scan_library_kind
 from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
@@ -66,15 +67,32 @@ def plugins(units: sessionmaker[Session], clock: FakeClock) -> PluginService:
 def jobs(
     units: sessionmaker[Session], clock: FakeClock, plugins: PluginService, tmp_path: Path
 ) -> JobService:
-    # No Job kinds and a runner that isn't started; suites that run Jobs start their own.
-    runner = JobRunner(units, clock, {}, plugins, tmp_path / "jobs")
-    return JobService(units, clock, {}, runner)
+    # A runner that isn't started; suites that run Jobs start their own.
+    kind = scan_library_kind(clock)
+    runner = JobRunner(units, clock, {kind.name: kind}, plugins, tmp_path / "jobs")
+    return JobService(units, clock, {kind.name: kind}, runner)
+
+
+@pytest.fixture
+def libraries(
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    plugins: PluginService,
+    jobs: JobService,
+    tmp_path: Path,
+) -> LibraryService:
+    return LibraryService(units, clock, plugins, jobs, scan_library_kind(clock), tmp_path / "data")
 
 
 @pytest.fixture
 def client(
-    accounts: AccountService, catalog: CatalogService, plugins: PluginService, jobs: JobService
+    accounts: AccountService,
+    catalog: CatalogService,
+    plugins: PluginService,
+    jobs: JobService,
+    libraries: LibraryService,
 ) -> Iterator[TestClient]:
-    app = create_app(Services(accounts, catalog, plugins, jobs), allowed_hosts=[TEST_HOST])
+    services = Services(accounts, catalog, plugins, jobs, libraries)
+    app = create_app(services, allowed_hosts=[TEST_HOST])
     with TestClient(app, base_url=f"http://{TEST_HOST}") as test_client:
         yield test_client

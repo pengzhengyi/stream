@@ -107,6 +107,12 @@ class ChildProcess[T]:
             self._popen.wait(timeout=_STOP_GRACE)
         self.kill()
 
+    def finish(self) -> None:
+        """Let a child that has said its last word exit, killing it if it doesn't at once."""
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            self._popen.wait(timeout=_STOP_GRACE)
+        self.kill()
+
     def kill(self) -> None:
         """Kill the child's whole process group, and reap the child."""
         kill_group(self._popen.pid)

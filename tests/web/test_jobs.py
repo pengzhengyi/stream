@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
+from medleyplay.application.libraries import LibraryService
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.jobs import JobState
 from medleyplay.web.app import create_app
@@ -28,10 +29,10 @@ def running(units: sessionmaker[Session], clock: FakeClock, tmp_path: Path) -> I
 
 @pytest.fixture
 def jobs_client(
-    running: Jobs, accounts: AccountService, catalog: CatalogService
+    running: Jobs, accounts: AccountService, catalog: CatalogService, libraries: LibraryService
 ) -> Iterator[TestClient]:
     plugins = running.runner._plugins  # noqa: SLF001 -- the plugin service the runner uses
-    services = Services(accounts, catalog, plugins, running.service)
+    services = Services(accounts, catalog, plugins, running.service, libraries)
     app = create_app(services, allowed_hosts=[TEST_HOST])
     with TestClient(app, base_url=f"http://{TEST_HOST}") as test_client:
         yield test_client

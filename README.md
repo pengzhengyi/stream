@@ -24,6 +24,10 @@ Account, created through `POST /api/setup`, is the admin. Add a host name the
 server should answer to, such as a router's DNS name, with
 `MEDLEYPLAY_ALLOWED_HOSTS=music.home`.
 
+Register a folder or a zip archive of your music with `POST /api/libraries`,
+such as `{"name": "Music", "kind": "folder", "path": "~/Music"}`; its scan shows
+in `GET /api/jobs`, and its songs in `GET /api/tracks`.
+
 The config file is optional; a missing setting takes its default, and a change
 applies on restart. This one lets the admin add Accounts beyond the first, and
 turns one plugin off:

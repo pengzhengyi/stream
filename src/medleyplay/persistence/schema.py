@@ -209,3 +209,25 @@ class JobRow(Base):
     created_at: Mapped[datetime] = mapped_column(UtcDateTime)
     started_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
     finished_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+
+
+class LibraryRow(Base):
+    """A Library; `(kind, path)` is its natural key, and its ids are never reused."""
+
+    __tablename__ = "library"
+    __table_args__ = (
+        UniqueConstraint("kind", "path", name="uq_library_kind_path"),
+        CheckConstraint("kind IN ('folder', 'zip')", name="kind"),
+        CheckConstraint("state IN ('online', 'offline')", name="state"),
+        {"sqlite_autoincrement": True},
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(128))
+    kind: Mapped[str] = mapped_column(String(16))
+    path: Mapped[str] = mapped_column(String(4096))
+    state: Mapped[str] = mapped_column(String(16), default="online")
+    message: Mapped[str] = mapped_column(String(1024), default="")
+    file_count: Mapped[int] = mapped_column(Integer, default=0)
+    added_at: Mapped[datetime] = mapped_column(UtcDateTime)
+    last_scanned_at: Mapped[datetime | None] = mapped_column(UtcDateTime)

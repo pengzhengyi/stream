@@ -28,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   delay, wait out network failures, survive a server restart, and can be
   cancelled or retried; `GET /api/jobs` lists them with their progress. See the
   [Jobs](docs/contributing/design-notes/Jobs.md) note.
+- **Libraries** — an admin registers a folder or a zip archive of music, and a
+  scan adds its songs to the catalog with their tags. Rescans read only what
+  changed, follow files that moved, mark files that went away as missing, and
+  take an unplugged drive offline without forgetting it. The `fsspec-library`
+  and `tinytag-tags` plugins read the files. See the
+  [Libraries](docs/contributing/design-notes/Libraries.md) note.
 
 ### Changed
 

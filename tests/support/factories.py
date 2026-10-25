@@ -3,6 +3,8 @@
 from medleyplay.application.accounts import NewAccount
 from medleyplay.domain.accounts import Account, AccountId, Role, Username
 from medleyplay.domain.catalog import SourceKey, TrackDetails
+from medleyplay.plugin_api import Tags
+from medleyplay.programs.scan_library import ScannedFile
 
 PASSWORD = "correct horse battery"
 
@@ -51,3 +53,26 @@ class TrackDetailsFactory:
     def song(title: str = "Intro") -> TrackDetails:
         """Return a three-minute song by a fixed artist."""
         return TrackDetails(title=title, artist="The Band", album="Blue", duration_ms=180_000)
+
+
+class ScannedFileFactory:
+    """Builds the files a Library scan reports."""
+
+    @staticmethod
+    def song(
+        path: str = "Blue/01 Intro.wav", title: str = "Intro", *, fingerprint: str = ""
+    ) -> ScannedFile:
+        """Return a new or changed file whose tags were read, fingerprinted by its path."""
+        return ScannedFile(
+            path=path,
+            size=1000,
+            modified_ns=1,
+            changed=True,
+            fingerprint=fingerprint or f"1000:{path}",
+            tags=Tags(title=title, artist="The Band", album="Blue", duration_ms=180_000),
+        )
+
+    @staticmethod
+    def unchanged(path: str = "Blue/01 Intro.wav") -> ScannedFile:
+        """Return a file the scan skipped because it hasn't changed."""
+        return ScannedFile(path=path, size=1000, modified_ns=1, changed=False)
