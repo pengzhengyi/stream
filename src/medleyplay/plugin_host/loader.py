@@ -35,6 +35,7 @@ def plugin_names(package: str = BUILT_IN_PLUGINS) -> tuple[str, ...]:
 class Endpoint:
     """One operation of one provider, ready to call with a request from the pipe."""
 
+    plugin: str
     parse: Callable[[JsonValue], BaseModel]
     invoke: Callable[[BaseModel], BaseModel]
 
@@ -42,7 +43,8 @@ class Endpoint:
 class _PluginRegistry:
     """The registry one plugin registers into; it checks every key as it is added."""
 
-    def __init__(self, taken: Mapping[tuple[str, str], str]) -> None:
+    def __init__(self, plugin: str, taken: Mapping[tuple[str, str], str]) -> None:
+        self._plugin = plugin
         self._taken = taken
         self.endpoints: dict[Address, Endpoint] = {}
         self.keys: dict[str, list[str]] = {}
@@ -54,11 +56,12 @@ class _PluginRegistry:
             message = f"{point.name} key {key!r} is already taken by {holder or 'this plugin'}."
             raise ValueError(message)
         for name, operation in point.operations.items():
-            self.endpoints[point.name, key, name] = _endpoint(operation, provider)
+            self.endpoints[point.name, key, name] = _endpoint(self._plugin, operation, provider)
         self.keys.setdefault(point.name, []).append(key)
 
 
 def _endpoint[P](
+    plugin: str,
     operation: Operation[P, Any, Any],  # Any: each operation has its own models
     provider: P,
 ) -> Endpoint:
@@ -68,6 +71,7 @@ def _endpoint[P](
         message = f"The provider has no method for {operation.point.name}.{operation.name}."
         raise TypeError(message)
     return Endpoint(
+        plugin=plugin,
         parse=operation.request.model_validate,
         invoke=lambda request: operation.invoke(provider, request),
     )
@@ -107,7 +111,7 @@ def _register(package: str, name: str, taken: Mapping[tuple[str, str], str]) -> 
     if plugin.api_version != API_VERSION:
         message = f"Written for plugin API {plugin.api_version}; this server has {API_VERSION}."
         raise ValueError(message)
-    registry = _PluginRegistry(taken)
+    registry = _PluginRegistry(name, taken)
     plugin.register(registry)
     return registry
 

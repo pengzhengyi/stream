@@ -10,6 +10,8 @@ from sqlalchemy import (
     DateTime,
     Dialect,
     ForeignKey,
+    Index,
+    Integer,
     MetaData,
     String,
     TypeDecorator,
@@ -17,6 +19,7 @@ from sqlalchemy import (
     Uuid,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.sql import text
 
 # Constraint names are fixed so a later migration can refer to them.
 NAMING_CONVENTION = {
@@ -169,3 +172,40 @@ class PluginStateRow(Base):
     name: Mapped[str] = mapped_column(String(64), primary_key=True)
     faulted_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
     fault_reason: Mapped[str] = mapped_column(String(2048), default="")
+
+
+class JobRow(Base):
+    """A Job; at most one active Job exists per kind and target."""
+
+    __tablename__ = "job"
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('waiting', 'queued', 'running', 'succeeded', 'failed', 'cancelled')",
+            name="state",
+        ),
+        CheckConstraint("attempts >= 0 AND interruptions >= 0", name="counts"),
+        Index(
+            "ix_job_active_target",
+            "kind",
+            "target",
+            unique=True,
+            sqlite_where=text("state IN ('waiting', 'queued', 'running')"),
+        ),
+        Index("ix_job_state", "state"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(64))
+    target: Mapped[str] = mapped_column(String(256))
+    state: Mapped[str] = mapped_column(String(16))
+    request: Mapped[dict[str, object]] = mapped_column(JSON)
+    requested_by: Mapped[int | None] = mapped_column(ForeignKey("account.id", ondelete="SET NULL"))
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    interruptions: Mapped[int] = mapped_column(Integer, default=0)
+    not_before: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    pid: Mapped[int | None]
+    failure_kind: Mapped[str | None] = mapped_column(String(16))
+    failure_message: Mapped[str] = mapped_column(String(2048), default="")
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime)
+    started_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    finished_at: Mapped[datetime | None] = mapped_column(UtcDateTime)

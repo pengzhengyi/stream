@@ -79,7 +79,9 @@ def _reset_password(settings: Settings, username: str, read_password: ReadPasswo
     config = load_config(settings.data_dir / CONFIG_FILE)
     engine = open_database(settings.data_dir)
     try:
-        build_services(engine, config=config).accounts.reset_password(username, password)
+        build_services(engine, settings.data_dir, config=config).accounts.reset_password(
+            username, password
+        )
     except MedleyplayError as error:
         sys.stderr.write(f"{error}\n")
         return 1

@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   folder turns plugins on and off, `medleyplay serve --safe-mode` starts with
   all of them off, and `GET /api/plugins` shows each plugin's state. See the
   [Plugin host](docs/contributing/design-notes/Plugin%20host.md) note.
+- **Jobs** — long work, such as a download or a scan, runs as a Job in a process
+  of its own, one at a time per target. Jobs retry plugin faults with a growing
+  delay, wait out network failures, survive a server restart, and can be
+  cancelled or retried; `GET /api/jobs` lists them with their progress. See the
+  [Jobs](docs/contributing/design-notes/Jobs.md) note.
 
 ### Changed
 

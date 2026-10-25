@@ -6,13 +6,13 @@ import resource
 import sys
 import threading
 from collections.abc import Mapping
-from pathlib import Path
 from typing import IO, Final
 
 from pydantic import BaseModel, JsonValue, ValidationError
 
 from medleyplay.plugin_api import AuthError, NetworkError
 from medleyplay.plugin_host.loader import Address, Endpoint, load_plugins
+from medleyplay.plugin_host.streams import take_standard_streams
 from medleyplay.plugin_host.wire import (
     MAX_LINE,
     TO_HOST,
@@ -35,7 +35,7 @@ _PROTOCOL_ERROR: Final = 2
 
 def main() -> int:
     """Run the host until the server closes the pipe."""
-    protocol_in, protocol_out = _take_standard_streams()
+    protocol_in, protocol_out = take_standard_streams()
     inbox: queue.Queue[str] = queue.Queue()
     threading.Thread(target=_read_inbox, args=(protocol_in, inbox), daemon=True).start()
 
@@ -53,20 +53,6 @@ def main() -> int:
         if not isinstance(call, Call):
             return _PROTOCOL_ERROR
         send(answer(call, endpoints))
-
-
-def _take_standard_streams() -> tuple[IO[str], IO[str]]:
-    # The protocol keeps private copies of standard input and output; a plugin that
-    # reads input gets end of file, and anything it prints goes to standard error.
-    protocol_in = os.fdopen(os.dup(0), "r", encoding="utf-8")
-    protocol_out = os.fdopen(os.dup(1), "w", encoding="utf-8")
-    devnull = os.open(os.devnull, os.O_RDONLY)
-    os.dup2(devnull, 0)
-    os.close(devnull)
-    os.dup2(2, 1)
-    sys.stdin = Path(os.devnull).open(encoding="utf-8")  # noqa: SIM115 -- open for the process's life
-    sys.stdout = sys.stderr
-    return protocol_in, protocol_out
 
 
 def _read_inbox(protocol_in: IO[str], inbox: queue.Queue[str]) -> None:

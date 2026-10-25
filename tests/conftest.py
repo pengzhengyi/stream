@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
+from medleyplay.application.job_runner import JobRunner
+from medleyplay.application.jobs import JobService
 from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
@@ -61,9 +63,18 @@ def plugins(units: sessionmaker[Session], clock: FakeClock) -> PluginService:
 
 
 @pytest.fixture
+def jobs(
+    units: sessionmaker[Session], clock: FakeClock, plugins: PluginService, tmp_path: Path
+) -> JobService:
+    # No Job kinds and a runner that isn't started; suites that run Jobs start their own.
+    runner = JobRunner(units, clock, {}, plugins, tmp_path / "jobs")
+    return JobService(units, clock, {}, runner)
+
+
+@pytest.fixture
 def client(
-    accounts: AccountService, catalog: CatalogService, plugins: PluginService
+    accounts: AccountService, catalog: CatalogService, plugins: PluginService, jobs: JobService
 ) -> Iterator[TestClient]:
-    app = create_app(Services(accounts, catalog, plugins), allowed_hosts=[TEST_HOST])
+    app = create_app(Services(accounts, catalog, plugins, jobs), allowed_hosts=[TEST_HOST])
     with TestClient(app, base_url=f"http://{TEST_HOST}") as test_client:
         yield test_client
