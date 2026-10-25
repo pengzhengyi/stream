@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
+from medleyplay.application.events import JobEvents
 from medleyplay.domain.accounts import Account, AccountId
 from medleyplay.domain.errors import ConflictError, ForbiddenError, NotFoundError
 from medleyplay.domain.jobs import ACTIVE_STATES, Job, JobId, JobState, JobView, Progress
@@ -88,12 +89,17 @@ class JobService:
         clock: Clock,
         kinds: Mapping[str, AnyJobKind],
         runner: Runner,
+        events: JobEvents | None = None,
     ) -> None:
-        """Create a service over the database `units` open, for Jobs of `kinds`."""
+        """Create a service over the database `units` open, for Jobs of `kinds`.
+
+        Each change it makes is published to `events`.
+        """
         self._units = units
         self._clock = clock
         self._kinds = kinds
         self._runner = runner
+        self._events = events
 
     def start(self) -> None:
         """Start running Jobs, after recovering those a stopped server left running."""
@@ -145,6 +151,7 @@ class JobService:
             if raced is None:
                 raise
             return raced
+        self._publish(job.id)
         self._runner.wake()
         return job
 
@@ -175,6 +182,8 @@ class JobService:
             )
         if was_running and cancelled.rowcount == 1:
             self._runner.kill(job_id)
+        if cancelled.rowcount == 1:
+            self._publish(job_id)
         return self.get_job(job_id)
 
     def retry(self, caller: Account, job_id: JobId) -> Job:
@@ -206,6 +215,10 @@ class JobService:
                 )
             )
             return None if row is None else to_job(row)
+
+    def _publish(self, job_id: JobId) -> None:
+        if self._events is not None:
+            self._events.publish(job_id)
 
     def _view(self, job: Job) -> JobView:
         progress = self._runner.progress(job.id) if job.state == JobState.RUNNING else None

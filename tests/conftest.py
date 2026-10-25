@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.downloads import DownloadService, download_source_kind
+from medleyplay.application.events import JobEvents
 from medleyplay.application.job_runner import JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.libraries import LibraryService, scan_library_kind
@@ -160,6 +161,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         playback=playback,
         linked=linked,
         links=links,
+        events=JobEvents(),
     )
 
 

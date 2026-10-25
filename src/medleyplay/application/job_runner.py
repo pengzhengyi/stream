@@ -20,6 +20,7 @@ from sqlalchemy import ColumnElement, or_, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
+from medleyplay.application.events import JobEvents
 from medleyplay.application.jobs import AnyJobKind, to_job
 from medleyplay.application.plugins import PluginService
 from medleyplay.domain.accounts import AccountId
@@ -137,6 +138,7 @@ class JobRunner:
         online: Callable[[], bool] = lambda: True,
         memory_limit: int = JOB_MEMORY_LIMIT,
         logins: Logins | None = None,
+        events: JobEvents | None = None,
     ) -> None:
         """Create a runner keeping Jobs' working folders in `jobs_dir`."""
         self._units = units
@@ -150,6 +152,7 @@ class JobRunner:
         self._online = online
         self._memory_limit = memory_limit
         self._logins = logins
+        self._events = events
         self._lock = threading.Lock()
         self._running: dict[JobId, _Running] = {}
         self._progress: dict[JobId, Progress] = {}
@@ -231,11 +234,13 @@ class JobRunner:
         if not self._online():
             return
         with self._units.begin() as db:
+            due = (JobRow.state == JobState.WAITING) & _due(self._clock())
+            promoted = list(db.scalars(select(JobRow.id).where(due)))
             db.execute(
-                update(JobRow)
-                .where(JobRow.state == JobState.WAITING, _due(self._clock()))
-                .values(state=JobState.QUEUED)
+                update(JobRow).where(JobRow.id.in_(promoted), due).values(state=JobState.QUEUED)
             )
+        for job_id in promoted:
+            self._publish(JobId(job_id))
 
     def _start_next(self) -> bool:
         with self._units.begin() as db:
@@ -257,6 +262,7 @@ class JobRunner:
             login_account = row.login_account_id
         if claimed.rowcount != 1:
             return True
+        self._publish(job_id)
         kind = self._kinds.get(kind_name)
         if kind is None:
             message = f"This server no longer runs Jobs of the kind {kind_name!r}."
@@ -353,6 +359,7 @@ class JobRunner:
                         return _Fault(f"It used {peak // 1024**2} MiB of memory.")
                     with self._lock:
                         self._progress[running.job_id] = Progress(fraction, text)
+                    self._publish(running.job_id, progress=True)
                 case JobFinished() | JobFailed():
                     return message
 
@@ -404,6 +411,8 @@ class JobRunner:
         except Exception as error:  # noqa: BLE001 -- a failed completion fails its Job
             message = f"Its completion failed: {type(error).__name__}: {error}"
             self._settle_failure(running.job_id, "program", message)
+            return
+        self._publish(running.job_id)
 
     def _retry_or_fail(self, running: _Running, message: str) -> None:
         with self._units() as db:
@@ -435,7 +444,14 @@ class JobRunner:
 
     def _set(self, job_id: JobId, state: JobState, **changes: Any) -> bool:  # noqa: ANN401 -- column values
         with self._units.begin() as db:
-            return self._set_in(db, job_id, state, **changes)
+            changed = self._set_in(db, job_id, state, **changes)
+        if changed:
+            self._publish(job_id)
+        return changed
+
+    def _publish(self, job_id: JobId, *, progress: bool = False) -> None:
+        if self._events is not None:
+            self._events.publish(job_id, progress=progress)
 
     def _set_in(
         self,

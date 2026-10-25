@@ -21,6 +21,7 @@ from medleyplay.application import Clock
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.downloads import DownloadService, download_source_kind
+from medleyplay.application.events import JobEvents
 from medleyplay.application.job_runner import JobProcesses, JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.libraries import LibraryService, scan_library_kind
@@ -153,6 +154,7 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         **(kinds or {}),
     }
     processes = JobProcesses(source.command, source.package)
+    events = JobEvents()
     runner = JobRunner(
         units,
         clock,
@@ -161,8 +163,9 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         data_dir / JOBS_FOLDER,
         processes=processes,
         logins=linked,
+        events=events,
     )
-    jobs = JobService(units, clock, job_kinds, runner)
+    jobs = JobService(units, clock, job_kinds, runner, events)
     catalog = CatalogService(units, clock)
     downloads = DownloadService(units, plugins, jobs, download, linked, data_dir)
     return Services(
@@ -176,6 +179,7 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         playback=PlaybackService(units, plugins, jobs, cache, data_dir, downloads),
         linked=linked,
         links=LinkService(units, clock, plugins, catalog, downloads),
+        events=events,
     )
 
 
