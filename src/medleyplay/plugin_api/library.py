@@ -95,13 +95,15 @@ class FileLocation(_Model):
 
     A file in a folder, or a member stored uncompressed in a zip archive, has a
     `local_path` with an `offset` and a `length`. A compressed member has none:
-    `compressed` is set, and it must be fetched first.
+    `compressed` is set, and it must be fetched first. A file that isn't there, or
+    can't be read now, is `missing`: an ordinary answer, not a failure.
     """
 
     local_path: str | None
     offset: int = 0
     length: int
     compressed: bool = False
+    missing: bool = False
 
 
 class FileFingerprint(_Model):
@@ -160,7 +162,11 @@ LIST_FILES = LIBRARY_BACKEND.operation(
     deadline=timedelta(hours=1),
 )
 LOCATE_FILE = LIBRARY_BACKEND.operation(
-    "locate", FileRequest, FileLocation, lambda backend: backend.locate
+    "locate",
+    FileRequest,
+    FileLocation,
+    lambda backend: backend.locate,
+    deadline=timedelta(seconds=5),
 )
 FINGERPRINT_FILE = LIBRARY_BACKEND.operation(
     "fingerprint",

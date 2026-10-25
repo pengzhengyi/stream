@@ -62,8 +62,8 @@ def check_library_backend(
 
     Every listed file must have a requested extension, a fingerprint that stays the
     same, and a location within its bounds; a compressed file must fetch into
-    `scratch`, an empty folder, and nowhere else. A path that leaves the root must be
-    refused.
+    `scratch`, an empty folder, and nowhere else. A file the listing lacks must be
+    missing, and a path that leaves the root must be refused or missing.
     """
     if not check_operation(CHECK_ROOT, backend, CheckRoot(root=root)).readable:
         message = f"The backend can't read {root!r}."
@@ -76,6 +76,9 @@ def check_library_backend(
         request = FileRequest(root=root, path=file.path)
         check_operation(FINGERPRINT_FILE, backend, request)
         location = check_operation(LOCATE_FILE, backend, request)
+        if location.missing:
+            message = f"A listed file, {file.path!r}, was located as missing."
+            raise ContractError(message)
         if location.compressed or location.local_path is None:
             fetched = FETCH_FILE.invoke(
                 backend, FetchFile(root=root, path=file.path, folder=str(scratch))
@@ -86,15 +89,23 @@ def check_library_backend(
         elif location.offset + location.length > Path(location.local_path).stat().st_size:
             message = f"The location of {file.path!r} runs past the end of its file."
             raise ContractError(message)
-    escaping = FileRequest.model_construct(root=root, path="../outside.mp3")
+    _check_unlisted(backend, root, min(extensions), len(listing.files))
+    return listing
+
+
+def _check_unlisted(backend: LibraryBackend, root: LibraryRoot, extension: str, n: int) -> None:
+    absent = FileRequest(root=root, path=f"not-listed-{n}.{extension}")
+    if not check_operation(LOCATE_FILE, backend, absent).missing:
+        message = f"{absent.path!r} isn't listed, but wasn't located as missing."
+        raise ContractError(message)
+    escaping = FileRequest.model_construct(root=root, path=f"../outside.{extension}")
     try:
-        LOCATE_FILE.invoke(backend, escaping)
+        escaped = LOCATE_FILE.invoke(backend, escaping)
     except (ValueError, OSError):
-        pass
-    else:
+        return
+    if not escaped.missing:
         message = "The backend located a path outside its root."
         raise ContractError(message)
-    return listing
 
 
 def check_tag_reader(reader: TagReader, request: ReadTags) -> Tags:

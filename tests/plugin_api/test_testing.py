@@ -111,6 +111,21 @@ class _FetchesElsewhere(FolderBackend):
         return FetchedFile(local_path=str(Path(request.root.path) / request.path))
 
 
+class _LosesListedFiles(FolderBackend):
+    def locate(self, request: FileRequest) -> FileLocation:
+        return FileLocation(local_path=None, length=0, missing=True)
+
+
+class _FindsUnlistedFiles(FolderBackend):
+    """A backend that answers any file it doesn't have with the location of `a.wav`."""
+
+    def locate(self, request: FileRequest) -> FileLocation:
+        found = super().locate(request)
+        if found.missing:
+            return super().locate(request.model_copy(update={"path": "a.wav"}))
+        return found
+
+
 class _LocatesAnything(FolderBackend):
     """A backend that locates a path leading out of its root instead of refusing it."""
 
@@ -126,6 +141,8 @@ class _LocatesAnything(FolderBackend):
         (_Unreadable(), "can't read"),
         (_LocatesPastTheEnd(), "runs past the end"),
         (_FetchesElsewhere(), "was fetched outside"),
+        (_LosesListedFiles(), "was located as missing"),
+        (_FindsUnlistedFiles(), "wasn't located as missing"),
         (_LocatesAnything(), "located a path outside its root"),
     ],
 )

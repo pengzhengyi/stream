@@ -24,6 +24,7 @@ from medleyplay.plugin_api import (
 from medleyplay.plugins.fsspec_library._fsspec import find_files
 
 EDGE: Final = 64 * 1024
+MISSING: Final = FileLocation(local_path=None, length=0, missing=True)
 # A zip member's data starts after a 30-byte local header, its name, and an extra field.
 _LOCAL_HEADER: Final = struct.Struct("<4s22xHH")
 _LOCAL_HEADER_SIGNATURE: Final = b"PK\x03\x04"
@@ -65,8 +66,11 @@ class FolderBackend:
 
     def locate(self, request: FileRequest) -> FileLocation:
         """Return the file's path; its bytes are the whole file."""
-        path = self._inside(request)
-        return FileLocation(local_path=str(path), length=path.stat().st_size)
+        try:
+            path = self._inside(request)
+            return FileLocation(local_path=str(path), length=path.stat().st_size)
+        except OSError:
+            return MISSING
 
     def fingerprint(self, request: FileRequest) -> FileFingerprint:
         """Return the file's size and a hash of its first and last 64 KB."""
@@ -128,20 +132,27 @@ class ZipBackend:
         return FileList(files=tuple(files))
 
     def locate(self, request: FileRequest) -> FileLocation:
-        """Return where a stored member's bytes are; a compressed member must be fetched."""
+        """Return where a stored member's bytes are; a compressed member must be fetched.
+
+        A member that isn't there, or an archive that can't be read now, perhaps
+        because it is being rewritten, is missing.
+        """
         archive = Path(request.root.path)
-        with zipfile.ZipFile(archive) as zip_file:
-            member = self._member(zip_file, request)
+        try:
+            with zipfile.ZipFile(archive) as zip_file:
+                member = self._member(zip_file, request)
             if member.compress_type != zipfile.ZIP_STORED:
                 return FileLocation(local_path=None, length=member.file_size, compressed=True)
-        with archive.open("rb") as file:
-            file.seek(member.header_offset)
-            signature, name_length, extra_length = _LOCAL_HEADER.unpack(
-                file.read(_LOCAL_HEADER.size)
-            )
+            with archive.open("rb") as file:
+                file.seek(member.header_offset)
+                header = file.read(_LOCAL_HEADER.size)
+        except (OSError, zipfile.BadZipFile):
+            return MISSING
+        if len(header) != _LOCAL_HEADER.size:
+            return MISSING
+        signature, name_length, extra_length = _LOCAL_HEADER.unpack(header)
         if signature != _LOCAL_HEADER_SIGNATURE:
-            message = f"{request.path!r} has a damaged header in {archive}."
-            raise ValueError(message)
+            return MISSING
         offset = member.header_offset + _LOCAL_HEADER.size + name_length + extra_length
         return FileLocation(local_path=str(archive), offset=offset, length=member.file_size)
 

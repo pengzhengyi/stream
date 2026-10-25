@@ -108,14 +108,23 @@ def test_a_symbolic_link_in_a_folder_is_left_out(tmp_path: Path) -> None:
     assert not any(file.path.startswith("loop/") for file in listing.files)
 
 
-@pytest.mark.parametrize("path", ["../Elsewhere/secret.wav", "link.wav"])
-def test_a_folder_path_that_leads_outside_the_root_is_refused(tmp_path: Path, path: str) -> None:
+def test_a_folder_path_that_climbs_out_of_the_root_is_refused(tmp_path: Path) -> None:
+    root = _folder(tmp_path)
+    folder_of(tmp_path / "Elsewhere", {"secret.wav": Song()})
+    request = FileRequest.model_construct(root=root, path="../Elsewhere/secret.wav")
+
+    with pytest.raises(ValueError, match="isn't a path inside a Library"):
+        FolderBackend().locate(request)
+
+
+def test_a_link_that_leads_outside_the_root_is_missing(tmp_path: Path) -> None:
     root = _folder(tmp_path)
     outside = folder_of(tmp_path / "Elsewhere", {"secret.wav": Song()})
     (Path(root.path) / "link.wav").symlink_to(outside / "secret.wav")
 
-    with pytest.raises((ValueError, FileNotFoundError)):
-        FolderBackend().locate(FileRequest.model_construct(root=root, path=path))
+    location = FolderBackend().locate(FileRequest(root=root, path="link.wav"))
+
+    assert location.missing
 
 
 def test_zip_members_named_outside_the_archive_or_encrypted_are_left_out(tmp_path: Path) -> None:
@@ -176,16 +185,36 @@ def test_a_folder_file_fetches_as_a_copy(tmp_path: Path) -> None:
     assert Path(fetched.local_path).read_bytes() == wav_bytes(Song("Intro"))
 
 
-def test_a_zip_member_that_does_not_exist_is_not_found(tmp_path: Path) -> None:
-    with pytest.raises(FileNotFoundError, match="isn't a member"):
-        ZipBackend().locate(FileRequest(root=_zip(tmp_path), path="x/absent.wav"))
+def test_a_zip_member_that_does_not_exist_is_missing(tmp_path: Path) -> None:
+    location = ZipBackend().locate(FileRequest(root=_zip(tmp_path), path="x/absent.wav"))
+
+    assert location.missing
 
 
-def test_a_stored_member_with_a_damaged_header_is_refused(tmp_path: Path) -> None:
+def test_a_stored_member_with_a_damaged_header_is_missing(tmp_path: Path) -> None:
     root = _zip(tmp_path)
     data = bytearray(Path(root.path).read_bytes())
     data[0:4] = b"XXXX"
     Path(root.path).write_bytes(bytes(data))
 
-    with pytest.raises(ValueError, match="damaged header"):
-        ZipBackend().locate(FileRequest(root=root, path="x/stored.wav"))
+    location = ZipBackend().locate(FileRequest(root=root, path="x/stored.wav"))
+
+    assert location.missing
+
+
+def test_a_member_of_an_archive_being_rewritten_is_missing(tmp_path: Path) -> None:
+    root = _zip(tmp_path)
+    Path(root.path).write_bytes(b"PK\x03\x04 half written")
+
+    location = ZipBackend().locate(FileRequest(root=root, path="x/stored.wav"))
+
+    assert location.missing
+
+
+def test_a_folder_file_that_is_gone_is_missing(tmp_path: Path) -> None:
+    root = _folder(tmp_path)
+    (Path(root.path) / "02 Outro.WAV").unlink()
+
+    location = FolderBackend().locate(FileRequest(root=root, path="02 Outro.WAV"))
+
+    assert location.missing
