@@ -16,7 +16,7 @@ from medleyplay.web.jobs import JobOut
 router = APIRouter(prefix="/api", tags=["events"])
 
 SESSION_CHECK_SECONDS: Final = 15.0
-"""How long a quiet stream waits before checking its session is still signed in."""
+"""How often a stream checks its session is still signed in."""
 
 
 @router.get("/events", response_class=EventSourceResponse)
@@ -35,19 +35,25 @@ async def stream_events(
     asks again. The stream ends when its session does.
     """
     del me  # Signed in to open the stream; the session is checked again as it runs.
+    loop = asyncio.get_running_loop()
     async with events.subscribe() as subscription:
         yield ServerSentEvent(event="ready", data={})
+        checked = loop.time()
         while True:
             try:
                 job_id = await asyncio.wait_for(subscription.next(), SESSION_CHECK_SECONDS)
             except TimeoutError:
-                if not await run_in_threadpool(_still_signed_in, accounts, token):
-                    return
-                continue
+                job_id = None
             except SubscriptionEndedError:
                 return
-            view = await run_in_threadpool(jobs.get_job, job_id)
-            yield ServerSentEvent(data=JobOut.of(view), event="job")
+            # Checked on a timer, so a busy stream ends with its session as a quiet one does.
+            if loop.time() - checked >= SESSION_CHECK_SECONDS:
+                if not await run_in_threadpool(_still_signed_in, accounts, token):
+                    return
+                checked = loop.time()
+            if job_id is not None:
+                view = await run_in_threadpool(jobs.get_job, job_id)
+                yield ServerSentEvent(data=JobOut.of(view), event="job")
 
 
 def _still_signed_in(accounts: AccountsDep, token: str | None) -> bool:

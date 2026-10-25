@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.events import JobEvents
+from medleyplay.domain.jobs import JobState
 from medleyplay.web import events as events_api
 from medleyplay.web.app import create_app
 from medleyplay.web.deps import SESSION_COOKIE, Services
@@ -67,6 +68,21 @@ def _job_events(lines: Iterator[str], until_state: str) -> list[dict[str, object
     return heard
 
 
+def _progress_heard(lines: Iterator[str]) -> None:
+    """Read the stream until a `job` event carries the Job's progress."""
+    event = None
+    for line in lines:
+        if line.startswith("event: "):
+            event = line.removeprefix("event: ")
+        elif (
+            line.startswith("data: ")
+            and event == "job"
+            and json.loads(line.removeprefix("data: "))["progress"] is not None
+        ):
+            return
+    raise AssertionError
+
+
 def test_a_browser_hears_a_job_change_until_it_succeeds(
     events_client: TestClient, running: Jobs
 ) -> None:
@@ -97,6 +113,30 @@ def test_a_stream_ends_when_its_session_does(
         remaining = list(lines)
 
     assert not any(line.startswith("event: job") for line in remaining)
+
+
+def test_a_busy_stream_ends_when_its_session_does_without_waiting_for_quiet(
+    events_client: TestClient,
+    running: Jobs,
+    accounts: AccountService,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Progress arrives four times a second, so the stream is never quiet for half a second.
+    monkeypatch.setattr(events_api, "SESSION_CHECK_SECONDS", 0.5)
+    alice = set_up_as_alice(events_client)
+
+    with events_client.stream("GET", "/api/events") as stream:
+        lines = stream.iter_lines()
+        _ready(lines)
+        job = running.submit(
+            EchoJob(text="hi", steps=40, step_seconds=0.1), by=int(str(alice["id"]))
+        )
+        _progress_heard(lines)
+        accounts.sign_out(events_client.cookies[SESSION_COOKIE])
+        remaining = _job_events(lines, "succeeded")
+
+    assert all(each["state"] != "succeeded" for each in remaining)
+    assert running.service.get_job(job.id).job.state is JobState.RUNNING
 
 
 def test_events_need_a_signed_in_account(client: TestClient) -> None:
