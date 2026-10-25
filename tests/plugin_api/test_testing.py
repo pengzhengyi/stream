@@ -1,12 +1,34 @@
 """The contract kit catches providers that break their extension point's contract."""
 
 import math
+from pathlib import Path
 
 import pytest
 from pydantic import BaseModel, field_serializer
 
-from medleyplay.plugin_api import ExtensionPoint
-from medleyplay.plugin_api.testing import ContractError, check_operation, check_round_trip
+from medleyplay.plugin_api import (
+    CheckRoot,
+    ExtensionPoint,
+    FetchedFile,
+    FetchFile,
+    FileList,
+    FileLocation,
+    FileRequest,
+    LibraryRoot,
+    ListFiles,
+    ReadTags,
+    RootCheck,
+    Tags,
+)
+from medleyplay.plugin_api.testing import (
+    ContractError,
+    check_library_backend,
+    check_operation,
+    check_round_trip,
+    check_tag_reader,
+)
+from medleyplay.plugins.fsspec_library.backends import FolderBackend
+from tests.support.audio import Song, folder_of
 from tests.support.echo import SAY, Parrot, Said, Say
 
 
@@ -57,3 +79,79 @@ def test_a_model_that_survives_a_round_trip_passes() -> None:
 def test_a_model_that_changes_in_a_round_trip_fails() -> None:
     with pytest.raises(ContractError, match=r"became Rounded\(value=2\.0\) in a JSON round trip"):
         check_round_trip(Rounded(value=1.5))
+
+
+def _library(tmp_path: Path) -> LibraryRoot:
+    """A folder holding `a.wav`."""
+    return LibraryRoot(kind="folder", path=str(folder_of(tmp_path / "Music", {"a.wav": Song()})))
+
+
+class _Unreadable(FolderBackend):
+    def check(self, request: CheckRoot) -> RootCheck:
+        return RootCheck(readable=False, message="unplugged")
+
+
+class _ListsEverything(FolderBackend):
+    def list_files(self, request: ListFiles) -> FileList:
+        return super().list_files(
+            request.model_copy(update={"extensions": frozenset({"wav", "txt"})})
+        )
+
+
+class _LocatesPastTheEnd(FolderBackend):
+    def locate(self, request: FileRequest) -> FileLocation:
+        return super().locate(request).model_copy(update={"offset": 10})
+
+
+class _FetchesElsewhere(FolderBackend):
+    def locate(self, request: FileRequest) -> FileLocation:
+        return FileLocation(local_path=None, length=1, compressed=True)
+
+    def fetch(self, request: FetchFile) -> FetchedFile:
+        return FetchedFile(local_path=str(Path(request.root.path) / request.path))
+
+
+class _LocatesAnything(FolderBackend):
+    """A backend that locates a path leading out of its root instead of refusing it."""
+
+    def locate(self, request: FileRequest) -> FileLocation:
+        if request.path.startswith("../"):
+            return FileLocation(local_path=request.path, length=0)
+        return super().locate(request)
+
+
+@pytest.mark.parametrize(
+    ("backend", "message"),
+    [
+        (_Unreadable(), "can't read"),
+        (_LocatesPastTheEnd(), "runs past the end"),
+        (_FetchesElsewhere(), "was fetched outside"),
+        (_LocatesAnything(), "located a path outside its root"),
+    ],
+)
+def test_the_library_kit_catches_a_backend_that_breaks_the_contract(
+    tmp_path: Path, backend: FolderBackend, message: str
+) -> None:
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+
+    with pytest.raises(ContractError, match=message):
+        check_library_backend(backend, _library(tmp_path), frozenset({"wav"}), scratch)
+
+
+def test_the_library_kit_catches_a_file_with_an_extension_not_asked_for(tmp_path: Path) -> None:
+    root = _library(tmp_path)
+    (Path(root.path) / "notes.txt").write_text("hi")
+
+    with pytest.raises(ContractError, match="doesn't have a requested extension"):
+        check_library_backend(_ListsEverything(), root, frozenset({"wav"}), tmp_path)
+
+
+class _NegativeReader:
+    def read_tags(self, request: ReadTags) -> Tags:
+        return Tags(duration_ms=-1)
+
+
+def test_the_tag_kit_catches_a_negative_duration(tmp_path: Path) -> None:
+    with pytest.raises(ContractError, match="A negative duration"):
+        check_tag_reader(_NegativeReader(), ReadTags(local_path=str(tmp_path)))

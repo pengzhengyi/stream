@@ -263,7 +263,10 @@ class JobRunner:
 
     def _supervise(self, running: _Running) -> None:
         outcome = self._watch(running)
-        running.process.kill()
+        if isinstance(outcome, JobFinished | JobFailed):
+            running.process.finish()
+        else:
+            running.process.kill()
         try:
             self._settle(running, outcome)
         finally:

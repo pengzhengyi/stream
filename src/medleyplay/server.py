@@ -22,6 +22,7 @@ from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.job_runner import JobProcesses, JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
+from medleyplay.application.libraries import LibraryService, scan_library_kind
 from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.config import CONFIG_FILE, Config, load_config
@@ -135,18 +136,21 @@ def build_services(
     lineup = Lineup(available, enabled, config.unknown_plugins(available), safe_mode)
     host = PluginHost(enabled, package=source.package, command=source.command) if enabled else None
     plugins = PluginService(units, clock, lineup, host)
-    job_kinds = kinds or {}
+    scan = scan_library_kind(clock)
+    job_kinds = {scan.name: scan, **(kinds or {})}
     processes = JobProcesses(source.command, source.package)
     runner = JobRunner(
         units, clock, job_kinds, plugins, data_dir / JOBS_FOLDER, processes=processes
     )
+    jobs = JobService(units, clock, job_kinds, runner)
     return Services(
         accounts=AccountService(
             units, hasher, clock, SignInThrottle(clock), multiple_accounts=config.multiple_accounts
         ),
         catalog=CatalogService(units, clock),
         plugins=plugins,
-        jobs=JobService(units, clock, job_kinds, runner),
+        jobs=jobs,
+        libraries=LibraryService(units, clock, plugins, jobs, scan, data_dir),
     )
 
 

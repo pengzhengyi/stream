@@ -5,8 +5,8 @@
 > as a download or a Library scan, in a process of its own, and how a Job
 > survives failures and restarts. Why Jobs run outside the server is in
 > [Architecture](Architecture.md#processes); how plugins load is in
-> [Plugin host](Plugin%20host.md). No Job kind ships yet; the first, scanning a
-> Library, comes with Libraries.
+> [Plugin host](Plugin%20host.md). The first Job kind scans a
+> [Library](Libraries.md).
 
 ## Contents
 

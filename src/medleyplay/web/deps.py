@@ -8,6 +8,7 @@ from fastapi import Cookie, Depends, Request
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.jobs import JobService
+from medleyplay.application.libraries import LibraryService
 from medleyplay.application.plugins import PluginService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.errors import NotSignedInError
@@ -23,6 +24,7 @@ class Services:
     catalog: CatalogService
     plugins: PluginService
     jobs: JobService
+    libraries: LibraryService
 
 
 def _services(request: Request) -> Services:
@@ -49,10 +51,15 @@ def _jobs(services: Annotated[Services, Depends(_services)]) -> JobService:
     return services.jobs
 
 
+def _libraries(services: Annotated[Services, Depends(_services)]) -> LibraryService:
+    return services.libraries
+
+
 AccountsDep = Annotated[AccountService, Depends(_accounts)]
 CatalogDep = Annotated[CatalogService, Depends(_catalog)]
 PluginsDep = Annotated[PluginService, Depends(_plugins)]
 JobsDep = Annotated[JobService, Depends(_jobs)]
+LibrariesDep = Annotated[LibraryService, Depends(_libraries)]
 SessionToken = Annotated[str | None, Cookie(alias=SESSION_COOKIE, include_in_schema=False)]
 
 

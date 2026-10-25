@@ -75,7 +75,7 @@
   Library, or a BV id and part), a quick fingerprint (size plus a hash of the
   first and last 64 KB), state (`ok`, `missing`, `unavailable`, `can't play`),
   and kind-specific details as JSON validated by the kind's model.
-- `library`: name, fsspec URL and options, the last completed scan.
+- `library`: name, storage kind and path, state, file count, the last completed scan.
 - `download`: source (unique), file path, audio quality, size, created, last
   served.
 - `playlist` and `playlist_entry`: owned by an Account; a smart playlist stores

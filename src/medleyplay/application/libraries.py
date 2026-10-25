@@ -1,0 +1,327 @@
+"""Libraries: registering them, scanning them, and applying each scan to the catalog."""
+
+from collections import Counter, defaultdict
+from collections.abc import Iterable
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path, PurePosixPath
+from typing import Final
+
+from sqlalchemy import Select, delete, exists, select
+from sqlalchemy.orm import Session, sessionmaker
+
+from medleyplay.application import Clock
+from medleyplay.application.jobs import JobKind, JobService
+from medleyplay.application.plugins import PluginService
+from medleyplay.domain.accounts import Account
+from medleyplay.domain.catalog import SourceState
+from medleyplay.domain.errors import ForbiddenError, InvalidInputError, NotFoundError
+from medleyplay.domain.jobs import Job
+from medleyplay.domain.libraries import (
+    LIBRARY_SOURCE,
+    Library,
+    LibraryId,
+    LibraryKind,
+    LibraryState,
+    library_locator,
+    parse_library_name,
+    path_of_locator,
+    scan_target,
+)
+from medleyplay.persistence.schema import LibraryRow, SourceRow, TrackRow
+from medleyplay.plugin_api import CHECK_ROOT, LIBRARY_BACKEND, TAG_READER, CheckRoot, LibraryRoot
+from medleyplay.programs.scan_library import (
+    KnownFile,
+    LibraryScan,
+    ScanLibrary,
+    ScannedFile,
+)
+
+SCAN_KIND: Final = "scan_library"
+
+type ScanKind = JobKind[ScanLibrary, LibraryScan]
+
+
+def scan_library_kind(clock: Clock) -> ScanKind:
+    """Return the Job kind that scans a Library and applies the scan to the catalog."""
+
+    def complete(db: Session, job: Job, scan: LibraryScan) -> None:
+        apply_scan(db, LibraryId(int(job.target.removeprefix("library:"))), scan, clock)
+
+    return JobKind(
+        name=SCAN_KIND,
+        program="medleyplay.programs.scan_library:SCAN_LIBRARY",
+        request=ScanLibrary,
+        result=LibraryScan,
+        complete=complete,
+        points=(LIBRARY_BACKEND.name, TAG_READER.name),
+    )
+
+
+@dataclass(frozen=True)
+class Registered:
+    """A Library, whether this request created it, and its scan when it did."""
+
+    library: Library
+    created: bool
+    scan: Job | None
+
+
+class LibraryService:
+    """Register, list, scan, and remove Libraries."""
+
+    def __init__(
+        self,
+        units: sessionmaker[Session],
+        clock: Clock,
+        plugins: PluginService,
+        jobs: JobService,
+        kind: ScanKind,
+        data_dir: Path,
+    ) -> None:
+        """Create a service; `data_dir` is refused as a Library, with anything inside it."""
+        self._units = units
+        self._clock = clock
+        self._plugins = plugins
+        self._jobs = jobs
+        self._kind = kind
+        self._data_dir = data_dir.resolve()
+
+    def register(self, caller: Account, name: str, kind: LibraryKind, path: str) -> Registered:
+        """Register a Library and start its scan; admins only.
+
+        A root already registered returns its Library unchanged, whatever `name` says.
+        """
+        _require_admin(caller)
+        name = parse_library_name(name)
+        root = self._canonical(path)
+        existing = self._find(kind, root)
+        if existing is not None:
+            return Registered(existing, created=False, scan=None)
+        check = self._plugins.call(
+            CHECK_ROOT, kind, CheckRoot(root=LibraryRoot(kind=kind, path=root))
+        )
+        if not check.readable:
+            raise InvalidInputError(check.message)
+        with self._units.begin() as db:
+            row = LibraryRow(
+                name=name,
+                kind=kind,
+                path=root,
+                state=LibraryState.ONLINE,
+                message="",
+                file_count=0,
+                added_at=self._clock(),
+            )
+            db.add(row)
+            db.flush()
+            library = _to_library(row)
+        return Registered(library, created=True, scan=self.scan(caller, library.id))
+
+    def list_libraries(self) -> list[Library]:
+        """Return every Library, in the order they were registered."""
+        with self._units() as db:
+            return [
+                _to_library(row) for row in db.scalars(select(LibraryRow).order_by(LibraryRow.id))
+            ]
+
+    def scan(self, caller: Account, library_id: LibraryId, *, full: bool = False) -> Job:
+        """Start a scan of the Library, or return the one already active; admins only.
+
+        A full scan reads every file again, even those that look unchanged.
+        """
+        _require_admin(caller)
+        with self._units() as db:
+            library = _to_library(_library_row(db, library_id))
+            known = _known_files(db, library_id)
+        extensions = frozenset(self._plugins.available_keys().get(TAG_READER.name, []))
+        request = ScanLibrary(
+            root=LibraryRoot(kind=library.kind, path=library.path),
+            extensions=extensions,
+            known=known,
+            full=full,
+        )
+        return self._jobs.submit(self._kind, scan_target(library_id), request, caller.id)
+
+    def remove(self, caller: Account, library_id: LibraryId) -> None:
+        """Remove a Library, its Sources, and Tracks left without one; admins only.
+
+        Its active scan is cancelled. Removing a Library that is gone changes nothing.
+        """
+        _require_admin(caller)
+        active = self._jobs.active(SCAN_KIND, scan_target(library_id))
+        if active is not None:
+            self._jobs.cancel(caller, active.id)
+        with self._units.begin() as db:
+            if db.get(LibraryRow, library_id) is None:
+                return
+            sources = list(db.scalars(_sources_of(library_id)))
+            track_ids = {source.track_id for source in sources}
+            for source in sources:
+                db.delete(source)
+            db.flush()
+            orphaned = select(TrackRow.id).where(
+                TrackRow.id.in_(track_ids),
+                ~exists().where(SourceRow.track_id == TrackRow.id),
+            )
+            db.execute(delete(TrackRow).where(TrackRow.id.in_(orphaned)))
+            db.execute(delete(LibraryRow).where(LibraryRow.id == library_id))
+
+    def _canonical(self, path: str) -> str:
+        root = Path(path).expanduser().resolve()
+        if root == self._data_dir or root.is_relative_to(self._data_dir):
+            message = "A Library can't be inside medleyplay's own data folder."
+            raise InvalidInputError(message)
+        return str(root)
+
+    def _find(self, kind: LibraryKind, root: str) -> Library | None:
+        with self._units() as db:
+            row = db.scalar(
+                select(LibraryRow).where(LibraryRow.kind == kind, LibraryRow.path == root)
+            )
+            return None if row is None else _to_library(row)
+
+
+def apply_scan(db: Session, library_id: LibraryId, scan: LibraryScan, clock: Clock) -> None:
+    """Apply a completed scan to the catalog; a scan of a removed Library changes nothing.
+
+    An unreadable root, or one that lists nothing after holding files, marks the
+    Library offline and changes no Source.
+    """
+    library = db.get(LibraryRow, library_id)
+    if library is None:
+        return
+    if not scan.readable or (not scan.files and library.file_count > 0):
+        library.state = LibraryState.OFFLINE
+        library.message = scan.message or "The Library lists no files; is its drive connected?"
+        return
+    now = clock()
+    sources = {path_of_locator(row.locator): row for row in db.scalars(_sources_of(library_id))}
+    files = {file.path: file for file in scan.files}
+    unseen = {path: row for path, row in sources.items() if path not in files}
+    new = [file for path, file in files.items() if path not in sources]
+    moved = _moves(new, unseen)
+    for file in new:
+        source = moved.get(file.path)
+        if source is None:
+            _add(db, library_id, file, now)
+        else:
+            unseen.pop(path_of_locator(source.locator))
+            source.locator = library_locator(library_id, file.path)
+            _update(db, source, file)
+    for path, file in files.items():
+        if path in sources and path not in unseen:
+            _update(db, sources[path], file)
+    for source in unseen.values():
+        source.state = SourceState.MISSING
+    library.state = LibraryState.ONLINE
+    library.message = ""
+    library.file_count = len(files)
+    library.last_scanned_at = now
+
+
+def _moves(new: Iterable[ScannedFile], unseen: dict[str, SourceRow]) -> dict[str, SourceRow]:
+    # Only a one-to-one match is a move: a fingerprint shared by two new files, or by
+    # two Sources, could be a copy, and guessing would hand one file's ratings to another.
+    new_counts = Counter(file.fingerprint for file in new if file.fingerprint)
+    by_fingerprint: defaultdict[str, list[SourceRow]] = defaultdict(list)
+    for source in unseen.values():
+        if source.fingerprint:
+            by_fingerprint[source.fingerprint].append(source)
+    return {
+        file.path: by_fingerprint[file.fingerprint][0]
+        for file in new
+        if file.fingerprint
+        and new_counts[file.fingerprint] == 1
+        and len(by_fingerprint[file.fingerprint]) == 1
+    }
+
+
+def _add(db: Session, library_id: LibraryId, file: ScannedFile, now: datetime) -> None:
+    track = TrackRow(title=_title(file), added_at=now)
+    _set_details(track, file)
+    db.add(track)
+    db.flush()
+    source = SourceRow(
+        track_id=track.id, kind=LIBRARY_SOURCE, locator=library_locator(library_id, file.path)
+    )
+    db.add(source)
+    _update(db, source, file)
+
+
+def _update(db: Session, source: SourceRow, file: ScannedFile) -> None:
+    previous = dict(source.details or {})
+    if file.changed:
+        source.fingerprint = file.fingerprint
+        source.details = {"size": file.size, "modified_ns": file.modified_ns, "error": file.error}
+        if file.tags is not None:
+            track = db.get(TrackRow, source.track_id)
+            if track is not None:
+                _set_details(track, file)
+    else:
+        source.details = {**previous, "size": file.size, "modified_ns": file.modified_ns}
+    protected = file.tags is not None and file.tags.protected
+    if file.changed:
+        source.state = SourceState.CANT_PLAY if protected else SourceState.OK
+    elif source.state == SourceState.MISSING:
+        source.state = SourceState.OK
+
+
+def _set_details(track: TrackRow, file: ScannedFile) -> None:
+    tags = file.tags
+    track.title = (tags.title if tags else "") or _title(file)
+    track.artist = tags.artist if tags else ""
+    track.album = tags.album if tags else ""
+    track.album_artist = tags.album_artist if tags else ""
+    track.duration_ms = tags.duration_ms if tags else None
+
+
+def _title(file: ScannedFile) -> str:
+    return PurePosixPath(file.path).stem
+
+
+def _known_files(db: Session, library_id: LibraryId) -> dict[str, KnownFile]:
+    # A file whose tags couldn't be read isn't known, so the next scan tries again.
+    known = {}
+    for source in db.scalars(_sources_of(library_id)):
+        details = source.details or {}
+        if not details.get("error") and "size" in details:
+            known[path_of_locator(source.locator)] = KnownFile(
+                size=int(str(details["size"])), modified_ns=int(str(details["modified_ns"]))
+            )
+    return known
+
+
+def _sources_of(library_id: LibraryId) -> Select[SourceRow]:
+    return select(SourceRow).where(
+        SourceRow.kind == LIBRARY_SOURCE,
+        SourceRow.locator.startswith(f"{library_id}/", autoescape=True),
+    )
+
+
+def _library_row(db: Session, library_id: LibraryId) -> LibraryRow:
+    row = db.get(LibraryRow, library_id)
+    if row is None:
+        message = f"There is no Library {library_id}."
+        raise NotFoundError(message)
+    return row
+
+
+def _to_library(row: LibraryRow) -> Library:
+    return Library(
+        id=LibraryId(row.id),
+        name=row.name,
+        kind=LibraryKind(row.kind),
+        path=row.path,
+        state=LibraryState(row.state),
+        message=row.message,
+        file_count=row.file_count,
+        added_at=row.added_at,
+        last_scanned_at=row.last_scanned_at,
+    )
+
+
+def _require_admin(caller: Account) -> None:
+    if not caller.is_admin:
+        message = "Only an admin can manage Libraries."
+        raise ForbiddenError(message)

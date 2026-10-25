@@ -9,9 +9,11 @@ requires-python = ">=3.13"
 dependencies = [
     "alembic>=1.20.1",
     "fastapi>=0.162.0",
+    "fsspec>=2026.9.0",
     "pwdlib[argon2]>=0.3.1",
     "pydantic>=2.14.1",
     "sqlalchemy>=2.1.6",
+    "tinytag>=2.3.2",
     "uvicorn>=0.54.0",
 ]
 
@@ -139,6 +141,7 @@ forbidden_modules = [
     "medleyplay.persistence",
     "medleyplay.domain",
     "medleyplay.plugin_host",
+    "medleyplay.programs",
     "medleyplay.plugins",
     "fastapi",
     "starlette",
@@ -148,9 +151,9 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "The plugin host never touches the database or the web"
+name = "The plugin host and Job programs never touch the database or the web"
 type = "forbidden"
-source_modules = ["medleyplay.plugin_host"]
+source_modules = ["medleyplay.plugin_host", "medleyplay.programs"]
 forbidden_modules = [
     "medleyplay.__main__",
     "medleyplay.server",
@@ -179,6 +182,7 @@ forbidden_modules = [
     "medleyplay.persistence",
     "medleyplay.domain",
     "medleyplay.plugin_host",
+    "medleyplay.programs",
 ]
 
 [[tool.importlinter.contracts]]
@@ -194,6 +198,7 @@ source_modules = [
     "medleyplay.domain",
     "medleyplay.plugin_host",
     "medleyplay.plugin_api",
+    "medleyplay.programs",
 ]
 forbidden_modules = ["medleyplay.plugins"]
 

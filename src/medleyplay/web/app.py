@@ -22,7 +22,7 @@ from medleyplay.domain.errors import (
     SignInRefusedError,
     SignInThrottledError,
 )
-from medleyplay.web import accounts, catalog, jobs, plugins
+from medleyplay.web import accounts, catalog, jobs, libraries, plugins
 from medleyplay.web.deps import Services
 
 _STATUS_OF: Final[tuple[tuple[type[MedleyplayError], int], ...]] = (
@@ -60,6 +60,7 @@ def create_app(
     app.include_router(catalog.router)
     app.include_router(plugins.router)
     app.include_router(jobs.router)
+    app.include_router(libraries.router)
     app.add_exception_handler(MedleyplayError, _handle_domain_error)  # type: ignore[arg-type] # Starlette types handlers for any Exception
     app.middleware("http")(_refuse_cross_origin_writes)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts))

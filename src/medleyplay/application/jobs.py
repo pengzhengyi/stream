@@ -107,7 +107,7 @@ class JobService:
         if self._kinds.get(kind.name) is not kind:
             message = f"The Job kind {kind.name!r} isn't one this server runs."
             raise ValueError(message)
-        existing = self._active(kind.name, target)
+        existing = self.active(kind.name, target)
         if existing is not None:
             return existing
         try:
@@ -128,7 +128,7 @@ class JobService:
                 job = to_job(row)
         except IntegrityError:
             # Another request queued the same Job between the lookup and the insert.
-            raced = self._active(kind.name, target)
+            raced = self.active(kind.name, target)
             if raced is None:
                 raise
             return raced
@@ -182,7 +182,8 @@ class JobService:
             target, request = row.target, kind.request.model_validate(row.request)
         return self.submit(kind, target, request, caller.id)
 
-    def _active(self, kind: str, target: str) -> Job | None:
+    def active(self, kind: str, target: str) -> Job | None:
+        """Return the waiting, queued, or running Job of `kind` for `target`, if any."""
         with self._units() as db:
             row = db.scalar(
                 select(JobRow).where(
