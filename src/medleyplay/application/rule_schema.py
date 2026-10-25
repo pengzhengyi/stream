@@ -12,12 +12,12 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 from medleyplay.domain.errors import InvalidInputError
 from medleyplay.domain.rules import (
     Added,
-    AgeOp,
     Condition,
     Favorite,
     Kind,
     LastPlayed,
     Match,
+    Not,
     PlayCount,
     Rating,
     Rules,
@@ -36,6 +36,9 @@ type Days = Annotated[int, Field(ge=1, le=MAX_DAYS)]
 
 class _Condition(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
+
+    negate: bool = False
+    """Match the Tracks the condition doesn't."""
 
 
 class FavoriteIn(_Condition):
@@ -73,7 +76,7 @@ class LastPlayedIn(_Condition):
     """Whether the Track was last played within a number of days."""
 
     field: Literal["last_played"]
-    op: AgeOp
+    op: Literal["within_days"]
     value: Days
 
 
@@ -81,7 +84,7 @@ class AddedIn(_Condition):
     """Whether the Track was added within a number of days."""
 
     field: Literal["added"]
-    op: AgeOp
+    op: Literal["within_days"]
     value: Days
 
 
@@ -131,7 +134,7 @@ def read_rules(document: object) -> Rules:
         where = ".".join(str(part) for part in first["loc"])
         message = f"The rules aren't valid at {where}: {first['msg']}"
         raise InvalidInputError(message) from None
-    return Rules(parsed.match, tuple(_condition(each) for each in parsed.conditions))
+    return Rules(parsed.match, tuple(_negated(each) for each in parsed.conditions))
 
 
 def rules_document(rules: Rules) -> dict[str, object]:
@@ -143,6 +146,11 @@ def rules_document(rules: Rules) -> dict[str, object]:
     }
 
 
+def _negated(condition: ConditionIn) -> Condition:
+    read = _condition(condition)
+    return Not(read) if condition.negate else read
+
+
 def _condition(condition: ConditionIn) -> Condition:  # noqa: PLR0911 -- one per field
     match condition:
         case FavoriteIn(value=value):
@@ -151,10 +159,10 @@ def _condition(condition: ConditionIn) -> Condition:  # noqa: PLR0911 -- one per
             return Rating(op, value)
         case PlayCountIn(op=op, value=value):
             return PlayCount(op, value)
-        case LastPlayedIn(op=op, value=value):
-            return LastPlayed(op, value)
-        case AddedIn(op=op, value=value):
-            return Added(op, value)
+        case LastPlayedIn(value=value):
+            return LastPlayed(value)
+        case AddedIn(value=value):
+            return Added(value)
         case TextIn(field=field, op=op, value=value):
             return Text(field, op, value)
         case SourceKindIn(value=value):
@@ -171,11 +179,13 @@ def _document(condition: Condition) -> dict[str, object]:  # noqa: PLR0911 -- on
             return {"field": "rating", "op": op, "value": value}
         case PlayCount(op=op, value=value):
             return {"field": "play_count", "op": op, "value": value}
-        case LastPlayed(op=op, days=days):
-            return {"field": "last_played", "op": op, "value": days}
-        case Added(op=op, days=days):
-            return {"field": "added", "op": op, "value": days}
+        case LastPlayed(days=days):
+            return {"field": "last_played", "op": "within_days", "value": days}
+        case Added(days=days):
+            return {"field": "added", "op": "within_days", "value": days}
         case Text(field=field, op=op, value=value):
             return {"field": field, "op": op, "value": value}
         case Kind(value=value):
             return {"field": "source_kind", "op": "is", "value": value}
+        case Not(condition=inner):
+            return {**_document(inner), "negate": True}

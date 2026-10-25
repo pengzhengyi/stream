@@ -1,14 +1,17 @@
 """Smart-playlist rules, and matching them against one Track as one Account sees it.
 
-A rule is one level of conditions joined by `all` or `any`:
+A rule is one level of conditions joined by `all` or `any`, each of which may
+be negated:
 
 ```text
-all of: favorite is true, rating at least 4, added within 30 days
+all of: favorite is true, rating at least 4, not (artist contains 周杰伦)
 ```
 
 Text is compared after Unicode compatibility folding and case folding, so a
 title in full-width capitals matches the same words typed plainly. A day count
-includes its boundary: a Track added exactly 7 days ago is added within 7 days.
+counts back 24 hours a day from now and includes its boundary: a Track added
+exactly 7 days ago is added within 7 days. A Track never played was not played
+within any number of days.
 """
 
 import unicodedata
@@ -18,7 +21,6 @@ from enum import StrEnum
 from typing import Literal
 
 type NumberOp = Literal["is", "at_least", "at_most"]
-type AgeOp = Literal["within_days", "not_within_days"]
 type TextField = Literal["title", "artist", "album"]
 type TextOp = Literal["is", "contains"]
 
@@ -70,17 +72,15 @@ class PlayCount:
 
 @dataclass(frozen=True)
 class LastPlayed:
-    """The Track was, or wasn't, last played within a number of days."""
+    """The Track was last played within a number of days."""
 
-    op: AgeOp
     days: int
 
 
 @dataclass(frozen=True)
 class Added:
-    """The Track was, or wasn't, added within a number of days."""
+    """The Track was added within a number of days."""
 
-    op: AgeOp
     days: int
 
 
@@ -100,7 +100,14 @@ class Kind:
     value: str
 
 
-type Condition = Favorite | Rating | PlayCount | LastPlayed | Added | Text | Kind
+@dataclass(frozen=True)
+class Not:
+    """The opposite of a condition, such as *artist doesn't contain*."""
+
+    condition: "Condition"
+
+
+type Condition = Favorite | Rating | PlayCount | LastPlayed | Added | Text | Kind | Not
 
 
 @dataclass(frozen=True)
@@ -132,15 +139,17 @@ def _meets(condition: Condition, facts: TrackFacts, now: datetime) -> bool:  # n
             return facts.rating is not None and _compare(op, facts.rating, value)
         case PlayCount(op=op, value=value):
             return _compare(op, facts.play_count, value)
-        case LastPlayed(op=op, days=days):
-            return _within(op, facts.last_played_at, days, now)
-        case Added(op=op, days=days):
-            return _within(op, facts.added_at, days, now)
+        case LastPlayed(days=days):
+            return _within(facts.last_played_at, days, now)
+        case Added(days=days):
+            return _within(facts.added_at, days, now)
         case Text(field=field, op=op, value=value):
             actual, wanted = fold(getattr(facts, field)), fold(value)
             return actual == wanted if op == "is" else wanted in actual
         case Kind(value=value):
             return value in facts.source_kinds
+        case Not(condition=inner):
+            return not _meets(inner, facts, now)
 
 
 def _compare(op: str, actual: int, value: int | None) -> bool:
@@ -153,6 +162,5 @@ def _compare(op: str, actual: int, value: int | None) -> bool:
     return actual == value
 
 
-def _within(op: AgeOp, when: datetime | None, days: int, now: datetime) -> bool:
-    within = when is not None and now - when <= timedelta(days=days)
-    return within if op == "within_days" else not within
+def _within(when: datetime | None, days: int, now: datetime) -> bool:
+    return when is not None and now - when <= timedelta(days=days)

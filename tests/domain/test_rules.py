@@ -12,6 +12,7 @@ from medleyplay.domain.rules import (
     Kind,
     LastPlayed,
     Match,
+    Not,
     PlayCount,
     Rating,
     Rules,
@@ -58,15 +59,17 @@ def _all(*conditions: Condition) -> Rules:
         (Rating("unrated"), False),
         (PlayCount("at_least", 3), True),
         (PlayCount("at_most", 2), False),
-        (LastPlayed("within_days", 7), True),
-        (LastPlayed("not_within_days", 7), False),
-        (Added("within_days", 30), True),
-        (Added("not_within_days", 30), False),
+        (LastPlayed(7), True),
+        (LastPlayed(1), False),
+        (Added(30), True),
+        (Added(9), False),
         (Text("artist", "is", "周杰伦"), True),
         (Text("title", "contains", "night"), True),
         (Text("album", "contains", "noon"), False),
         (Kind("bilibili"), True),
         (Kind("library"), False),
+        (Not(Text("artist", "contains", "周")), False),
+        (Not(Kind("library")), True),
     ],
 )
 def test_each_condition_matches_the_track_as_its_field_and_operator_say(
@@ -86,8 +89,8 @@ def test_an_unrated_track_matches_unrated_and_no_rating_bound() -> None:
 def test_a_track_never_played_is_not_within_any_days() -> None:
     never_played = dataclasses.replace(_night_drive(), play_count=0, last_played_at=None)
 
-    assert not matches(_all(LastPlayed("within_days", 3650)), never_played, NOW)
-    assert matches(_all(LastPlayed("not_within_days", 1)), never_played, NOW)
+    assert not matches(_all(LastPlayed(3650)), never_played, NOW)
+    assert matches(_all(Not(LastPlayed(1))), never_played, NOW)
 
 
 def test_text_is_compared_case_folded_and_width_folded() -> None:
@@ -106,5 +109,5 @@ def test_all_needs_every_condition_and_any_needs_one() -> None:
 def test_days_count_back_from_now_inclusive_of_the_boundary() -> None:
     added_a_week_ago = dataclasses.replace(_night_drive(), added_at=NOW - timedelta(days=7))
 
-    assert matches(_all(Added("within_days", 7)), added_a_week_ago, NOW)
-    assert not matches(_all(Added("within_days", 6)), added_a_week_ago, NOW)
+    assert matches(_all(Added(7)), added_a_week_ago, NOW)
+    assert not matches(_all(Added(6)), added_a_week_ago, NOW)

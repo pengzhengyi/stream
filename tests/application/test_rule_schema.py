@@ -6,7 +6,7 @@ import pytest
 
 from medleyplay.application.rule_schema import MAX_CONDITIONS, read_rules, rules_document
 from medleyplay.domain.errors import InvalidInputError
-from medleyplay.domain.rules import Added, Favorite, Kind, Match, Rating, Rules, Text
+from medleyplay.domain.rules import Added, Favorite, Kind, Match, Not, Rating, Rules, Text
 
 FAVORITES_ADDED_THIS_MONTH = """
 {
@@ -16,7 +16,7 @@ FAVORITES_ADDED_THIS_MONTH = """
     { "field": "favorite", "op": "is", "value": true },
     { "field": "rating", "op": "at_least", "value": 4 },
     { "field": "rating", "op": "unrated" },
-    { "field": "artist", "op": "contains", "value": "周杰伦" },
+    { "field": "artist", "op": "contains", "value": "周杰伦", "negate": true },
     { "field": "added", "op": "within_days", "value": 30 },
     { "field": "source_kind", "op": "is", "value": "bilibili" }
   ]
@@ -33,8 +33,8 @@ def test_a_document_reads_as_the_rules_it_spells_out() -> None:
             Favorite(value=True),
             Rating("at_least", 4),
             Rating("unrated"),
-            Text("artist", "contains", "周杰伦"),
-            Added("within_days", 30),
+            Not(Text("artist", "contains", "周杰伦")),
+            Added(30),
             Kind("bilibili"),
         ),
     )
@@ -57,6 +57,7 @@ def test_rules_written_back_read_as_the_same_document() -> None:
         ({"conditions": [{"field": "rating", "op": "at_least"}]}, "rating"),
         ({"conditions": [{"field": "rating", "op": "unrated", "value": 3}]}, "rating"),
         ({"conditions": [{"field": "added", "op": "within_days", "value": 0}]}, "added"),
+        ({"conditions": [{"field": "added", "op": "not_within_days", "value": 7}]}, "added"),
         ({"conditions": [{"field": "title", "op": "is", "value": ""}]}, "title"),
         ({"conditions": [{"field": "favorite", "op": "is", "value": True, "x": 1}]}, "x"),
     ],
