@@ -2,6 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Iterable
 from contextlib import AbstractAsyncContextManager
+from pathlib import Path
 from typing import Final
 from urllib.parse import urlsplit
 
@@ -24,6 +25,7 @@ from medleyplay.domain.errors import (
 )
 from medleyplay.web import accounts, catalog, jobs, libraries, playback, plugins
 from medleyplay.web.deps import Services
+from medleyplay.web.pages import CLIENT_DIR, client_app
 
 _STATUS_OF: Final[tuple[tuple[type[MedleyplayError], int], ...]] = (
     (InvalidInputError, status.HTTP_422_UNPROCESSABLE_CONTENT),
@@ -46,9 +48,15 @@ type Lifespan = Callable[[FastAPI], AbstractAsyncContextManager[None]]
 
 
 def create_app(
-    services: Services, allowed_hosts: Iterable[str], *, lifespan: Lifespan | None = None
+    services: Services,
+    allowed_hosts: Iterable[str],
+    *,
+    lifespan: Lifespan | None = None,
+    client_dir: Path = CLIENT_DIR,
 ) -> FastAPI:
     """Return the app serving `services`, answering only requests addressed to `allowed_hosts`.
+
+    The web client built into `client_dir` is served at every path outside `/api`.
 
     Checking the Host header blocks DNS rebinding; checking a state-changing
     request's Origin against its Host blocks other sites' pages from using a
@@ -62,6 +70,7 @@ def create_app(
     app.include_router(jobs.router)
     app.include_router(libraries.router)
     app.include_router(playback.router)
+    app.mount("/", client_app(client_dir))
     app.add_exception_handler(MedleyplayError, _handle_domain_error)  # type: ignore[arg-type] # Starlette types handlers for any Exception
     app.middleware("http")(_refuse_cross_origin_writes)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts))

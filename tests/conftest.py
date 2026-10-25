@@ -102,8 +102,10 @@ def client(
     jobs: JobService,
     libraries: LibraryService,
     playback: PlaybackService,
+    tmp_path: Path,
 ) -> Iterator[TestClient]:
     services = Services(accounts, catalog, plugins, jobs, libraries, playback)
-    app = create_app(services, allowed_hosts=[TEST_HOST])
+    # No client is built there, so the suites never depend on a local build.
+    app = create_app(services, allowed_hosts=[TEST_HOST], client_dir=tmp_path / "client")
     with TestClient(app, base_url=f"http://{TEST_HOST}") as test_client:
         yield test_client
