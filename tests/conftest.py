@@ -20,6 +20,7 @@ from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.links import LinkService
 from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
+from medleyplay.application.settings import SettingsService
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
 from medleyplay.web.app import create_app
@@ -60,6 +61,17 @@ def accounts(
 @pytest.fixture
 def catalog(units: sessionmaker[Session], clock: FakeClock) -> CatalogService:
     return CatalogService(units, clock)
+
+
+@pytest.fixture
+def changes() -> list[str]:
+    """What the services said changed, in order."""
+    return []
+
+
+@pytest.fixture
+def settings(units: sessionmaker[Session], clock: FakeClock, changes: list[str]) -> SettingsService:
+    return SettingsService(units, clock, changes.append)
 
 
 @pytest.fixture
