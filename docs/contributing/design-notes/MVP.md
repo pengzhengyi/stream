@@ -211,7 +211,8 @@
   round-trip through JSON.
 - **Plugins:** each extension point's contract tests, plus the plugin's own
   tests: fsspec's in-memory filesystem and zip fixtures (stored and compressed
-  members) for Libraries; a recorded info JSON from a real video for Bilibili.
+  members) for Libraries; a recorded info JSON from a real video for Bilibili, which a fixture
+  made from yt-dlp's documented fields stands in for until yt-dlp is fixed.
   Tests never contact Bilibili; a live check is an opt-in marker you run by hand.
 - **Plugin host and Jobs:** a plugin that raises, hangs, returns malformed data,
   or crashes, against the host and the Job runner.
@@ -270,9 +271,9 @@ Each step is one branch, designed briefly, built test-first, and merged before
 the next. From step 4 on, each step is usable in a browser.
 
 0. **Bilibili check:** confirm that the pinned yt-dlp downloads the sample
-   video's audio with your cookies, and record its info JSON as a fixture. If
-   it still fails, the Bilibili steps wait for an upstream fix while the rest
-   proceeds.
+   video's audio with your cookies, and record its info JSON as a fixture. It
+   still fails, so step 5 is split: everything up to the tools first, the tools
+   once yt-dlp is fixed; see [Bilibili](Bilibili.md#where-this-stands).
 1. **Catalog and Accounts:** Tracks, Sources, Playlists, Accounts, and sessions in
    SQLite, with migrations and sign-in.
 2. **Plugin host and Jobs:** the plugin API, the host process, Job processes,
@@ -280,7 +281,8 @@ the next. From step 4 on, each step is usable in a browser.
 3. **Libraries:** the `fsspec-library` and `tinytag-tags` plugins, and scanning.
 4. **Playback:** serving audio with Range, and a bare page with sign-in, the
    player, the queue, and lock-screen controls.
-5. **Bilibili:** the `bilibili` plugin, linked accounts, and progress events.
+5. **Bilibili:** the `bilibili` plugin, linked accounts, and progress events;
+   see [Bilibili](Bilibili.md).
 6. **Download policy and Mode:** smart-playlist rules, the storage limit,
    removal, and Online and Offline.
 7. **Client views:** the song table, queue, stage, add dialog, *Downloads* tab,

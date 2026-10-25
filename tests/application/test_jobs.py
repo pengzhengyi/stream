@@ -230,6 +230,28 @@ def test_cancelling_a_running_job_kills_its_process_and_the_programs_it_started(
     assert after.job.state is JobState.CANCELLED
 
 
+def test_a_job_cancelled_while_its_process_starts_is_killed(
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    tmp_path: Path,
+    household: tuple[Account, Account],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    admin, _member = household
+    with running_jobs(units, clock, tmp_path / "jobs", idle_timeout=timedelta(minutes=1)) as jobs:
+        spawn = jobs.runner._spawn  # noqa: SLF001 -- the moment between claiming and running
+
+        def cancelled_first(work_dir: Path) -> object:
+            jobs.service.cancel(admin, JobId(int(work_dir.name)))
+            return spawn(work_dir)
+
+        monkeypatch.setattr(jobs.runner, "_spawn", cancelled_first)
+        job = jobs.submit(EchoJob(text="x", fail="hang"))
+        jobs.wait_for(job.id, JobState.CANCELLED)
+
+        _wait_until_no_job_runs(jobs.runner)
+
+
 def test_cancelling_a_finished_job_changes_nothing(
     units: sessionmaker[Session],
     clock: FakeClock,
@@ -332,6 +354,16 @@ def _wait_until_gone(pid: int) -> None:
             return
         time.sleep(0.05)
     message = f"Process {pid} is still alive."
+    raise AssertionError(message)
+
+
+def _wait_until_no_job_runs(runner: JobRunner) -> None:
+    ends = time.monotonic() + 10
+    while time.monotonic() < ends:
+        if not runner._running:  # noqa: SLF001 -- no process is left behind
+            return
+        time.sleep(0.05)
+    message = "A Job's process is still running."
     raise AssertionError(message)
 
 

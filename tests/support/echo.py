@@ -10,7 +10,7 @@ from typing import Literal, Protocol
 
 from pydantic import BaseModel
 
-from medleyplay.plugin_api import AuthError, ExtensionPoint, NetworkError
+from medleyplay.plugin_api import AuthError, ExtensionPoint, NetworkError, report_progress
 
 
 class Say(BaseModel):
@@ -24,6 +24,8 @@ class Say(BaseModel):
     wrong_reply: bool = False
     count_calls: bool = False
     exit_after_seconds: float | None = None
+    progress: float | None = None
+    """Report this fraction of the way, as a download does."""
 
 
 class Said(BaseModel):
@@ -57,6 +59,7 @@ class Parrot:
     def say(self, request: Say) -> Said:
         """Say the text back, misbehaving first as the request asks."""
         time.sleep(request.sleep_seconds)
+        _report(request.progress)
         if request.print_text:
             sys.stdout.write(f"{request.text}\n")
             sys.stdout.flush()
@@ -78,3 +81,8 @@ class Parrot:
         if request.wrong_reply:
             return Say(text=request.text)  # type: ignore[return-value] # a plugin that breaks its contract
         return Said(text=request.text, calls=next(self._calls) if request.count_calls else 0)
+
+
+def _report(progress: float | None) -> None:
+    if progress is not None:
+        report_progress(progress, "Saying")

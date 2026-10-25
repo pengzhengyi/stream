@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
+from medleyplay.application.events import JobEvents
 from medleyplay.domain.accounts import Account, AccountId
 from medleyplay.domain.errors import ConflictError, ForbiddenError, NotFoundError
 from medleyplay.domain.jobs import ACTIVE_STATES, Job, JobId, JobState, JobView, Progress
@@ -35,7 +36,9 @@ class JobKind(Generic[I, R]):  # noqa: UP046 -- invariant, so `submit` checks it
     `program` names a `JobProgram` as `module:attribute`. `complete` applies the
     result to the database in the transaction that marks the Job succeeded, and
     must tolerate finding its work already applied. `points` are the extension
-    points the program calls; its Job process loads only their plugins.
+    points the program calls; its Job process loads only their plugins. A kind
+    with a `login_site` gets a copy of the submitting Account's login on that site,
+    when it has a valid one.
     """
 
     name: str
@@ -46,6 +49,7 @@ class JobKind(Generic[I, R]):  # noqa: UP046 -- invariant, so `submit` checks it
     points: tuple[str, ...] = ()
     idle_timeout: timedelta = IDLE_TIMEOUT
     max_attempts: int = MAX_ATTEMPTS
+    login_site: str | None = None
 
 
 # Any: each kind has its own request and result models.
@@ -85,12 +89,17 @@ class JobService:
         clock: Clock,
         kinds: Mapping[str, AnyJobKind],
         runner: Runner,
+        events: JobEvents | None = None,
     ) -> None:
-        """Create a service over the database `units` open, for Jobs of `kinds`."""
+        """Create a service over the database `units` open, for Jobs of `kinds`.
+
+        Each change it makes is published to `events`.
+        """
         self._units = units
         self._clock = clock
         self._kinds = kinds
         self._runner = runner
+        self._events = events
 
     def start(self) -> None:
         """Start running Jobs, after recovering those a stopped server left running."""
@@ -101,9 +110,18 @@ class JobService:
         self._runner.stop()
 
     def submit(
-        self, kind: JobKind[I, R], target: str, request: I, requested_by: AccountId | None
+        self,
+        kind: JobKind[I, R],
+        target: str,
+        request: I,
+        requested_by: AccountId | None,
+        *,
+        login_account: AccountId | None = None,
     ) -> Job:
-        """Queue a Job of `kind` for `target`, or return the active one that already exists."""
+        """Queue a Job of `kind` for `target`, or return the active one that already exists.
+
+        `login_account` names whose login the Job uses, for a kind with a login site.
+        """
         if self._kinds.get(kind.name) is not kind:
             message = f"The Job kind {kind.name!r} isn't one this server runs."
             raise ValueError(message)
@@ -118,6 +136,7 @@ class JobService:
                     state=JobState.QUEUED,
                     request=request.model_dump(mode="json"),
                     requested_by=requested_by,
+                    login_account_id=login_account if kind.login_site else None,
                     attempts=0,
                     interruptions=0,
                     failure_message="",
@@ -132,6 +151,7 @@ class JobService:
             if raced is None:
                 raise
             return raced
+        self._publish(job.id)
         self._runner.wake()
         return job
 
@@ -162,6 +182,8 @@ class JobService:
             )
         if was_running and cancelled.rowcount == 1:
             self._runner.kill(job_id)
+        if cancelled.rowcount == 1:
+            self._publish(job_id)
         return self.get_job(job_id)
 
     def retry(self, caller: Account, job_id: JobId) -> Job:
@@ -180,7 +202,19 @@ class JobService:
                 message = f"This server no longer runs Jobs of the kind {row.kind!r}."
                 raise ConflictError(message)
             target, request = row.target, kind.request.model_validate(row.request)
-        return self.submit(kind, target, request, caller.id)
+        # The runner lends the login only if it is valid when the Job starts.
+        return self.submit(kind, target, request, caller.id, login_account=caller.id)
+
+    def latest(self, kind: str, target: str) -> Job | None:
+        """Return the newest Job of `kind` for `target`, in any state, if any."""
+        with self._units() as db:
+            row = db.scalar(
+                select(JobRow)
+                .where(JobRow.kind == kind, JobRow.target == target)
+                .order_by(JobRow.id.desc())
+                .limit(1)
+            )
+            return None if row is None else to_job(row)
 
     def active(self, kind: str, target: str) -> Job | None:
         """Return the waiting, queued, or running Job of `kind` for `target`, if any."""
@@ -193,6 +227,10 @@ class JobService:
                 )
             )
             return None if row is None else to_job(row)
+
+    def _publish(self, job_id: JobId) -> None:
+        if self._events is not None:
+            self._events.publish(job_id)
 
     def _view(self, job: Job) -> JobView:
         progress = self._runner.progress(job.id) if job.state == JobState.RUNNING else None

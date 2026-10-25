@@ -1,5 +1,6 @@
 """The Libraries API: admins register, scan, and remove Libraries; everyone sees them."""
 
+import dataclasses
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -7,7 +8,6 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
-from medleyplay.application.accounts import AccountService
 from medleyplay.domain.jobs import JobId, JobState
 from medleyplay.web.app import create_app
 from medleyplay.web.deps import Services
@@ -25,9 +25,14 @@ def running(units: sessionmaker[Session], clock: FakeClock, tmp_path: Path) -> I
 
 
 @pytest.fixture
-def library_client(running: Libraries, accounts: AccountService) -> Iterator[TestClient]:
-    services = Services(
-        accounts, running.catalog, running.plugins, running.jobs, running.service, running.playback
+def library_client(running: Libraries, services: Services) -> Iterator[TestClient]:
+    services = dataclasses.replace(
+        services,
+        catalog=running.catalog,
+        plugins=running.plugins,
+        jobs=running.jobs,
+        libraries=running.service,
+        playback=running.playback,
     )
     with TestClient(
         create_app(services, allowed_hosts=[TEST_HOST]), base_url=f"http://{TEST_HOST}"

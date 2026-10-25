@@ -1,5 +1,6 @@
 """The Jobs API: every signed-in Account sees the Jobs; owners and admins change them."""
 
+import dataclasses
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -7,10 +8,6 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
-from medleyplay.application.accounts import AccountService
-from medleyplay.application.catalog import CatalogService
-from medleyplay.application.libraries import LibraryService
-from medleyplay.application.playback import PlaybackService
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.jobs import JobState
 from medleyplay.web.app import create_app
@@ -29,16 +26,12 @@ def running(units: sessionmaker[Session], clock: FakeClock, tmp_path: Path) -> I
 
 
 @pytest.fixture
-def jobs_client(
-    running: Jobs,
-    accounts: AccountService,
-    catalog: CatalogService,
-    libraries: LibraryService,
-    playback: PlaybackService,
-) -> Iterator[TestClient]:
+def jobs_client(running: Jobs, services: Services) -> Iterator[TestClient]:
     plugins = running.runner._plugins  # noqa: SLF001 -- the plugin service the runner uses
-    services = Services(accounts, catalog, plugins, running.service, libraries, playback)
-    app = create_app(services, allowed_hosts=[TEST_HOST])
+    app = create_app(
+        dataclasses.replace(services, plugins=plugins, jobs=running.service),
+        allowed_hosts=[TEST_HOST],
+    )
     with TestClient(app, base_url=f"http://{TEST_HOST}") as test_client:
         yield test_client
 

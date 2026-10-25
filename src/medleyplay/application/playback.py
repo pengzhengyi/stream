@@ -17,6 +17,7 @@ from typing import Final
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from medleyplay.application.downloads import DownloadService
 from medleyplay.application.jobs import JobKind, JobService
 from medleyplay.application.plugins import PluginService
 from medleyplay.domain.accounts import Account
@@ -42,6 +43,7 @@ from medleyplay.domain.libraries import (
     library_of_locator,
     path_of_locator,
 )
+from medleyplay.domain.links import BILIBILI_SOURCE
 from medleyplay.domain.playback import (
     CACHE_FOLDER,
     cache_name,
@@ -49,7 +51,7 @@ from medleyplay.domain.playback import (
     media_type,
     source_version,
 )
-from medleyplay.persistence.schema import LibraryRow, SourceRow, TrackRow
+from medleyplay.persistence.schema import DownloadRow, LibraryRow, SourceRow, TrackRow
 from medleyplay.plugin_api import (
     LIBRARY_BACKEND,
     LOCATE_FILE,
@@ -157,6 +159,11 @@ class _NeedsCopy:
 
 
 @dataclass(frozen=True)
+class _NeedsDownload:
+    source_id: SourceId
+
+
+@dataclass(frozen=True)
 class _Remembered:
     path: str
     offset: int
@@ -180,19 +187,22 @@ class PlaybackService:
         jobs: JobService,
         kind: CacheKind,
         data_dir: Path,
+        downloads: DownloadService,
     ) -> None:
-        """Create a service keeping cache copies in `data_dir`."""
+        """Create a service keeping cache copies in `data_dir`, and starting `downloads`."""
         self._units = units
         self._plugins = plugins
         self._jobs = jobs
         self._kind = kind
+        self._downloads = downloads
         self._cache = data_dir / CACHE_FOLDER
         self._locations = _Locations()
 
     def play(self, caller: Account, track_id: TrackId) -> Playback:
         """Answer how the Track can play: ready, preparing, or unplayable.
 
-        A Source that is ready wins over one that must be prepared first.
+        A Source that is ready wins over one that must be prepared first, and a
+        Library file to copy wins over a Source to download.
         """
         with self._units() as db:
             if db.get(TrackRow, track_id) is None:
@@ -204,22 +214,19 @@ class PlaybackService:
             libraries = {row.id: row for row in db.scalars(select(LibraryRow))}
         found: list[Availability] = []
         to_prepare: _NeedsCopy | None = None
+        to_download: _NeedsDownload | None = None
         for row in sources:
-            source = _source(row, libraries)
-            if row.state != SourceState.OK:
-                found.append(source_availability(SourceState(row.state), online=True))
-                continue
-            opened = self._try_open(source)
-            if isinstance(opened, AudioFile):
-                opened.close()
-                return Ready(source.id, media_type(source.path))
-            if isinstance(opened, _NeedsCopy):
-                to_prepare = to_prepare or opened
-            else:
-                found.append(opened.availability)
-        if to_prepare is not None:
-            return Preparing(to_prepare.source.id, self._prepare(caller, to_prepare))
-        return Unplayable(track_availability(found))
+            match self._consider(row, libraries):
+                case AudioFile() as audio:
+                    audio.close()
+                    return Ready(SourceId(row.id), audio.media_type)
+                case _NeedsCopy() as needed:
+                    to_prepare = to_prepare or needed
+                case _NeedsDownload() as needed:
+                    to_download = to_download or needed
+                case _Gone(availability=availability):
+                    found.append(availability)
+        return self._prepared(caller, to_prepare, to_download, found)
 
     def open_audio(self, source_id: SourceId) -> AudioFile:
         """Open a Source's audio for serving; the caller closes it.
@@ -229,6 +236,8 @@ class PlaybackService:
         """
         with self._units() as db:
             row = db.get(SourceRow, source_id)
+            if row is not None and row.kind == BILIBILI_SOURCE:
+                return self._downloaded_audio(source_id, SourceState(row.state))
             if row is None or row.state != SourceState.OK:
                 message = f"The Source {source_id} can't be played."
                 raise NotFoundError(message)
@@ -254,6 +263,68 @@ class PlaybackService:
         for copy in self._cache.iterdir():
             if copy.name not in current:
                 copy.unlink(missing_ok=True)
+
+    def _consider(
+        self, row: SourceRow, libraries: dict[int, LibraryRow]
+    ) -> "AudioFile | _NeedsCopy | _NeedsDownload | _Gone":
+        if row.kind == BILIBILI_SOURCE:
+            download = self._open_download(SourceId(row.id))
+            if download is not None:
+                return download
+            if row.state == SourceState.UNAVAILABLE:
+                return _Gone(Availability.UNAVAILABLE)
+            return _NeedsDownload(SourceId(row.id))
+        if row.state != SourceState.OK:
+            return _Gone(source_availability(SourceState(row.state), online=True))
+        return self._try_open(_source(row, libraries))
+
+    def _prepared(
+        self,
+        caller: Account,
+        to_prepare: "_NeedsCopy | None",
+        to_download: "_NeedsDownload | None",
+        found: list[Availability],
+    ) -> Playback:
+        if to_prepare is not None:
+            return Preparing(to_prepare.source.id, self._prepare(caller, to_prepare))
+        if to_download is not None:
+            job = self._downloads.start(caller, to_download.source_id)
+            if job is not None:
+                return Preparing(to_download.source_id, job)
+            found.append(Availability.UNAVAILABLE)
+        return Unplayable(track_availability(found))
+
+    def _downloaded_audio(self, source_id: SourceId, state: SourceState) -> AudioFile:
+        download = self._open_download(source_id)
+        if download is not None:
+            return download
+        if state == SourceState.UNAVAILABLE:
+            message = f"The Source {source_id} can't be played: it is unavailable."
+            raise NotFoundError(message)
+        message = f"The Source {source_id} must be downloaded first."
+        raise ConflictError(message)
+
+    def _open_download(self, source_id: SourceId) -> AudioFile | None:
+        # The name comes from the catalog, never a plugin, and the file must still
+        # be a regular file there, not a link.
+        with self._units() as db:
+            row = db.get(DownloadRow, source_id)
+            name = None if row is None else row.file_name
+        if name is None:
+            return None
+        try:
+            descriptor = os.open(self._downloads.folder / name, _OPEN_FLAGS)
+        except OSError:
+            return None
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode):
+            os.close(descriptor)
+            return None
+        return AudioFile(descriptor, 0, info.st_size, media_type(name))
+
+    def sweep_downloads(self) -> None:
+        """Remove files in `downloads/` that no Download names, as a crash can leave."""
+        self._downloads.sweep()
 
     def _try_open(self, source: _Source) -> AudioFile | _NeedsCopy | _Gone:
         # While picking a Source, one whose plugin is off or failing is unavailable,

@@ -15,6 +15,7 @@ from medleyplay.domain.errors import (
     ConflictError,
     ForbiddenError,
     InvalidInputError,
+    KeychainUnavailableError,
     MedleyplayError,
     NotFoundError,
     NotSignedInError,
@@ -23,7 +24,17 @@ from medleyplay.domain.errors import (
     SignInRefusedError,
     SignInThrottledError,
 )
-from medleyplay.web import accounts, catalog, jobs, libraries, playback, plugins
+from medleyplay.web import (
+    accounts,
+    catalog,
+    events,
+    jobs,
+    libraries,
+    linked_accounts,
+    links,
+    playback,
+    plugins,
+)
 from medleyplay.web.deps import Services
 from medleyplay.web.pages import CLIENT_DIR, client_app
 
@@ -36,6 +47,7 @@ _STATUS_OF: Final[tuple[tuple[type[MedleyplayError], int], ...]] = (
     (SignInRefusedError, status.HTTP_401_UNAUTHORIZED),
     (SignInThrottledError, status.HTTP_429_TOO_MANY_REQUESTS),
     (PluginUnavailableError, status.HTTP_503_SERVICE_UNAVAILABLE),
+    (KeychainUnavailableError, status.HTTP_503_SERVICE_UNAVAILABLE),
     (PluginCallError, status.HTTP_502_BAD_GATEWAY),
 )
 _DETAIL_OF: Final[dict[type[MedleyplayError], str]] = {
@@ -70,6 +82,9 @@ def create_app(
     app.include_router(jobs.router)
     app.include_router(libraries.router)
     app.include_router(playback.router)
+    app.include_router(linked_accounts.router)
+    app.include_router(links.router)
+    app.include_router(events.router)
     app.mount("/", client_app(client_dir))
     app.add_exception_handler(MedleyplayError, _handle_domain_error)  # type: ignore[arg-type] # Starlette types handlers for any Exception
     app.middleware("http")(_refuse_cross_origin_writes)

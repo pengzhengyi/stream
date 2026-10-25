@@ -25,6 +25,7 @@ from typing import IO, Generic, Literal, TypeVar
 from pydantic import BaseModel
 
 from medleyplay.plugin_api import AuthError, NetworkError, Operation
+from medleyplay.plugin_api.progress import reporting_to
 from medleyplay.plugin_host.host import peak_memory
 from medleyplay.plugin_host.job_wire import (
     RESULT_FILE,
@@ -69,6 +70,8 @@ class JobContext:
     work_dir: Path
     _endpoints: Mapping[Address, Endpoint]
     _send: Callable[[JobProgress], None]
+    login: Path | None = None
+    """A copy of the login the Job was given, readable by its owner alone, or `None`."""
     _keys: dict[str, _KeyRecord] = field(default_factory=dict)
 
     def report(self, fraction: float | None = None, message: str = "") -> None:
@@ -89,7 +92,8 @@ class JobContext:
             raise PluginCallFailedError(kind="plugin", message=message, plugin=None, key=key)
         record = self._keys.setdefault(key, _KeyRecord(endpoint.plugin))
         try:
-            reply = endpoint.invoke(request)
+            with reporting_to(self.report):
+                reply = endpoint.invoke(request)
         except NetworkError as error:
             raise PluginCallFailedError(
                 kind="network", message=str(error), plugin=endpoint.plugin, key=key
@@ -152,7 +156,9 @@ def run_job(start: JobStart, send: Callable[[JobProgress], None]) -> JobFinished
     """Run `start`'s program and return its outcome, writing its result to the working folder."""
     work_dir = Path(start.work_dir)
     endpoints = load_plugins(start.package, start.plugins, lambda _: None)
-    context = JobContext(work_dir, endpoints, send)
+    context = JobContext(
+        work_dir, endpoints, send, login=Path(start.login) if start.login else None
+    )
     try:
         program = _program(start.program)
         result = program.run(program.request.model_validate(start.request), context)

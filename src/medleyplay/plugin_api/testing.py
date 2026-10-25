@@ -19,6 +19,24 @@ from medleyplay.plugin_api.library import (
     LibraryRoot,
     ListFiles,
 )
+from medleyplay.plugin_api.sources import (
+    CANONICALIZE,
+    CHECK_LOGIN,
+    DOWNLOAD_PART,
+    READ_VIDEO,
+    Canonical,
+    Canonicalize,
+    CheckedLogin,
+    CheckLogin,
+    CredentialSpec,
+    Downloaded,
+    DownloadPart,
+    ReadVideo,
+    SourceDownloader,
+    SourceResolver,
+    VideoDetails,
+    VideoStatus,
+)
 from medleyplay.plugin_api.tags import READ_TAGS, ReadTags, TagReader, Tags
 
 
@@ -115,3 +133,74 @@ def check_tag_reader(reader: TagReader, request: ReadTags) -> Tags:
         message = f"A negative duration: {tags.duration_ms} ms."
         raise ContractError(message)
     return tags
+
+
+def check_source_resolver(
+    resolver: SourceResolver, link: str
+) -> tuple[Canonical, VideoDetails | None]:
+    """Check a resolver against a link, and return what it names and, for a video, its details.
+
+    A readable video has parts and qualities, none named twice; one that can't be
+    read has neither.
+    """
+    canonical = check_operation(CANONICALIZE, resolver, Canonicalize(link=link))
+    if canonical.video is None:
+        if canonical.part is not None:
+            message = f"{link!r} names a part, {canonical.part}, but no video."
+            raise ContractError(message)
+        return canonical, None
+    details = check_operation(READ_VIDEO, resolver, ReadVideo(video=canonical.video))
+    if details.status is not VideoStatus.OK:
+        if details.parts or details.qualities:
+            message = f"A video that is {details.status} has parts or qualities."
+            raise ContractError(message)
+        return canonical, details
+    parts = [part.part for part in details.parts]
+    qualities = [quality.id for quality in details.qualities]
+    if not parts or len(set(parts)) != len(parts):
+        message = f"A readable video's parts must be there and distinct, not {parts}."
+        raise ContractError(message)
+    if not qualities or len(set(qualities)) != len(qualities):
+        message = f"A readable video's qualities must be there and distinct, not {qualities}."
+        raise ContractError(message)
+    return canonical, details
+
+
+def check_source_downloader(downloader: SourceDownloader, request: DownloadPart) -> Downloaded:
+    """Check a downloader against a part, and return what it downloaded.
+
+    The file must be a regular file named bare, directly in the request's folder,
+    with the quality it got; a part that is gone has no file.
+    """
+    downloaded = check_operation(DOWNLOAD_PART, downloader, request)
+    if downloaded.gone or downloaded.file is None:
+        if downloaded.file is not None or not downloaded.gone:
+            message = "A download must name its file, or say the part is gone, not both."
+            raise ContractError(message)
+        return downloaded
+    path = Path(request.folder) / downloaded.file
+    if PurePosixPath(downloaded.file).name != downloaded.file or path.is_symlink():
+        message = f"{downloaded.file!r} isn't a bare file name."
+        raise ContractError(message)
+    if not path.is_file() or downloaded.quality is None:
+        message = f"{downloaded.file!r} isn't a file in the folder with the quality it got."
+        raise ContractError(message)
+    return downloaded
+
+
+def check_credential_spec(spec: CredentialSpec, text: str) -> CheckedLogin:
+    """Check a credential spec against a pasted login, and return what it keeps.
+
+    A valid login keeps something, and checking what it kept keeps it unchanged.
+    """
+    checked = check_operation(CHECK_LOGIN, spec, CheckLogin(text=text))
+    if not checked.valid:
+        if checked.login:
+            message = "A login that isn't valid keeps nothing."
+            raise ContractError(message)
+        return checked
+    again = check_operation(CHECK_LOGIN, spec, CheckLogin(text=checked.login))
+    if again != checked:
+        message = f"Checking the kept login again gave {again!r}, not {checked!r}."
+        raise ContractError(message)
+    return checked

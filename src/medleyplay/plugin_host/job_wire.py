@@ -35,6 +35,8 @@ class JobStart(_Message):
     program: str
     request: JsonValue
     work_dir: str
+    login: str | None = None
+    """The path of a copy of a login in the working folder, for the program to pass on."""
 
 
 class KeyOutcome(_Message):

@@ -11,16 +11,20 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
+from medleyplay.application.downloads import DownloadService, download_source_kind
+from medleyplay.application.events import JobEvents
 from medleyplay.application.job_runner import JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.libraries import LibraryService, scan_library_kind
+from medleyplay.application.linked_accounts import LinkedAccountService
+from medleyplay.application.links import LinkService
 from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
 from medleyplay.web.app import create_app
 from medleyplay.web.deps import Services
-from tests.support.fakes import FakeClock
+from tests.support.fakes import FakeClock, MemorySecrets
 
 TEST_HOST = "testserver"
 
@@ -70,7 +74,8 @@ def jobs(
 ) -> JobService:
     # A runner that isn't started; suites that run Jobs start their own.
     scan, cache = scan_library_kind(clock), cache_source_kind(tmp_path / "data")
-    kinds: dict[str, AnyJobKind] = {scan.name: scan, cache.name: cache}
+    download = download_source_kind(tmp_path / "data", tmp_path / "jobs", clock)
+    kinds: dict[str, AnyJobKind] = {scan.name: scan, cache.name: cache, download.name: download}
     runner = JobRunner(units, clock, kinds, plugins, tmp_path / "jobs")
     return JobService(units, clock, kinds, runner)
 
@@ -87,24 +92,81 @@ def libraries(
 
 
 @pytest.fixture
-def playback(
-    units: sessionmaker[Session], plugins: PluginService, jobs: JobService, tmp_path: Path
-) -> PlaybackService:
+def downloads(
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    plugins: PluginService,
+    jobs: JobService,
+    linked: LinkedAccountService,
+    tmp_path: Path,
+) -> DownloadService:
     data_dir = tmp_path / "data"
-    return PlaybackService(units, plugins, jobs, cache_source_kind(data_dir), data_dir)
+    kind = download_source_kind(data_dir, tmp_path / "jobs", clock)
+    return DownloadService(units, plugins, jobs, kind, linked, data_dir)
 
 
 @pytest.fixture
-def client(
+def playback(
+    units: sessionmaker[Session],
+    plugins: PluginService,
+    jobs: JobService,
+    downloads: DownloadService,
+    tmp_path: Path,
+) -> PlaybackService:
+    data_dir = tmp_path / "data"
+    return PlaybackService(units, plugins, jobs, cache_source_kind(data_dir), data_dir, downloads)
+
+
+@pytest.fixture
+def links(
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    plugins: PluginService,
+    catalog: CatalogService,
+    downloads: DownloadService,
+) -> LinkService:
+    return LinkService(units, clock, plugins, catalog, downloads)
+
+
+@pytest.fixture
+def secrets() -> MemorySecrets:
+    return MemorySecrets()
+
+
+@pytest.fixture
+def linked(
+    units: sessionmaker[Session], clock: FakeClock, plugins: PluginService, secrets: MemorySecrets
+) -> LinkedAccountService:
+    return LinkedAccountService(units, clock, plugins, secrets)
+
+
+@pytest.fixture
+def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     accounts: AccountService,
     catalog: CatalogService,
     plugins: PluginService,
     jobs: JobService,
     libraries: LibraryService,
     playback: PlaybackService,
-    tmp_path: Path,
-) -> Iterator[TestClient]:
-    services = Services(accounts, catalog, plugins, jobs, libraries, playback)
+    linked: LinkedAccountService,
+    links: LinkService,
+) -> Services:
+    """The services of a server with no plugins on; a suite replaces what it runs for real."""
+    return Services(
+        accounts=accounts,
+        catalog=catalog,
+        plugins=plugins,
+        jobs=jobs,
+        libraries=libraries,
+        playback=playback,
+        linked=linked,
+        links=links,
+        events=JobEvents(),
+    )
+
+
+@pytest.fixture
+def client(services: Services, tmp_path: Path) -> Iterator[TestClient]:
     # No client is built there, so the suites never depend on a local build.
     app = create_app(services, allowed_hosts=[TEST_HOST], client_dir=tmp_path / "client")
     with TestClient(app, base_url=f"http://{TEST_HOST}") as test_client:

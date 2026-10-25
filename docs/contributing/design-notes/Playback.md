@@ -230,6 +230,7 @@ come in step 7.
 
 ## Left for later steps
 
-- **Bilibili Downloads** play through the same `playback` request in step 5.
+- **Bilibili Downloads** play through the same `playback` request, and play
+  whatever their Source's state; see [Bilibili](Bilibili.md#playing-a-download).
 - **The storage limit** and removing cache copies, in step 6.
 - **The full views,** artwork, and SSE progress, in step 7.

@@ -4,7 +4,7 @@ Every command here is idempotent: repeating it leaves the same state as doing it
 """
 
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 
 from sqlalchemy import Select, case, delete, select
@@ -33,6 +33,7 @@ from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundE
 from medleyplay.domain.libraries import LIBRARY_SOURCE, LibraryState, library_of_locator
 from medleyplay.domain.playback import PlayId
 from medleyplay.persistence.schema import (
+    DownloadRow,
     LibraryRow,
     PlaylistEntryRow,
     PlaylistRow,
@@ -51,11 +52,16 @@ class CatalogService:
         self._units = units
         self._clock = clock
 
-    def add_track(self, key: SourceKey, details: TrackDetails) -> TrackId:
+    def add_track(
+        self,
+        key: SourceKey,
+        details: TrackDetails,
+        source_details: Mapping[str, object] | None = None,
+    ) -> TrackId:
         """Return the Track for a Source, creating both when the Source is new.
 
-        A Source that already exists returns its Track unchanged, so adding the same
-        link or file twice never makes a second Track.
+        A Source that already exists returns its Track unchanged, `source_details`
+        included, so adding the same link or file twice never makes a second Track.
         """
         existing = self._track_of(key)
         if existing is not None:
@@ -72,7 +78,14 @@ class CatalogService:
                 )
                 db.add(track)
                 db.flush()
-                db.add(SourceRow(track_id=track.id, kind=key.kind, locator=key.locator))
+                db.add(
+                    SourceRow(
+                        track_id=track.id,
+                        kind=key.kind,
+                        locator=key.locator,
+                        details=dict(source_details or {}),
+                    )
+                )
                 return TrackId(track.id)
         except IntegrityError:
             # Another request added the same Source between the lookup and the insert.
@@ -259,10 +272,14 @@ def _count_play(db: Session, account_id: AccountId, track_id: TrackId, when: dat
 
 def _availability(db: Session, sources: Select[SourceRow]) -> defaultdict[int, Availability]:
     # A Library's Source can play only while its Library is online; other kinds don't
-    # depend on a drive.
+    # depend on a drive. A Source with a Download plays it, whatever its state.
     online = {row.id: row.state == LibraryState.ONLINE for row in db.scalars(select(LibraryRow))}
+    downloaded = set(db.scalars(select(DownloadRow.source_id)))
     per_track: defaultdict[int, list[Availability]] = defaultdict(list)
     for source in db.scalars(sources):
+        if source.id in downloaded:
+            per_track[source.track_id].append(Availability.OK)
+            continue
         reachable = source.kind != LIBRARY_SOURCE or online.get(
             library_of_locator(source.locator), False
         )

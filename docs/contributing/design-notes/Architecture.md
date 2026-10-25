@@ -261,11 +261,11 @@ one downloader, and one credential spec, never the tools.
 
 - A *linked account* is an Account's login on a site, such as Bilibili cookies.
   It is a credential for the whole site account.
-- **Stored in the macOS Keychain** through `keyring`, never in the database or the
-  data folder.
+- **Stored in the macOS Keychain** through `keyring`, never in the database; the
+  data folder holds one only while a Job uses it.
 - **Used per Job:** the core writes a temporary owner-only copy into the Job's
-  working folder and deletes it after the Job. A refreshed cookie comes back in
-  the result and is saved under a per-Account lock.
+  working folder and deletes it after the Job. The copy is read-only: an
+  expired login is pasted again. How is in [Bilibili](Bilibili.md#linked-accounts).
 - **States:** *valid*, *needs sign-in*. Logs redact it.
 
 ## Online and Offline
