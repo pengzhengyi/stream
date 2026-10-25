@@ -14,10 +14,10 @@ Run from `web/`:
 
 ```bash
 npm ci
-npm run dev      # live-reloading dev server
+npm run dev      # live-reloading dev server; /api goes to a server on port 8000
 npm run check    # typecheck + eslint + stylelint + prettier + vitest
-npm run build    # typecheck and build the production bundle
-npm run e2e      # Playwright end-to-end (needs: npx playwright install chromium)
+npm run build    # typecheck and build into src/medleyplay/web/client
+npm run e2e      # Playwright against the real server (needs: uv sync, npx playwright install chromium)
 ```
 
 ## Rules

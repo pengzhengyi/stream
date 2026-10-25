@@ -1,4 +1,4 @@
-"""The web client: its page at every path outside `/api`, its assets, and a hint when unbuilt."""
+"""The web client: its page at every path outside `/api`, its assets, and a hint before a build."""
 
 from pathlib import Path
 

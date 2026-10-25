@@ -119,15 +119,18 @@ The client is a React + Vite + TypeScript project. You need Node 24+ to work on 
 ```bash
 cd web
 npm ci
-npm run dev                        # live-reloading dev server
+npm run dev                        # live-reloading dev server; /api goes to port 8000
 npm run check                      # typecheck, lint, style, format, unit tests
-npm run build                      # typecheck and build the production bundle
+npm run build                      # build the client into the Python package
 npx playwright install chromium    # once, for e2e
 npm run e2e                        # Playwright end-to-end tests
 ```
 
-`npm run check` is the gate CI runs for the **Frontend quality** job; the **Frontend
-E2E** job runs `npm run e2e` against the production build. When an end-to-end test
+`npm run dev` forwards `/api` to a server you start yourself with
+`uv run medleyplay serve`. `npm run check` is the gate CI runs for the **Frontend
+quality** job; the **Frontend E2E** job runs `npm run e2e`, which builds the client
+and starts the real server, so it needs `uv sync --locked` first. The server runs
+on port 4174 over a fresh data folder and generated music in `web/.cache/e2e`. When an end-to-end test
 fails in CI, download the `playwright-report` artifact from the run and open it with
 `npx playwright show-report <folder>` for the trace and screenshot.
 
