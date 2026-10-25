@@ -1,10 +1,329 @@
 :root {
   color-scheme: light dark;
-  font-family: system-ui, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+  line-height: 1.4;
+
+  --page: #f7f7f9;
+  --surface: #fff;
+  --ink: #1d1d22;
+  --muted: #6b6b76;
+  --line: #e3e3e8;
+  --accent: #d6336c;
+  --accent-ink: #fff;
 }
 
-.app {
-  margin: 0 auto;
-  max-width: 40rem;
-  padding: 2rem 1rem;
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #141418;
+    --surface: #1e1e24;
+    --ink: #ececf1;
+    --muted: #9a9aa6;
+    --line: #2e2e36;
+    --accent: #f06595;
+    --accent-ink: #141418;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.25rem 0.6rem;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.empty {
+  color: var(--muted);
+}
+
+/* Signing in */
+
+.sign-in {
+  max-width: 22rem;
+  margin: 15vh auto 0;
+  padding: 0 1rem;
+}
+
+.sign-in form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.sign-in label {
+  display: grid;
+  gap: 0.25rem;
+  color: var(--muted);
+}
+
+.sign-in input {
+  font: inherit;
+  padding: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.sign-in button[type="submit"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+  padding: 0.5rem;
+}
+
+[role="alert"] {
+  color: var(--accent);
+}
+
+/* The signed-in page: the Tracks beside the queue, the player along the bottom. */
+
+.library {
+  display: grid;
+  grid-template:
+    "top top" auto
+    "main queue" 1fr
+    "player player" auto / 1fr 18rem;
+  min-height: 100dvh;
+}
+
+.top {
+  grid-area: top;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.top h1 {
+  margin: 0 auto 0 0;
+  font-size: 1.1rem;
+}
+
+.library main {
+  grid-area: main;
+  padding: 0.5rem 1rem 6rem;
+  overflow: auto;
+}
+
+.tracks {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tracks th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--muted);
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.tracks td {
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.tracks .title {
+  border: none;
+  padding: 0;
+  text-align: left;
+}
+
+.tracks tr[aria-current="true"] .title {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.tracks .unplayable {
+  color: var(--muted);
+}
+
+.tracks .why {
+  margin-left: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.tracks .time {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.tracks .actions {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.tracks .actions button {
+  margin-left: 0.25rem;
+  font-size: 0.8rem;
+}
+
+.queue {
+  grid-area: queue;
+  padding: 0.5rem 1rem 6rem;
+  border-left: 1px solid var(--line);
+}
+
+.queue header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.queue h2 {
+  font-size: 1rem;
+}
+
+.queue ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.queue li {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.queue li span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player {
+  grid-area: player;
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.5fr);
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+
+.player .now {
+  display: grid;
+  min-width: 0;
+}
+
+.player .now > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player .now span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.player .note {
+  color: var(--accent);
+}
+
+.player .controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.player .play {
+  min-width: 4.5rem;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+
+.player .progress {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.player input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+/* On a phone: one column, the queue under the Tracks, the player pinned. */
+
+@media (width <= 40rem) {
+  .library {
+    grid-template:
+      "top" auto
+      "main" auto
+      "queue" auto
+      "player" auto / 1fr;
+  }
+
+  .library main,
+  .queue {
+    padding-bottom: 1rem;
+  }
+
+  .queue {
+    border-left: none;
+    border-top: 1px solid var(--line);
+  }
+
+  .tracks .album {
+    display: none;
+  }
+
+  .player {
+    position: fixed;
+    inset: auto 0 0;
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  .player .controls {
+    justify-content: center;
+  }
 }

@@ -143,6 +143,16 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      # The tests drive the real server, so the job needs Python as well as Node.
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.3.2
+        with:
+          enable-cache: true
+
+      - name: Install the server's dependencies
+        working-directory: .
+        run: uv sync --locked
+
       - name: Install dependencies
         run: npm ci
 
@@ -151,6 +161,13 @@ jobs:
 
       - name: End-to-end tests (Playwright)
         run: npm run e2e
+
+      # The tests built the client into the package; the wheel must carry it.
+      - name: Check the package holds the client
+        working-directory: .
+        run: |
+          uv build --wheel --out-dir "$RUNNER_TEMP/wheel"
+          unzip -l "$RUNNER_TEMP"/wheel/*.whl | grep -q "medleyplay/web/client/index.html"
 
       - name: Upload the Playwright report
         if: failure()
