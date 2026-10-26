@@ -75,6 +75,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   *Add to playlist…*, which adds the song to one or several Playlists, or to a
   new one. See the
   [Web client](docs/contributing/design-notes/Web%20client.md#a-songs-menu) note.
+- **Keyboard shortcuts** — Space plays or pauses, the arrows seek, Shift and
+  the arrows skip, and keys for volume, shuffle, repeat, favorite, search, and
+  *Up next*. Each control names its keys on hover, *?* lists them, and
+  Settings changes them, kept in this browser. See the
+  [Web client](docs/contributing/design-notes/Web%20client.md#keyboard-shortcuts) note.
 - **One Favorites** — every Account has a Favorites smart playlist the server
   keeps, which can be *Keep downloaded* and can't be edited or deleted; the web
   client shows it in place of its own copy, so Favorites appears once. A

@@ -17,6 +17,8 @@ Element.prototype.releasePointerCapture = () => undefined;
 // jsdom has `<dialog>` but not its methods: these open and close it as a browser would.
 HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
   this.open = true;
+  // As a browser does, focus moves to the first control in it.
+  this.querySelector<HTMLElement>("[autofocus], button, a[href], input, select, textarea")?.focus();
 };
 HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
   if (this.open) {

@@ -2,8 +2,8 @@
 
 > [!NOTE]
 > **Status: implemented.** This note describes the client's views: the song
-> table, Artists, Albums, Downloaded, Playlists, search, and Settings, and how
-> they get their data. What the client must do is in [MVP](MVP.md#client-notes);
+> table, Artists, Albums, Downloaded, Playlists, search, the keyboard
+> shortcuts, and Settings, and how they get their data. What the client must do is in [MVP](MVP.md#client-notes);
 > the player, the queue, and play modes are in
 > [Playback](Playback.md#the-web-client).
 
@@ -13,6 +13,7 @@
 - [Views](#views)
 - [The song table](#the-song-table)
 - [A song's menu](#a-songs-menu)
+- [Keyboard shortcuts](#keyboard-shortcuts)
 - [Search](#search)
 - [Favorites and ratings](#favorites-and-ratings)
 - [Settings](#settings)
@@ -125,6 +126,47 @@ no router package.
   refuses one. Escape, Cancel, or a click outside close it. A notice above the
   player says where the song went.
 
+## Keyboard shortcuts
+
+| Keys | Command |
+| --- | --- |
+| Space | Play or pause |
+| ← and → | Back or ahead 5 seconds |
+| Shift + ← and Shift + → | Previous and Next |
+| - and = | Volume down and up, a mark at a time |
+| S, R, and L | Shuffle, Repeat, and favorite the song playing |
+| / | Go to the search box |
+| Q | Open or close *Up next*; where it is always open, go to it |
+| Shift + / (?) | List the shortcuts |
+
+- **Keys are physical keys,** as `KeyboardEvent.code` names them, so a shortcut
+  sits in the same place on any keyboard layout; *?* is Shift and the */* key.
+  A key held with Ctrl, Alt, or ⌘ is left to the browser unless a binding names
+  that modifier.
+- **The focused control keeps the keys it uses:** typing goes into a text box,
+  an arrow moves a focused slider, and Space or Enter presses a button reached
+  with the keyboard. A button focused by a click doesn't keep Space, so Space
+  after clicking a song pauses it rather than playing it again. An open dialog
+  or menu keeps every key.
+- **Holding a key** repeats seeking and the volume, but not the others, so
+  holding Space doesn't flicker between play and pause.
+- **A control names its keys** in its hover text, such as *Next (Shift + →)*,
+  and in `aria-keyshortcuts`. The header's keyboard button, or *?*, lists them
+  all, with a link to change them; a phone, which has no keyboard, hides the
+  button.
+- **Changing a shortcut** is in Settings: *Change* waits for the next press,
+  modifiers included, and gives it to the command, unless another command has
+  it, which it names, waiting for other keys. Escape, or moving away, keeps the
+  keys the command had, and *Reset to defaults* puts every command back.
+  The keys are kept in this browser, versioned, and the defaults return when
+  they can't be read or two commands share keys.
+- **react-hotkeys-hook** listens for them: it matches physical keys with their
+  modifiers and leaves out form fields, and the page decides which keys a
+  focused control keeps. It was chosen over tinykeys, hotkeys-js, and writing
+  the listener: it is the most used, has no dependencies, and is a hook, so a
+  listener comes and goes with the page. One module owns it, with one listener
+  for each command.
+
 ## Search
 
 <!-- cspell:ignore ｍｅｌｔ -->
@@ -158,6 +200,8 @@ One view, in sections, each saved on its own:
 
 - **Appearance:** the theme, the same choice as the header's switch; every
   switch on the page shows the one chosen.
+- **Keyboard shortcuts:** each command's keys, and changing them; see
+  [Keyboard shortcuts](#keyboard-shortcuts).
 - **Downloads and storage:** what the Downloads, prepared copies, and Downloads
   under way use, against the limit or the free disk, and what kept Playlists
   want, from `GET /api/storage`; and the storage limit, from `GET` and `PUT
@@ -191,7 +235,9 @@ tab bar clear of the iPhone's home indicator (`env(safe-area-inset-bottom)`).
   layout; Playwright scrolls a large Library in Chromium and checks that the
   page holds only the rows on screen.
 - **Playwright** for moving between views, Back and Forward, search, favorites,
-  ratings, and Settings, at phone, tablet, and laptop widths.
+  ratings, the keyboard shortcuts, and Settings, at phone, tablet, and laptop
+  widths. Whether a click or the keyboard focused a button differs only in a
+  browser, so Space after a click is checked there.
 
 ## Left for later
 

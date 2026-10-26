@@ -57,6 +57,13 @@ export type QueueAction =
   | { readonly type: "repeat"; readonly repeat: Repeat }
   | { readonly type: "restore"; readonly queue: Queue };
 
+const REPEAT_AFTER: Readonly<Record<Repeat, Repeat>> = { off: "all", all: "one", one: "off" };
+
+/** Return the repeat mode after `repeat`, as the Repeat button cycles: off, all, one. */
+export function repeatAfter(repeat: Repeat): Repeat {
+  return REPEAT_AFTER[repeat];
+}
+
 /** An empty queue, in order. */
 export const EMPTY: Queue = { entries: [], position: 0, repeat: "off", order: undefined };
 

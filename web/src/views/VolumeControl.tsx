@@ -6,6 +6,7 @@ import { SpeakerHighIcon, SpeakerLowIcon } from "@phosphor-icons/react";
 import { type CSSProperties, useRef } from "react";
 
 import { stepVolume } from "../player/volume";
+import { hintOf, useBindings } from "../shortcuts";
 import { useHeldRange } from "./useHeldRange";
 
 /** Change `volume`, from 0 to 1: a button moves it one mark, and the bar once it is let go. */
@@ -20,13 +21,14 @@ export function VolumeControl({
   const range = useHeldRange(bar, onVolume);
   const shown = range.held ?? volume;
   const percent = Math.round(shown * 100);
+  const keys = useBindings();
   return (
     <div className="volume" role="group" aria-label="Volume">
       <button
         type="button"
         className="icon"
         aria-label="Volume down"
-        title="Volume down"
+        {...hintOf("Volume down", keys.volumeDown)}
         onClick={() => {
           onVolume(stepVolume(volume, -1));
         }}
@@ -50,7 +52,7 @@ export function VolumeControl({
         type="button"
         className="icon"
         aria-label="Volume up"
-        title="Volume up"
+        {...hintOf("Volume up", keys.volumeUp)}
         onClick={() => {
           onVolume(stepVolume(volume, 1));
         }}
