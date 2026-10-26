@@ -52,7 +52,16 @@ Removal deletes the household's files, so the policy is built to fail closed:
   smart playlist over a plain one, or back, replaces it whole.
 - **Any Playlist can be *Keep downloaded*,** plain or smart. The MVP named the
   switch on smart playlists; a plain Playlist of songs for the car is the
-  commonest wish, and to the policy both are a set of Tracks.
+  commonest wish, and to the policy both are a set of Tracks. `PUT
+  /api/playlists/{id}/keep_downloaded` switches it alone, as often as sent.
+- **Every Account has *Favorites*,** a smart playlist of its favorite Tracks that
+  the server keeps, marked `builtin: "favorites"`. It is made with the Account,
+  and whenever the server starts for an Account without one, so a restored
+  database gains it too; a unique index keeps it to one. It can't be renamed,
+  given other rules, or deleted, which answers 409; only its *Keep downloaded*
+  switch changes, off at first. Upgrading kept an Account's oldest smart
+  playlist of exactly its favorites as its Favorites, rather than adding a
+  second. A built-in Playlist is a Playlist like any other to the policy.
 - **`GET /api/playlists/{id}`** of a smart playlist lists the Tracks its rules
   match now, newest added first, with how many there are and the estimated size
   of the ones without a Download, so the household sees what a switch would
@@ -308,7 +317,8 @@ first:
 
 | Route | Who | Does |
 | --- | --- | --- |
-| `PUT /api/playlists/{id}` | The owner | Saves a plain or smart Playlist and its *Keep downloaded* switch |
+| `PUT /api/playlists/{id}` | The owner | Saves a plain or smart Playlist and its *Keep downloaded* switch; 409 for Favorites |
+| `PUT /api/playlists/{id}/keep_downloaded` | The owner | Switches *Keep downloaded* alone, for any Playlist, Favorites included |
 | `GET /api/playlists/{id}` | The owner | A smart playlist's current Tracks |
 | `GET /api/settings` | Signed in | The household's settings and their revision |
 | `PUT /api/settings` | An admin | Replaces the settings at a revision, and evaluates |

@@ -33,6 +33,8 @@ export interface Playlist {
   readonly rules: Record<string, unknown> | null;
   readonly keep_downloaded: boolean;
   readonly unreadable: string;
+  /** Which Playlist the server keeps this is, such as `favorites`; it can't be edited. */
+  readonly builtin: "favorites" | null;
   readonly updated_at: string;
 }
 

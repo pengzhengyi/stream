@@ -69,7 +69,8 @@ def test_putting_a_playlist_answers_201_then_200_with_the_same_body(
     assert (created.status_code, repeated.status_code) == (201, 200)
     assert created.json() == repeated.json()
     assert created.json()["track_ids"] == [track_id, track_id]
-    assert client.get("/api/playlists").json() == [created.json()]
+    favorites, morning = client.get("/api/playlists").json()
+    assert (favorites["builtin"], morning) == ("favorites", created.json())
 
 
 FAVORITES = """
@@ -143,7 +144,71 @@ def test_deleting_a_playlist_answers_204_every_time(client: TestClient) -> None:
     )
 
     assert (first.status_code, second.status_code) == (204, 204)
-    assert client.get("/api/playlists").json() == []
+    assert [p["name"] for p in client.get("/api/playlists").json()] == ["Favorites"]
+
+
+def _favorites(client: TestClient) -> dict[str, object]:
+    """Return the signed-in Account's Favorites, which the API lists first."""
+    favorites: dict[str, object] = client.get("/api/playlists").json()[0]
+    assert favorites["builtin"] == "favorites"
+    return favorites
+
+
+def test_favorites_is_the_smart_playlist_of_your_favorites_the_server_keeps(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    track_id = _one_track(catalog)
+
+    client.put(f"/api/tracks/{track_id}/favorite", json={"favorite": True})
+
+    favorites = _favorites(client)
+    expected = json.loads(FAVORITES)
+    assert (favorites["name"], favorites["rules"], favorites["track_ids"]) == (
+        "Favorites",
+        expected["rules"],
+        [track_id],
+    )
+    assert favorites["keep_downloaded"] is False
+
+
+def test_keep_downloaded_switches_with_a_put_of_its_own_as_often_as_sent(
+    client: TestClient,
+) -> None:
+    set_up_as_alice(client)
+    url = f"/api/playlists/{_favorites(client)['id']}/keep_downloaded"
+
+    first = client.put(url, json={"keep_downloaded": True})
+    again = client.put(url, json={"keep_downloaded": True})
+
+    assert (first.status_code, again.status_code) == (200, 200)
+    assert first.json() == again.json()
+    assert _favorites(client)["keep_downloaded"] is True
+
+
+def test_favorites_answers_409_to_a_replace_or_a_delete(client: TestClient) -> None:
+    set_up_as_alice(client)
+    favorites = _favorites(client)
+    url = f"/api/playlists/{favorites['id']}"
+
+    replaced = client.put(url, json={"name": "Loved", "track_ids": []})
+    deleted = client.delete(url)
+
+    assert (replaced.status_code, deleted.status_code) == (409, 409)
+    assert _favorites(client) == favorites
+
+
+def test_keep_downloaded_of_another_accounts_playlist_answers_404(client: TestClient) -> None:
+    set_up_as_alice(client)
+    add_bob(client)
+    alices = _favorites(client)["id"]
+    sign_in(client, "bob")
+
+    switched = client.put(
+        f"/api/playlists/{alices}/keep_downloaded", json={"keep_downloaded": True}
+    )
+
+    assert switched.status_code == 404
 
 
 FIRST_PLAY = "00000000-0000-4000-8000-0000000000a1"

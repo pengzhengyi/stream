@@ -8,7 +8,7 @@ from enum import StrEnum
 from typing import Final, NewType
 
 from medleyplay.domain.errors import InvalidInputError
-from medleyplay.domain.rules import Rules
+from medleyplay.domain.rules import Favorite, Match, Rules
 
 TrackId = NewType("TrackId", int)
 SourceId = NewType("SourceId", int)
@@ -18,6 +18,17 @@ MIN_RATING: Final = 1
 MAX_RATING: Final = 5
 MAX_PLAYLIST_NAME_LENGTH: Final = 128
 MAX_PLAYLIST_LENGTH: Final = 10_000
+
+
+class Builtin(StrEnum):
+    """A Playlist the server keeps for every Account, which can't be edited or deleted."""
+
+    FAVORITES = "favorites"
+
+
+FAVORITES_NAME: Final = "Favorites"
+FAVORITES_RULES: Final = Rules(Match.ALL, (Favorite(value=True),))
+"""The rules of Favorites: the Tracks the Account marked as a favorite."""
 
 
 class SourceState(StrEnum):
@@ -116,7 +127,8 @@ class Playlist:
 
     A smart playlist has `rules`, and its Tracks are the ones they match now,
     newest added first. Stored rules the server can't read leave it with no
-    rules and no Tracks, and `unreadable` saying why.
+    rules and no Tracks, and `unreadable` saying why. A `builtin` Playlist is one
+    the server keeps, such as Favorites.
     """
 
     id: PlaylistId
@@ -126,6 +138,7 @@ class Playlist:
     rules: Rules | None = None
     keep_downloaded: bool = False
     unreadable: str = ""
+    builtin: Builtin | None = None
 
 
 def check_rating(rating: int | None) -> None:

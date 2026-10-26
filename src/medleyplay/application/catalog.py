@@ -14,12 +14,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
+from medleyplay.application.builtin_playlists import ensure_builtin_playlists
 from medleyplay.application.changes import OnChange
 from medleyplay.application.rule_schema import read_rules, rules_document
 from medleyplay.application.track_facts import track_facts
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.catalog import (
     Availability,
+    Builtin,
     Playlist,
     PlaylistId,
     SourceKey,
@@ -211,6 +213,11 @@ class CatalogService:
             elif row.account_id != account_id:
                 message = f"The Playlist id {playlist_id} is already in use."
                 raise ConflictError(message)
+            elif row.builtin is not None:
+                message = (
+                    f"{row.name} is kept by the server; only its Keep downloaded switch changes."
+                )
+                raise ConflictError(message)
             wanted = (clean_name, entries, document, keep_downloaded)
             changed = created or _stored(db, row) != wanted
             if changed:
@@ -228,37 +235,67 @@ class CatalogService:
             self._changed("catalog")
         return saved
 
+    def ensure_builtin_playlists(self) -> None:
+        """Give every Account the built-in Playlists it doesn't have, such as Favorites."""
+        with self._units.begin() as db:
+            ensure_builtin_playlists(db, self._clock())
+
+    def set_keep_downloaded(
+        self, account_id: AccountId, playlist_id: PlaylistId, *, keep: bool
+    ) -> Playlist:
+        """Switch whether one of `account_id`'s Playlists keeps its Tracks downloaded.
+
+        Any Playlist's switch changes this way, Favorites' included; switching it to
+        what it is changes nothing.
+        """
+        with self._units.begin() as db:
+            row = _owned_playlist(db, account_id, playlist_id)
+            changed = row.keep_downloaded != keep
+            if changed:
+                row.keep_downloaded = keep
+                row.updated_at = self._clock()
+                db.flush()
+            saved = _to_playlist(db, row, self._clock())
+        if changed:
+            self._changed("catalog")
+        return saved
+
     def list_playlists(self, account_id: AccountId) -> list[Playlist]:
-        """Return `account_id`'s Playlists by name."""
+        """Return `account_id`'s Playlists: the built-in ones first, then the rest by name."""
         with self._units() as db:
             rows = db.scalars(
                 select(PlaylistRow)
                 .where(PlaylistRow.account_id == account_id)
-                .order_by(PlaylistRow.name, PlaylistRow.id)
+                .order_by(PlaylistRow.builtin.is_(None), PlaylistRow.name, PlaylistRow.id)
             ).all()
             return [_to_playlist(db, row, self._clock()) for row in rows]
 
     def get_playlist(self, account_id: AccountId, playlist_id: PlaylistId) -> Playlist:
         """Return one of `account_id`'s Playlists; another Account's is not found."""
         with self._units() as db:
-            row = db.get(PlaylistRow, playlist_id)
-            if row is None or row.account_id != account_id:
-                message = f"No Playlist has the id {playlist_id}."
-                raise NotFoundError(message)
-            return _to_playlist(db, row, self._clock())
+            return _to_playlist(db, _owned_playlist(db, account_id, playlist_id), self._clock())
 
     def delete_playlist(self, account_id: AccountId, playlist_id: PlaylistId) -> None:
-        """Delete one of `account_id`'s Playlists; deleting a missing one does nothing."""
+        """Delete one of `account_id`'s Playlists; deleting a missing one does nothing.
+
+        A built-in Playlist, such as Favorites, can't be deleted.
+        """
         with self._units.begin() as db:
             deleted = (
                 db.connection()
                 .execute(
                     delete(PlaylistRow).where(
-                        PlaylistRow.id == playlist_id, PlaylistRow.account_id == account_id
+                        PlaylistRow.id == playlist_id,
+                        PlaylistRow.account_id == account_id,
+                        PlaylistRow.builtin.is_(None),
                     )
                 )
                 .rowcount
             )
+            kept = None if deleted else db.get(PlaylistRow, playlist_id)
+            if kept is not None and kept.account_id == account_id:
+                message = f"{kept.name} is kept by the server and can't be deleted."
+                raise ConflictError(message)
         if deleted:
             self._changed("catalog")
 
@@ -401,6 +438,15 @@ def _stored(db: Session, row: PlaylistRow) -> tuple[object, ...]:
     return (row.name, _entries_of(db, PlaylistId(row.id)), row.rules, row.keep_downloaded)
 
 
+def _owned_playlist(db: Session, account_id: AccountId, playlist_id: PlaylistId) -> PlaylistRow:
+    """Return one of `account_id`'s Playlists; another Account's is not found."""
+    row = db.get(PlaylistRow, playlist_id)
+    if row is None or row.account_id != account_id:
+        message = f"No Playlist has the id {playlist_id}."
+        raise NotFoundError(message)
+    return row
+
+
 def _to_playlist(db: Session, row: PlaylistRow, now: datetime) -> Playlist:
     playlist_id = PlaylistId(row.id)
     playlist = Playlist(
@@ -409,6 +455,7 @@ def _to_playlist(db: Session, row: PlaylistRow, now: datetime) -> Playlist:
         _entries_of(db, playlist_id),
         row.updated_at,
         keep_downloaded=row.keep_downloaded,
+        builtin=None if row.builtin is None else Builtin(row.builtin),
     )
     if row.rules is None:
         return playlist

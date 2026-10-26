@@ -154,10 +154,12 @@ class PlayRow(Base):
 class PlaylistRow(Base):
     """An Account's Playlist; the id is chosen by the client, so creating it is retry-safe.
 
-    A smart playlist has `rules`, its rules document, in place of entries.
+    A smart playlist has `rules`, its rules document, in place of entries. A
+    `builtin` one is kept by the server, at most one of each kind per Account.
     """
 
     __tablename__ = "playlist"
+    __table_args__ = (Index("ix_playlist_account_builtin", "account_id", "builtin", unique=True),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
     account_id: Mapped[int] = mapped_column(
@@ -166,6 +168,7 @@ class PlaylistRow(Base):
     name: Mapped[str] = mapped_column(String(128))
     rules: Mapped[dict[str, object] | None] = mapped_column(JSON)
     keep_downloaded: Mapped[bool] = mapped_column(default=False, server_default=text("0"))
+    builtin: Mapped[str | None] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(UtcDateTime)
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime)
 

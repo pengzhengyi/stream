@@ -77,9 +77,11 @@ export function tracksOfAlbum(tracks: readonly Track[], artist: string, name: st
   );
 }
 
-/** Return the favorite Tracks, in the order given. */
+/** Return the favorite Tracks newest added first, the order of the server's Favorites. */
 export function favoritesOf(tracks: readonly Track[]): Track[] {
-  return tracks.filter((track) => track.favorite);
+  return tracks
+    .filter((track) => track.favorite)
+    .sort((a, b) => b.added_at.localeCompare(a.added_at) || b.id - a.id);
 }
 
 /** Return the Tracks with a Download kept on the server, in the order given. */

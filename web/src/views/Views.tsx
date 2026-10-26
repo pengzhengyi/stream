@@ -22,7 +22,7 @@ import { type Route, hrefOf } from "../routes";
 import { SettingsView } from "./SettingsView";
 import { type TrackActions, TrackTable } from "./TrackTable";
 
-/** The id of the Playlist the client makes from the favorites. */
+/** The route id of Favorites, the Playlist of favorites the server keeps for each Account. */
 export const FAVORITES = "favorites";
 
 const UNKNOWN_ARTIST = "Unknown artist";
@@ -229,23 +229,26 @@ function Playlists({
   readonly tracks: readonly Track[];
   readonly playlists: readonly Playlist[];
 }) {
+  // Favorites is worked out from the hearts here, so a heart counts at once.
   const favorites = favoritesOf(tracks);
   return (
     <>
       <ViewHeading title="Playlists" />
       <ul className="groups" aria-label="Playlists">
-        <li>
-          <a href={hrefOf({ view: "playlist", id: FAVORITES })}>
-            <span className="cover-tile favorites" aria-hidden>
-              <HeartIcon weight="fill" />
-            </span>
-            <span className="group-name">Favorites</span>
-            <span className="group-meta">
-              {formatLength(favorites.length, durationOf(favorites))}
-            </span>
-          </a>
-        </li>
-        {playlists.map((playlist) => {
+        {playlists.some((playlist) => playlist.builtin === FAVORITES) && (
+          <li>
+            <a href={hrefOf({ view: "playlist", id: FAVORITES })}>
+              <span className="cover-tile favorites" aria-hidden>
+                <HeartIcon weight="fill" />
+              </span>
+              <span className="group-name">Favorites</span>
+              <span className="group-meta">
+                {formatLength(favorites.length, durationOf(favorites))}
+              </span>
+            </a>
+          </li>
+        )}
+        {ownPlaylists(playlists).map((playlist) => {
           const held = tracksOfPlaylist(tracks, playlist);
           return (
             <li key={playlist.id}>
@@ -268,7 +271,8 @@ function Playlists({
 }
 
 function PlaylistView({ id, ...props }: ViewProps & { readonly id: string }) {
-  if (id === FAVORITES) {
+  const playlist = props.playlists.find((each) => each.id === id);
+  if (id === FAVORITES || playlist?.builtin === FAVORITES) {
     return (
       <Songs
         title="Favorites"
@@ -281,7 +285,6 @@ function PlaylistView({ id, ...props }: ViewProps & { readonly id: string }) {
       </Songs>
     );
   }
-  const playlist = props.playlists.find((each) => each.id === id);
   if (playlist === undefined) {
     return (
       <>
@@ -354,6 +357,11 @@ function NoMusic() {
       its songs appear here.
     </p>
   );
+}
+
+/** Return the Account's own Playlists, leaving out the ones the server keeps. */
+function ownPlaylists(playlists: readonly Playlist[]): Playlist[] {
+  return playlists.filter((playlist) => playlist.builtin === null);
 }
 
 /** Return a Playlist's Tracks the page holds, in its order, a Track as often as it appears. */

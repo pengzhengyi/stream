@@ -70,6 +70,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the queue. Choosing a Track now queues its whole list, so *Previous*
   reaches the Tracks before it. See the
   [Playback](docs/contributing/design-notes/Playback.md#the-web-client) note.
+- **One Favorites** — every Account has a Favorites smart playlist the server
+  keeps, which can be *Keep downloaded* and can't be edited or deleted; the web
+  client shows it in place of its own copy, so Favorites appears once. A
+  Playlist's *Keep downloaded* switch also has a route of its own. See the
+  [Download policy](docs/contributing/design-notes/Download%20policy.md#smart-playlists)
+  note.
 - **Volume, Play and Shuffle, and a precise seek bar** — the player gains a
   volume control, and each view *Play* and *Shuffle* for its songs. The seek bar
   shows the time under the pointer, seeks at once where it is clicked, seeks a

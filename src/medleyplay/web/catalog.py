@@ -12,6 +12,7 @@ from medleyplay.domain.catalog import (
     MAX_RATING,
     MIN_RATING,
     Availability,
+    Builtin,
     Playlist,
     PlaylistId,
     Track,
@@ -92,6 +93,12 @@ class PlaylistIn(BaseModel):
     """Keep every Track the Playlist holds downloaded on the server."""
 
 
+class KeepDownloadedIn(BaseModel):
+    """Whether a Playlist keeps every Track it holds downloaded on the server."""
+
+    keep_downloaded: bool
+
+
 class PlaylistOut(BaseModel):
     """A Playlist; a smart one's Tracks are the ones its rules match now, newest added first."""
 
@@ -102,6 +109,9 @@ class PlaylistOut(BaseModel):
     keep_downloaded: bool
     unreadable: str
     """Why the server can't read the Playlist's stored rules, or empty."""
+    builtin: Builtin | None
+    """Which Playlist the server keeps this is, such as `favorites`; it can't be edited
+    or deleted, though its Keep downloaded switch changes."""
     updated_at: datetime
 
     @classmethod
@@ -114,6 +124,7 @@ class PlaylistOut(BaseModel):
             rules=None if playlist.rules is None else rules_document(playlist.rules),
             keep_downloaded=playlist.keep_downloaded,
             unreadable=playlist.unreadable,
+            builtin=playlist.builtin,
             updated_at=playlist.updated_at,
         )
 
@@ -187,6 +198,17 @@ def put_playlist(
         keep_downloaded=body.keep_downloaded,
     )
     response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+    return PlaylistOut.of(playlist)
+
+
+@router.put("/playlists/{playlist_id}/keep_downloaded")
+def put_keep_downloaded(
+    playlist_id: uuid.UUID, body: KeepDownloadedIn, me: SignedInAccount, catalog: CatalogDep
+) -> PlaylistOut:
+    """Switch whether one of your Playlists keeps its Tracks downloaded; Favorites' too."""
+    playlist = catalog.set_keep_downloaded(
+        me.id, PlaylistId(playlist_id), keep=body.keep_downloaded
+    )
     return PlaylistOut.of(playlist)
 
 

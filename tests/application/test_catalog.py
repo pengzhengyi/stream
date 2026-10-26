@@ -174,7 +174,7 @@ def test_another_accounts_playlist_id_is_refused_and_hidden(
         catalog.put_playlist(bob.id, MORNING, "Mine now", [])
     with pytest.raises(NotFoundError):
         catalog.get_playlist(bob.id, MORNING)
-    assert catalog.list_playlists(bob.id) == []
+    assert [playlist.name for playlist in catalog.list_playlists(bob.id)] == ["Favorites"]
     catalog.delete_playlist(bob.id, MORNING)
     assert catalog.get_playlist(alice.id, MORNING).name == "Morning"
 
@@ -188,12 +188,14 @@ def test_a_playlist_with_unknown_tracks_is_refused(
         catalog.put_playlist(alice.id, MORNING, "Morning", [TrackId(405), TrackId(404)])
 
 
-def test_playlists_are_listed_by_name(catalog: CatalogService, accounts: AccountService) -> None:
+def test_playlists_are_listed_by_name_after_favorites(
+    catalog: CatalogService, accounts: AccountService
+) -> None:
     alice, _ = _alice_and_bob(accounts)
     for name in ("Zen", "Afternoon"):
         catalog.put_playlist(alice.id, PlaylistId(uuid.uuid4()), name, [])
 
-    assert [p.name for p in catalog.list_playlists(alice.id)] == ["Afternoon", "Zen"]
+    assert [p.name for p in catalog.list_playlists(alice.id)] == ["Favorites", "Afternoon", "Zen"]
 
 
 def test_deleting_a_playlist_is_safe_to_repeat(
@@ -205,7 +207,7 @@ def test_deleting_a_playlist_is_safe_to_repeat(
     catalog.delete_playlist(alice.id, MORNING)
     catalog.delete_playlist(alice.id, MORNING)
 
-    assert catalog.list_playlists(alice.id) == []
+    assert [p.name for p in catalog.list_playlists(alice.id)] == ["Favorites"]
 
 
 def test_deleting_an_account_deletes_its_playlists_and_track_state(
