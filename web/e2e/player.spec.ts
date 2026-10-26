@@ -70,6 +70,68 @@ test("Next and Previous move through the queue", async ({ page }) => {
   await expect(player(page).getByText("Alpha", { exact: true })).toBeVisible();
 });
 
+test("choosing a Track queues the whole list, so Previous reaches the Tracks before it", async ({
+  page,
+}) => {
+  await play(page, "Bravo");
+  await player(page).getByRole("button", { name: "Pause" }).click();
+
+  await player(page).getByRole("button", { name: "Previous" }).click();
+
+  await expect(player(page).getByText("Alpha", { exact: true })).toBeVisible();
+});
+
+test("shuffle reorders what plays next, and turned off puts it back", async ({ page }) => {
+  await play(page, "Alpha");
+  const shuffle = player(page).getByRole("button", { name: "Shuffle" });
+
+  await shuffle.click();
+
+  await expect(shuffle).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("status").filter({ hasText: "Shuffle on." })).toBeAttached();
+  const shuffled = await upNext(page).allTextContents();
+  expect(shuffled.map((text) => /Bravo|Charlie|Delta/.exec(text)?.[0]).sort()).toEqual([
+    "Bravo",
+    "Charlie",
+    "Delta",
+  ]);
+  await shuffle.click();
+  await expect(upNext(page)).toHaveText([/Bravo/, /Charlie/, /Delta/]);
+});
+
+test("repeat one starts the Track over when it ends", async ({ page }) => {
+  await page.goto("/");
+  const repeat = player(page).getByRole("button", { name: /^Repeat/ });
+  await repeat.click();
+  await repeat.click();
+  await expect(repeat).toHaveAccessibleName("Repeat: one");
+  await page.locator("audio").evaluate((audio: HTMLAudioElement) => {
+    audio.dataset.ends = "0";
+    audio.addEventListener("ended", () => {
+      audio.dataset.ends = String(Number(audio.dataset.ends) + 1);
+    });
+  });
+
+  await page.getByRole("button", { name: "Charlie", exact: true }).click();
+
+  await expect(page.locator("audio")).not.toHaveAttribute("data-ends", "0");
+  await expect(player(page).getByText("Charlie", { exact: true })).toBeVisible();
+  await expect.poll(async () => (await audioState(page)).playing).toBe(true);
+});
+
+test("repeat all plays the first Track after the last", async ({ page }) => {
+  await page.goto("/");
+  const repeat = player(page).getByRole("button", { name: /^Repeat/ });
+  await repeat.click();
+  await expect(repeat).toHaveAccessibleName("Repeat: all");
+  await expect(page.getByRole("status").filter({ hasText: "Repeating the queue." })).toBeAttached();
+  await page.getByRole("button", { name: "Delta", exact: true }).click();
+
+  await player(page).getByRole("button", { name: "Next" }).click();
+
+  await expect(player(page).getByText("Alpha", { exact: true })).toBeVisible();
+});
+
 test("a reload keeps the queue, paused where it was", async ({ page }) => {
   await play(page, "Alpha");
   await player(page).getByLabel("Position").fill("20");

@@ -167,8 +167,35 @@ come in step 7.
   a server with no Accounts yet shows the first-run form for `POST /api/setup`.
   Any 401 later returns to the sign-in form.
 - **The Track list** shows title, artist, album, and duration. Clicking a Track
-  plays it and queues the Tracks after it in the list; *Play next* and *Add to
-  queue* put a Track in the queue without interrupting.
+  queues the whole list and plays from that Track, so the Tracks before it count
+  as played: *Previous* reaches them, and *Repeat all* starts over from the
+  list's first Track. *Play next* and *Add to queue* put a Track in the queue
+  without interrupting.
+- **Play modes** are two controls, as in most players: *Shuffle*, on or off,
+  and *Repeat*, which cycles through off, all, and one. In order is both off.
+  - **Turning shuffle on** puts what plays next in random order. What played and
+    the Track playing keep their places, so *Previous* still goes back through
+    them. The queue remembers its own order.
+  - **Turning shuffle off** puts the queue back in its own order, with the Track
+    playing in its own place, and plays what follows it there; an entry heard
+    while shuffled may follow it again. A move made while shuffled lasts until
+    then.
+  - **While shuffled,** clicking a Track plays it, then every other Track of the
+    list in random order. *Play next* still plays next, and *Add to queue* still
+    adds at the end; each takes the same place in the queue's own order.
+  - **Repeat all** plays the first entry again after the last, in the same
+    order, shuffled or not. *Next* past the last entry does the same, under
+    *Repeat one* too, and turning repeat on for a finished queue starts it over.
+  - **Repeat one** starts the Track again when it ends. *Next* and *Previous*
+    still move through the queue.
+  - **Starting a Track over is a new play,** whether *Repeat one* or *Previous*
+    started it.
+  - **The Repeat button names its mode,** such as *Repeat: all*, and a status
+    message says each change, since a label that changes on a focused button
+    isn't always read out. *Shuffle* is a toggle button.
+  - **Both modes are saved with the queue.** A queue saved before play modes
+    existed restores in order; a saved order that doesn't hold exactly the
+    queue's entries is dropped.
 - **The queue** lists what plays next; a Track is dragged by its handle into
   another place, with a pointer or a finger, or moved from the keyboard (Space
   picks it up, the arrow keys move it, Space drops it, and a screen reader hears
@@ -180,14 +207,14 @@ come in step 7.
   play and pause, regular for the rest, light for a row's actions. The page
   follows the system's light or dark scheme unless a browser chooses one in the
   header's theme switch, which it remembers.
-- **The player** shows the Track, play and pause, previous and next, a seek bar,
-  and the time.
+- **The player** shows the Track, shuffle, previous, play and pause, next,
+  repeat, a seek bar, and the time.
   - **One persistent `<audio>` element;** the next Track swaps its `src`, so
     autoplay keeps working on iOS after the first tap.
-  - **The next Track is asked for ahead of time,** once the current one loads, so
-    the `ended` event only swaps `src` and plays: iOS may suspend a locked page
-    during a network round trip. Asking ahead also starts preparing a compressed
-    next Track.
+  - **The next Track is asked for ahead of time,** once the current one loads,
+    and again whenever what plays next changes, so the `ended` event only swaps
+    `src` and plays: iOS may suspend a locked page during a network round trip.
+    Asking ahead also starts preparing a compressed next Track.
   - **The queue advances on the `ended` event,** never on a timer.
   - **Previous** restarts the Track after its first three seconds, and goes to
     the previous Track before that.

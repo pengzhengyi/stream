@@ -50,6 +50,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A redesigned web player** — a floating player with icons for every control,
   a light, dark, or system theme, and a queue you reorder by dragging, or from
   the keyboard.
+- **Play modes** — shuffle, and repeat the queue or the current Track, saved
+  with the queue. Choosing a Track now queues its whole list, so *Previous*
+  reaches the Tracks before it. See the
+  [Playback](docs/contributing/design-notes/Playback.md#the-web-client) note.
 - **Bilibili** — save an Account's Bilibili login from a cookies file, kept in
   the macOS Keychain and lent to its downloads; look a video up by any link,
   short links included, and add its parts as Tracks, which download in the

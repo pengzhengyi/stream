@@ -5,7 +5,7 @@
  * starts with an empty queue and sends plays only while the page is open.
  */
 
-import type { Queue } from "./queue";
+import { EMPTY, type Queue, type Repeat } from "./queue";
 
 /** The queue as it was saved, with how far into the current Track it was. */
 export interface Saved {
@@ -79,11 +79,33 @@ export async function saveQueue(saved: Saved): Promise<void> {
 
 /** Return the saved queue, if the browser kept one. */
 export async function loadQueue(): Promise<Saved | undefined> {
-  return run(
+  const saved = await run(
     STATE,
     "readonly",
     (objects) => objects.get(QUEUE_KEY) as IDBRequest<Saved | undefined>,
   );
+  return saved === undefined ? undefined : { ...saved, queue: withModes(saved.queue) };
+}
+
+const REPEATS: readonly unknown[] = ["off", "all", "one"] satisfies Repeat[];
+
+/**
+ * Return `queue` with play modes it can keep: one saved before they existed plays in
+ * order, and an own order that doesn't hold exactly its entries is dropped.
+ */
+export function withModes(queue: Partial<Queue> & Pick<Queue, "entries" | "position">): Queue {
+  const keys = queue.entries.map((entry) => entry.key).sort();
+  const order: readonly unknown[] | undefined = Array.isArray(queue.order)
+    ? queue.order
+    : undefined;
+  const whole =
+    order?.length === keys.length && [...order].sort().every((key, i) => key === keys[i]);
+  return {
+    entries: queue.entries,
+    position: queue.position,
+    repeat: REPEATS.includes(queue.repeat) ? (queue.repeat ?? EMPTY.repeat) : EMPTY.repeat,
+    order: whole ? queue.order : undefined,
+  };
 }
 
 /** Keep a play until the server accepts it. */
