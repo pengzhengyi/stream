@@ -171,6 +171,10 @@ and the full views are in [Web client](Web%20client.md).
   as played: *Previous* reaches them, and *Repeat all* starts over from the
   list's first Track. *Play next* and *Add to queue* put a Track in the queue
   without interrupting.
+- **Play and Shuffle** above a view's songs queue every song in it that can play:
+  *Play* in the table's order with shuffle off, *Shuffle* at random with shuffle
+  on. The queue then holds only that view, so *Repeat all* on an album plays the
+  album again; the repeat mode itself is kept.
 - **Play modes** are two controls, as in most players: *Shuffle*, on or off,
   and *Repeat*, which cycles through off, all, and one. In order is both off.
   - **Turning shuffle on** puts what plays next in random order. What played and
@@ -209,7 +213,7 @@ and the full views are in [Web client](Web%20client.md).
   header's theme switch, which it remembers. On a touch screen, which can't
   point at a row, a row's actions and the seek bar's thumb always show.
 - **The player** shows the Track, shuffle, previous, play and pause, next,
-  repeat, a seek bar, and the time.
+  repeat, a seek bar, the volume, and the time.
   - **One persistent `<audio>` element;** the next Track swaps its `src`, so
     autoplay keeps working on iOS after the first tap.
   - **The next Track is asked for ahead of time,** once the current one loads,
@@ -217,10 +221,19 @@ and the full views are in [Web client](Web%20client.md).
     `src` and plays: iOS may suspend a locked page during a network round trip.
     Asking ahead also starts preparing a compressed next Track.
   - **The queue advances on the `ended` event,** never on a timer.
-  - **The seek bar seeks once it is let go.** While it is dragged, the bar and
-    the time show where it would go and the Track plays on undisturbed; the
-    range's `change` event, which fires on release, or at once for a key, moves
-    the audio.
+  - **The seek bar is the client's own slider,** not a range input, whose
+    thumb width shifts where a click lands. The time comes from where the pointer
+    is on the bar. Hovering shows that time over the pointer; a click seeks there
+    at once; a drag follows the pointer, with the Track playing on undisturbed,
+    and seeks once where it is let go. The arrow keys move five seconds, Page Up
+    and Page Down a tenth of the Track, and Home and End to either end.
+  - **The bar stays where it was sent** until the audio reports a position
+    within a second of it, or for two seconds at most, so it never jumps back
+    before moving on. Between the audio's few position updates a second the bar
+    glides, unless the system asks for reduced motion.
+  - **The volume** steps a tenth with each of its buttons, and its bar sets it
+    once let go. Each browser keeps its own. On iOS, where only the device sets
+    the volume, the control doesn't show.
   - **Previous** restarts the Track after its first three seconds, and goes to
     the previous Track before that.
   - **A Track that is preparing** shows *Preparing*; the client polls its Job,

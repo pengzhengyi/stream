@@ -29,33 +29,61 @@ test("choosing a Track plays it and queues the Tracks after it", async ({ page }
   await expect(player(page).getByRole("button", { name: "Pause" })).toBeVisible();
 });
 
-test("the seek bar moves the playing position", async ({ page }) => {
-  await play(page, "Alpha");
-  await expect(player(page).getByRole("button", { name: "Pause" })).toBeVisible();
+/** Return where the seek bar is, once the Track's length lets it move. */
+async function seekBar(page: Page) {
+  const bar = player(page).getByRole("slider", { name: "Position" });
+  await expect(bar).toHaveAttribute("aria-disabled", "false");
+  const box = await bar.boundingBox();
+  if (box === null) {
+    throw new Error("The seek bar isn't on the page.");
+  }
+  return { bar, box, y: box.y + box.height / 2 };
+}
 
-  await player(page).getByLabel("Position").fill("40");
+test("hovering the seek bar shows the time a click would move to", async ({ page }) => {
+  await play(page, "Alpha");
+  const { bar, box, y } = await seekBar(page);
+
+  await page.mouse.move(box.x + box.width * 0.25, y);
+
+  await expect(bar.getByText("0:15")).toBeVisible();
+  expect((await audioState(page)).position).toBeLessThan(10);
+});
+
+test("clicking the seek bar moves playback to where it was clicked, at once", async ({ page }) => {
+  await play(page, "Alpha");
+  const { box, y } = await seekBar(page);
+
+  await page.mouse.click(box.x + box.width * (40 / 60), y);
 
   await expect.poll(async () => (await audioState(page)).position).toBeGreaterThanOrEqual(40);
+  expect((await audioState(page)).position).toBeLessThan(41.5);
+});
+
+test("the seek bar moves with the arrow keys", async ({ page }) => {
+  await play(page, "Alpha");
+  const { bar } = await seekBar(page);
+
+  await bar.focus();
+  await page.keyboard.press("End");
+  await page.keyboard.press("ArrowLeft");
+
+  await expect.poll(async () => (await audioState(page)).position).toBeGreaterThanOrEqual(54);
 });
 
 test("dragging the seek bar moves the audio only once let go", async ({ page }) => {
   await play(page, "Alpha");
-  // The bar takes a drag once the Track's length is known.
-  await expect(player(page).getByLabel("Position")).toBeEnabled();
-  const bar = await player(page).getByLabel("Position").boundingBox();
-  if (bar === null) {
-    throw new Error("The seek bar isn't on the page.");
-  }
-  const y = bar.y + bar.height / 2;
+  const { bar, box, y } = await seekBar(page);
 
-  await page.mouse.move(bar.x + bar.width * 0.05, y);
+  await page.mouse.move(box.x + box.width * 0.05, y);
   await page.mouse.down();
-  await page.mouse.move(bar.x + bar.width * 0.6, y, { steps: 12 });
+  await page.mouse.move(box.x + box.width * 0.6, y, { steps: 12 });
 
-  await expect(player(page).getByText(/^0:3\d/)).toBeVisible();
+  await expect(bar.getByText(/^0:3\d$/)).toBeVisible();
   expect((await audioState(page)).position).toBeLessThan(10);
   await page.mouse.up();
-  await expect.poll(async () => (await audioState(page)).position).toBeGreaterThanOrEqual(30);
+  await expect.poll(async () => (await audioState(page)).position).toBeGreaterThanOrEqual(35);
+  expect((await audioState(page)).position).toBeLessThan(37.5);
   expect((await audioState(page)).playing).toBe(true);
 });
 
@@ -155,7 +183,8 @@ test("repeat all plays the first Track after the last", async ({ page }) => {
 
 test("a reload keeps the queue, paused where it was", async ({ page }) => {
   await play(page, "Alpha");
-  await player(page).getByLabel("Position").fill("20");
+  const { box, y } = await seekBar(page);
+  await page.mouse.click(box.x + box.width * (22 / 60), y);
   await expect.poll(async () => (await audioState(page)).position).toBeGreaterThanOrEqual(21);
 
   await page.reload();

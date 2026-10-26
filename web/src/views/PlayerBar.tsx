@@ -18,15 +18,15 @@ import {
   SkipForwardIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react";
-import { type CSSProperties, useRef, useState } from "react";
+import { useState } from "react";
 
 import type { Track } from "../api";
 import { formatTime } from "../format";
 import type { Repeat } from "../player/queue";
 import type { Player } from "../player/usePlayer";
 import { canSetVolume } from "../player/volume";
+import { SeekBar } from "./SeekBar";
 import { VolumeControl } from "./VolumeControl";
-import { useHeldRange } from "./useHeldRange";
 
 /** Each repeat mode: the next one a click chooses, its label, and what is said on choosing it. */
 const REPEATS: Record<
@@ -57,27 +57,9 @@ export function PlayerBar({
   // A label that changes on a focused button isn't always read out, so the change is said.
   const [said, setSaid] = useState("");
   const playing = status.kind === "playing";
-  // While the position is dragged, it shows where it would go and seeks once let go.
-  const seekBar = useRef<HTMLInputElement>(null);
-  const seeking = useHeldRange(seekBar, player.seek);
-  const shown = seeking.held ?? position;
-  const length = duration ?? 0;
-  const played = length > 0 ? Math.min(shown / length, 1) : 0;
   return (
     <section className="player" aria-label="Player">
-      <input
-        ref={seekBar}
-        className="seek"
-        type="range"
-        aria-label="Position"
-        min={0}
-        max={length}
-        step={1}
-        value={Math.min(shown, length)}
-        disabled={duration === undefined}
-        style={{ "--played": `${String(played * 100)}%` } as CSSProperties}
-        onChange={seeking.onChange}
-      />
+      <SeekBar position={position} duration={duration} onSeek={player.seek} />
       <div className="now">
         <span className="cover" aria-hidden>
           <MusicNotesIcon weight="duotone" />
@@ -193,7 +175,7 @@ export function PlayerBar({
         )}
         {canSetVolume() && <VolumeControl volume={player.volume} onVolume={player.setVolume} />}
         <span className="time">
-          {formatTime(shown)} <span aria-hidden>/</span> {formatTime(duration)}
+          {formatTime(position)} <span aria-hidden>/</span> {formatTime(duration)}
         </span>
       </div>
     </section>

@@ -70,6 +70,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the queue. Choosing a Track now queues its whole list, so *Previous*
   reaches the Tracks before it. See the
   [Playback](docs/contributing/design-notes/Playback.md#the-web-client) note.
+- **Volume, Play and Shuffle, and a precise seek bar** — the player gains a
+  volume control, and each view *Play* and *Shuffle* for its songs. The seek bar
+  shows the time under the pointer, seeks at once where it is clicked, seeks a
+  drag once it is let go, and no longer jumps back after a seek. See the
+  [Playback](docs/contributing/design-notes/Playback.md#the-web-client) note.
 - **Bilibili** — save an Account's Bilibili login from a cookies file, kept in
   the macOS Keychain and lent to its downloads; look a video up by any link,
   short links included, and add its parts as Tracks, which download in the

@@ -51,7 +51,7 @@ export function SearchBox({
   return (
     <search className="search">
       <label className="search-field">
-        <MagnifyingGlassIcon weight="regular" aria-hidden />
+        <MagnifyingGlassIcon className="search-glass" weight="regular" aria-hidden />
         <span className="visually-hidden">Search</span>
         <input
           type="search"

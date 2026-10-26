@@ -250,32 +250,38 @@ button.text:hover:not(:disabled) {
 }
 
 .search-field {
+  position: relative;
   display: flex;
   flex: 1 1 auto;
   align-items: center;
-  gap: 0.5rem;
   margin: 0;
-  padding: 0.4rem 0.95rem;
-  border-radius: 999px;
-  background: var(--raised);
   color: var(--muted);
-  box-shadow: inset 0 0 0 1px var(--line);
 }
 
-.search-field:focus-within {
-  box-shadow: inset 0 0 0 2px var(--accent);
+/* The field is the whole pill, the glass over its padding, so its one ring is the pill's. */
+.search-glass {
+  position: absolute;
+  left: 0.95rem;
+  pointer-events: none;
 }
 
 .search-field input[type="search"] {
   width: 100%;
   height: auto;
-  padding: 0;
   margin: 0;
+  padding: 0.4rem 0.95rem 0.4rem 2.4rem;
   border: none;
-  background: none;
+  border-radius: 999px;
+  background: var(--raised);
   color: var(--ink);
-  box-shadow: none;
+  box-shadow: inset 0 0 0 1px var(--line);
   font-size: 0.95rem;
+}
+
+.search-field input[type="search"]:focus,
+.search-field input[type="search"]:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--accent);
 }
 
 .scope {
@@ -1300,20 +1306,8 @@ button.icon.heart.on:hover,
   background: var(--accent);
 }
 
-/* The position: a hairline along the deck's top edge, which thickens to be held. */
+/* The volume's bar: a short track, filled to the volume. */
 
-.player .seek {
-  position: absolute;
-  inset: -0.6rem 1.25rem auto;
-  width: auto;
-  height: 1.2rem;
-  margin: 0;
-  background: transparent;
-  cursor: pointer;
-  appearance: none;
-}
-
-.player .seek::-webkit-slider-runnable-track,
 .player .volume input::-webkit-slider-runnable-track {
   height: 6px;
   border-radius: 999px;
@@ -1322,10 +1316,8 @@ button.icon.heart.on:hover,
     var(--accent) var(--played, 0%),
     var(--line) var(--played, 0%)
   );
-  transition: height 120ms;
 }
 
-.player .seek::-moz-range-track,
 .player .volume input::-moz-range-track {
   height: 6px;
   border-radius: 999px;
@@ -1336,42 +1328,117 @@ button.icon.heart.on:hover,
   );
 }
 
-.player .seek::-webkit-slider-thumb {
+/*
+ * The position: a hairline along the deck's top edge, which thickens to be held.
+ * `--played` and `--tip` are shares of the Track, from 0 to 1. Between the audio's
+ * few updates a second the fill glides, except while held, when it follows the pointer.
+ */
+
+.player .seek {
+  position: absolute;
+  inset: -0.6rem 1.25rem auto;
+  height: 1.2rem;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.player .seek:focus-visible {
+  outline: none;
+}
+
+.player .seek[aria-disabled="true"] {
+  cursor: default;
+}
+
+.seek-track {
+  position: absolute;
+  inset: 50% 0 auto;
+  height: 6px;
+  margin-top: -3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+  transition:
+    height 120ms,
+    margin-top 120ms;
+}
+
+.seek:hover .seek-track,
+.seek[data-held] .seek-track {
+  height: 8px;
+  margin-top: -4px;
+}
+
+.seek:focus-visible .seek-track {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.seek-hover,
+.seek-fill {
+  position: absolute;
+  inset: 0;
+  transform-origin: left;
+}
+
+.seek-hover {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  transform: scaleX(var(--tip));
+}
+
+.seek-fill {
+  background: var(--accent);
+  transform: scaleX(var(--played));
+  transition: transform 260ms linear;
+}
+
+.seek-thumb {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--played) * 100%);
   width: 1rem;
   height: 1rem;
-  margin-top: calc(3px - 0.5rem);
-  border: none;
+  margin: -0.5rem 0 0 -0.5rem;
   border-radius: 50%;
   background: var(--accent);
   box-shadow: var(--lift);
   opacity: 0;
-  transition: opacity 120ms;
-  appearance: none;
+  transition:
+    left 260ms linear,
+    opacity 120ms;
 }
 
-.player .seek::-moz-range-thumb {
-  width: 1rem;
-  height: 1rem;
-  border: none;
-  border-radius: 50%;
-  background: var(--accent);
+.seek[data-held] .seek-fill,
+.seek[data-held] .seek-thumb {
+  transition: opacity 120ms;
+}
+
+.seek:hover .seek-thumb,
+.seek:focus-visible .seek-thumb,
+.seek[data-held] .seek-thumb {
+  opacity: 1;
+}
+
+.seek[aria-disabled="true"] .seek-thumb {
   opacity: 0;
 }
 
-.player .seek:hover::-webkit-slider-thumb,
-.player .seek:active::-webkit-slider-thumb,
-.player .seek:focus-visible::-webkit-slider-thumb {
-  opacity: 1;
-}
+/* The time a click or a let-go would move to, over the pointer. */
 
-.player .seek:hover::-moz-range-thumb,
-.player .seek:active::-moz-range-thumb,
-.player .seek:focus-visible::-moz-range-thumb {
-  opacity: 1;
-}
-
-.player .seek:disabled {
-  cursor: default;
+.seek-tip {
+  position: absolute;
+  bottom: calc(100% + 0.4rem);
+  left: calc(var(--tip) * 100%);
+  padding: 0.15rem 0.5rem;
+  border-radius: 0.45rem;
+  background: var(--ink);
+  color: var(--surface);
+  box-shadow: var(--lift);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%);
 }
 
 /* A touch screen can't point at a row, so its actions and the thumb always show. */
@@ -1384,11 +1451,7 @@ button.icon.heart.on:hover,
     opacity: 1;
   }
 
-  .player .seek::-webkit-slider-thumb {
-    opacity: 1;
-  }
-
-  .player .seek::-moz-range-thumb {
+  .seek-thumb {
     opacity: 1;
   }
 }
@@ -1583,5 +1646,10 @@ button.icon.heart.on:hover,
   .bars,
   .spin {
     animation: none;
+  }
+
+  .seek-fill,
+  .seek-thumb {
+    transition: none;
   }
 }
