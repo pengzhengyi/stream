@@ -6,6 +6,7 @@
 
 import {
   CircleNotchIcon,
+  HeartIcon,
   MusicNotesIcon,
   PauseIcon,
   PlayIcon,
@@ -37,9 +38,11 @@ const REPEATS: Record<
 export function PlayerBar({
   player,
   track,
+  onFavorite,
 }: {
   readonly player: Player;
   readonly track: Track | undefined;
+  readonly onFavorite: (track: Track, favorite: boolean) => void;
 }) {
   const { status, position, duration, shuffled, repeat } = player;
   // A label that changes on a focused button isn't always read out, so the change is said.
@@ -94,6 +97,20 @@ export function PlayerBar({
           <strong>{track?.title ?? "Nothing playing"}</strong>
           <span>{track?.artist ?? "Choose a Track to play it"}</span>
         </div>
+        {track !== undefined && (
+          <button
+            type="button"
+            className={track.favorite ? "icon heart on" : "icon heart"}
+            aria-label={`Favorite ${track.title}`}
+            aria-pressed={track.favorite}
+            title={track.favorite ? "Favorite" : "Not a favorite"}
+            onClick={() => {
+              onFavorite(track, !track.favorite);
+            }}
+          >
+            <HeartIcon weight={track.favorite ? "fill" : "regular"} aria-hidden />
+          </button>
+        )}
       </div>
       <div className="controls">
         <button

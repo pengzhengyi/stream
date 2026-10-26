@@ -1,17 +1,18 @@
 /**
- * @file The signed-in page: the Track list, the queue, and the player.
+ * @file The signed-in page: the song table, the queue, and the player.
  */
 
 import { SignOutIcon, WaveformIcon } from "@phosphor-icons/react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 
-import { type Account, type Track, api } from "../api";
+import { type Account, api } from "../api";
+import { useLibrary } from "../library/useLibrary";
 import { current } from "../player/queue";
 import { usePlayer } from "../player/usePlayer";
 import { PlayerBar } from "./PlayerBar";
 import { QueuePanel } from "./QueuePanel";
 import { ThemeSwitch } from "./ThemeSwitch";
-import { TrackList } from "./TrackList";
+import { type TrackActions, TrackTable } from "./TrackTable";
 
 /** Everything a signed-in Account sees. */
 export function Library({
@@ -21,17 +22,22 @@ export function Library({
   readonly account: Account;
   readonly onSignedOut: () => void;
 }) {
-  const [tracks, setTracks] = useState<readonly Track[]>([]);
-  const [error, setError] = useState("");
-  const byId = useMemo(() => new Map(tracks.map((track) => [track.id, track])), [tracks]);
+  const library = useLibrary(onSignedOut);
+  const byId = library.tracks;
+  const tracks = useMemo(() => [...byId.values()], [byId]);
   const [player, audio] = usePlayer(byId, onSignedOut);
   const playingId = current(player.queue)?.trackId;
-
-  useEffect(() => {
-    api.tracks().then(setTracks, (failure: unknown) => {
-      setError(failure instanceof Error ? failure.message : String(failure));
-    });
-  }, []);
+  const actions: TrackActions = {
+    onPlay: player.playList,
+    onPlayNext: player.playNext,
+    onAdd: player.add,
+    onFavorite: (track, favorite) => {
+      library.setFavorite(track.id, favorite);
+    },
+    onRate: (track, rating) => {
+      library.setRating(track.id, rating);
+    },
+  };
 
   const signOut = () => {
     void api.signOut().finally(onSignedOut);
@@ -58,21 +64,30 @@ export function Library({
       </header>
       <main>
         <h2 className="section">Library</h2>
-        {error !== "" && <p role="alert">{error}</p>}
-        <TrackList
-          tracks={tracks}
-          playingId={playingId}
-          onPlay={(index) => {
-            player.playList(tracks, index);
-          }}
-          onPlayNext={player.playNext}
-          onAdd={player.add}
-        />
+        {library.error !== "" && <p role="alert">{library.error}</p>}
+        {library.loaded ? (
+          <TrackTable
+            tracks={tracks}
+            playingId={playingId}
+            actions={actions}
+            empty={
+              <p className="empty">
+                No music yet. An admin adds a Library of your own music in{" "}
+                <a href="/docs">the API</a>, and its songs appear here.
+              </p>
+            }
+          />
+        ) : (
+          <p className="empty" aria-busy="true">
+            Loading your music…
+          </p>
+        )}
       </main>
       <QueuePanel player={player} tracks={byId} />
       <PlayerBar
         player={player}
         track={playingId === undefined ? undefined : byId.get(playingId)}
+        onFavorite={actions.onFavorite}
       />
       <audio ref={audio} preload="auto" />
     </div>

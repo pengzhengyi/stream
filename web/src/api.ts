@@ -11,11 +11,18 @@ export interface Track {
   readonly title: string;
   readonly artist: string;
   readonly album: string;
+  readonly album_artist: string;
   readonly duration_ms: number | null;
+  /** When the Track was added, as an ISO 8601 date and time. */
+  readonly added_at: string;
   readonly favorite: boolean;
+  /** 1 to 5 stars, or `null` when unrated. */
   readonly rating: number | null;
   readonly play_count: number;
+  readonly last_played_at: string | null;
   readonly availability: Availability;
+  /** Whether a Source of the Track has a Download kept on the server. */
+  readonly downloaded: boolean;
 }
 
 /** The signed-in Account. */
@@ -87,6 +94,10 @@ export const api = {
   signOut: () => call<undefined>("DELETE", "/api/session"),
   me: () => call<Account>("GET", "/api/me"),
   tracks: () => call<Track[]>("GET", "/api/tracks"),
+  setFavorite: (trackId: number, favorite: boolean) =>
+    call<Track>("PUT", `/api/tracks/${String(trackId)}/favorite`, { favorite }),
+  setRating: (trackId: number, rating: number | null) =>
+    call<Track>("PUT", `/api/tracks/${String(trackId)}/rating`, { rating }),
   playback: (trackId: number) =>
     call<PlaybackAnswer>("POST", `/api/tracks/${String(trackId)}/playback`),
   job: (jobId: number) => call<Job>("GET", `/api/jobs/${String(jobId)}`),

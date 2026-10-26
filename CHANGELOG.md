@@ -51,6 +51,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a light, dark, or system theme, and a queue you reorder by dragging, or from
   the keyboard. The seek bar is easier to drag and moves the Track only once
   let go, and a row's actions show on touch screens.
+- **The song table** — sort by any column, hide and resize columns, and mark
+  favorites and rate Tracks from five stars, in the table and the player. It
+  draws only the rows on screen, so a large Library scrolls smoothly. Each Track
+  in the API now says whether it is `downloaded`. See the
+  [Web client](docs/contributing/design-notes/Web%20client.md) note.
 - **Play modes** — shuffle, and repeat the queue or the current Track, saved
   with the queue. Choosing a Track now queues its whole list, so *Previous*
   reaches the Tracks before it. See the
