@@ -706,7 +706,7 @@ button.text:hover:not(:disabled) {
 }
 
 .tracks th.actions {
-  width: 6rem;
+  width: 8.5rem;
 }
 
 .tracks th,
@@ -929,6 +929,11 @@ details.dropdown.columns-menu > summary + ul {
 .tracks tr:hover .actions button:disabled,
 .tracks tr:focus-within .actions button:disabled {
   opacity: 0.35;
+}
+
+/* A row's "…" stays while its menu is open, though the pointer has left the row. */
+.tracks .actions button[data-state="open"] {
+  opacity: 1;
 }
 
 /* A heart and five stars, quiet until a row is pointed at, unless already given. */
@@ -1588,8 +1593,13 @@ button.icon.heart.on:hover,
   .tracks .time,
   .tracks .rating,
   .tracks .plays,
-  .tracks .added {
+  .tracks .added,
+  .tracks .actions button:not(.more) {
     display: none;
+  }
+
+  .tracks th.actions {
+    width: 2.75rem;
   }
 
   .tracks th.title {
@@ -1652,4 +1662,182 @@ button.icon.heart.on:hover,
   .seek-thumb {
     transition: none;
   }
+}
+
+/* A song's menu: a card of icons and words, drawn over the page. */
+
+.track-menu {
+  z-index: 10;
+  min-width: 13rem;
+  padding: 0.35rem;
+  border-radius: 0.9rem;
+  background: var(--surface);
+  box-shadow: var(--float);
+  font-size: 0.92rem;
+}
+
+.track-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 0.6rem;
+  color: var(--ink);
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+}
+
+.track-menu-item[data-highlighted] {
+  background: var(--accent-soft);
+}
+
+.track-menu-item[data-disabled] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.track-menu-icon {
+  display: inline-grid;
+  color: var(--muted);
+  font-size: 1.15rem;
+}
+
+.track-menu-item[data-highlighted] .track-menu-icon {
+  color: var(--accent);
+}
+
+.track-menu-line {
+  height: 1px;
+  margin: 0.3rem 0.4rem;
+  background: var(--line);
+}
+
+/* Adding a song to Playlists: a card over a dimmed page. */
+
+dialog.add-to-playlist {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+dialog.add-to-playlist::backdrop {
+  background: rgb(0 0 0 / 35%);
+  backdrop-filter: blur(2px);
+}
+
+.add-to-playlist .card {
+  width: min(26rem, calc(100vw - 2rem));
+  max-height: min(36rem, 85dvh);
+  margin: 0;
+  padding: 1.25rem 1.25rem 1rem;
+  overflow-y: auto;
+  border-radius: 1.25rem;
+  background: var(--surface);
+  box-shadow: var(--float);
+}
+
+.add-to-playlist h2 {
+  margin-bottom: 0.9rem;
+  font-size: 1.1rem;
+}
+
+.add-to-playlist .choices {
+  margin: 0 0 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.choice {
+  margin: 0;
+  list-style: none;
+}
+
+.choice-label {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0.5rem 0.4rem;
+  border-radius: 0.6rem;
+  cursor: pointer;
+}
+
+.choice-label:hover {
+  background: var(--accent-soft);
+}
+
+.choice-box {
+  margin: 0;
+}
+
+.choice-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.choice-meta {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.new-playlist {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.add-to-playlist .new-playlist-name {
+  height: 2.6rem;
+  margin: 0;
+  padding-block: 0;
+}
+
+.add-to-playlist .dialog-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  width: auto;
+  height: 2.6rem;
+  margin: 0;
+  padding: 0 1rem;
+  white-space: nowrap;
+}
+
+.add-to-playlist .error {
+  margin: 0.75rem 0 0;
+  color: #d1495b;
+  font-size: 0.9rem;
+}
+
+.dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+/* What was just done, above the player for a moment. */
+
+.notice {
+  position: fixed;
+  bottom: 7.5rem;
+  left: 50%;
+  z-index: 5;
+  max-width: calc(100vw - 2rem);
+  margin: 0;
+  padding: 0.55rem 1rem;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--surface);
+  box-shadow: var(--float);
+  font-size: 0.9rem;
+  transform: translateX(-50%);
+}
+
+.notice:empty {
+  display: none;
 }

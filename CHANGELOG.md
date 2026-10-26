@@ -70,6 +70,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the queue. Choosing a Track now queues its whole list, so *Previous*
   reaches the Tracks before it. See the
   [Playback](docs/contributing/design-notes/Playback.md#the-web-client) note.
+- **A song's menu and Add to playlist** — a "…" on every song and on the song
+  playing holds *Play next*, *Add to queue*, *Go to artist*, *Go to album*, and
+  *Add to playlist…*, which adds the song to one or several Playlists, or to a
+  new one. See the
+  [Web client](docs/contributing/design-notes/Web%20client.md#a-songs-menu) note.
 - **One Favorites** — every Account has a Favorites smart playlist the server
   keeps, which can be *Keep downloaded* and can't be edited or deleted; the web
   client shows it in place of its own copy, so Favorites appears once. A

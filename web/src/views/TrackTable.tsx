@@ -36,6 +36,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import type { Track } from "../api";
 import { formatTime } from "../format";
+import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
 
 /** What every cell may need: the page's callbacks, and which Track is playing. */
 interface Meta {
@@ -72,14 +73,12 @@ const byText = (a: Row<typeof features, Track>, b: Row<typeof features, Track>, 
 const byNumber = (a: Row<typeof features, Track>, b: Row<typeof features, Track>, id: string) =>
   (a.getValue<number | null>(id) ?? -1) - (b.getValue<number | null>(id) ?? -1);
 
-/** What the table does when a Track is chosen, queued, or rated. */
-export interface TrackActions {
+/** What the table does when a Track is chosen, queued, rated, or added to a Playlist. */
+export interface TrackActions extends TrackMenuActions {
   /** Play `shown`, the Tracks in the order the table shows them, from its entry `index`. */
   readonly onPlay: (shown: readonly Track[], index: number) => void;
   /** Play every Track of `playable` from the first, in the table's order or shuffled. */
   readonly onPlayAll: (playable: readonly Track[], shuffled: boolean) => void;
-  readonly onPlayNext: (track: Track) => void;
-  readonly onAdd: (track: Track) => void;
   readonly onFavorite: (track: Track, favorite: boolean) => void;
   readonly onRate: (track: Track, rating: number | null) => void;
 }
@@ -501,6 +500,7 @@ const COLUMNS: Column[] = [
           >
             <ListPlusIcon weight="light" aria-hidden />
           </button>
+          <TrackMenu track={track} actions={actions} queueing />
         </>
       );
     },

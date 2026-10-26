@@ -1,6 +1,6 @@
 /**
- * @file Adds the Testing Library matchers to Vitest, stands in for media playback and
- * pointer capture, and unmounts between tests.
+ * @file Adds the Testing Library matchers to Vitest, stands in for media playback, pointer
+ * capture, and dialogs, and unmounts between tests.
  */
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
@@ -14,6 +14,16 @@ HTMLMediaElement.prototype.canPlayType = () => "maybe";
 // jsdom dispatches pointer events but can't capture the pointer.
 Element.prototype.setPointerCapture = () => undefined;
 Element.prototype.releasePointerCapture = () => undefined;
+// jsdom has `<dialog>` but not its methods: these open and close it as a browser would.
+HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
+  this.open = true;
+};
+HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+  if (this.open) {
+    this.open = false;
+    this.dispatchEvent(new Event("close"));
+  }
+};
 
 afterEach(() => {
   cleanup();

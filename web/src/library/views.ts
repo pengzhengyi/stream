@@ -115,7 +115,8 @@ export function search(tracks: readonly Track[], query: string): Found {
   };
 }
 
-function albumArtistOf(track: Track): string {
+/** Return the artist a Track's album is listed under: its album artist, or its artist. */
+export function albumArtistOf(track: Track): string {
   return track.album_artist === "" ? track.artist : track.album_artist;
 }
 
