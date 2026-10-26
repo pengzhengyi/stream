@@ -112,6 +112,7 @@
     "tsbuildinfo",
     "typecheck",
     "unintrusive",
+    "unmute",
     "unreviewed",
     "unshuffle",
     "unstartable",

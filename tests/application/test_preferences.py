@@ -74,7 +74,7 @@ def test_shortcuts_saved_as_none_go_back_to_the_pages_defaults(
     ("shortcuts", "where"),
     [
         ({"toggle": ("Space Bar",)}, "toggle"),
-        ({"to ggle": ("space",)}, "shortcuts"),
+        ({"play pause": ("space",)}, "shortcuts"),
         ({"toggle": ("space",) * 9}, "toggle"),
         ({f"command{n}": ("k",) for n in range(65)}, "shortcuts"),
     ],

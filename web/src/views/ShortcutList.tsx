@@ -29,7 +29,16 @@ export function ShortcutList({ onClose }: { readonly onClose: () => void }) {
             <div key={command} className="shortcut">
               <dt>{name}</dt>
               <dd>
-                <kbd>{labelOf(bindings[command])}</kbd>
+                {bindings[command].length === 0 ? (
+                  <span className="no-keys">None</span>
+                ) : (
+                  bindings[command].map((keys, index) => (
+                    <span key={keys}>
+                      {index > 0 && <span className="or"> or </span>}
+                      <kbd>{labelOf(keys)}</kbd>
+                    </span>
+                  ))
+                )}
               </dd>
             </div>
           ))}

@@ -1,13 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_BINDINGS, saveBindings } from "../shortcuts";
+import { openWithShortcuts } from "../testing/server";
 import { VolumeControl } from "./VolumeControl";
-
-afterEach(() => {
-  saveBindings(DEFAULT_BINDINGS);
-});
 
 describe("the volume", () => {
   it.each([
@@ -39,8 +35,8 @@ describe("the volume", () => {
     expect(bar).toHaveAttribute("aria-valuetext", "50%");
   });
 
-  it("names each button's keys on hover, as they are now", () => {
-    saveBindings({ ...DEFAULT_BINDINGS, volumeUp: "shift+equal" });
+  it("names each button's keys on hover, as they are now", async () => {
+    await openWithShortcuts({ volumeUp: ["equal", "shift+equal"] });
 
     render(<VolumeControl volume={0.5} onVolume={vi.fn()} />);
 
@@ -50,7 +46,16 @@ describe("the volume", () => {
     );
     expect(screen.getByRole("button", { name: "Volume up" })).toHaveAttribute(
       "aria-keyshortcuts",
-      "Shift+=",
+      "= Shift+=",
+    );
+  });
+
+  it("says it is muted, keeping the volume it comes back to", () => {
+    render(<VolumeControl volume={0.5} muted onVolume={vi.fn()} />);
+
+    expect(screen.getByRole("slider", { name: "Volume" })).toHaveAttribute(
+      "aria-valuetext",
+      "Muted, 50%",
     );
   });
 });

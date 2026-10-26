@@ -130,19 +130,21 @@ function Shortcut({
   ignored,
   onPress,
 }: {
-  readonly keys: string;
+  readonly keys: readonly string[];
   readonly held: boolean;
   readonly ignored: (event: KeyboardEvent) => boolean;
   readonly onPress: () => void;
 }) {
   useHotkeys(
-    keys,
+    keys.join(","),
     (event) => {
       if (held || !event.repeat) {
         onPress();
       }
     },
     {
+      // A command with no keys listens for none.
+      enabled: keys.length > 0,
       preventDefault: true,
       // The page decides which keys a control keeps, text boxes among them.
       enableOnFormTags: true,

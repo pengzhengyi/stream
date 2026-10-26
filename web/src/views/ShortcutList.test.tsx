@@ -1,23 +1,20 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_BINDINGS, saveBindings } from "../shortcuts";
+import { openWithShortcuts } from "../testing/server";
 import { ShortcutList } from "./ShortcutList";
 
-afterEach(() => {
-  saveBindings(DEFAULT_BINDINGS);
-});
-
 describe("the list of keyboard shortcuts", () => {
-  it("names each command's keys as they are now", () => {
-    saveBindings({ ...DEFAULT_BINDINGS, toggle: "k" });
+  it("names each command's keys as they are now", async () => {
+    await openWithShortcuts({ toggle: ["j"], mute: [] });
 
     render(<ShortcutList onClose={vi.fn()} />);
 
     const list = within(screen.getByRole("dialog", { name: "Keyboard shortcuts" }));
-    expect(list.getByText("Play or pause").nextElementSibling).toHaveTextContent("K");
-    expect(list.getByText("Up next").nextElementSibling).toHaveTextContent("Q");
+    expect(list.getByText("Play or pause").nextElementSibling).toHaveTextContent(/^J$/);
+    expect(list.getByText("Next").nextElementSibling).toHaveTextContent("Shift + →");
+    expect(list.getByText("Mute or unmute").nextElementSibling).toHaveTextContent("None");
   });
 
   it("leads to Settings to change them, closing as it goes", async () => {
