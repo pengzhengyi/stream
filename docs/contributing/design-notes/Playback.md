@@ -148,8 +148,8 @@ sequenceDiagram
 
 ## The web client
 
-A bare page: enough to sign in and play music on every device. The full views
-come in step 7.
+A bare page: enough to sign in and play music on every device. The song table
+and the full views are in [Web client](Web%20client.md).
 
 - **Built with what the project already has:** React with `useReducer`,
   `fetch`, and the platform's IndexedDB, with no new dependencies. The page is
@@ -273,4 +273,5 @@ come in step 7.
 - **Bilibili Downloads** play through the same `playback` request, and play
   whatever their Source's state; see [Bilibili](Bilibili.md#playing-a-download).
 - **The storage limit** and removing cache copies, in step 6.
-- **The full views,** artwork, and SSE progress, in step 7.
+- **The full views** are in [Web client](Web%20client.md); artwork and SSE
+  progress, in step 7.

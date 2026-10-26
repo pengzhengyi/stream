@@ -289,16 +289,30 @@ button.text:hover:not(:disabled) {
   border-spacing: 0;
 }
 
-.tracks th.title-column {
-  width: 40%;
+.tracks th.favorite {
+  width: 2.75rem;
 }
 
-.tracks th.artist {
-  width: 22%;
+/* A share of the width until resized, when the header says how wide. */
+.tracks th.artist,
+.tracks th.album {
+  width: 18%;
 }
 
 .tracks th.time {
   width: 4.5rem;
+}
+
+.tracks th.rating {
+  width: 8rem;
+}
+
+.tracks th.plays {
+  width: 4.5rem;
+}
+
+.tracks th.added {
+  width: 7.5rem;
 }
 
 .tracks th.actions {
@@ -316,14 +330,92 @@ button.text:hover:not(:disabled) {
 }
 
 .tracks th {
+  position: relative;
   color: var(--muted);
   font-size: 0.8rem;
   font-weight: 500;
   text-align: left;
 }
 
+.tracks td.favorite {
+  padding-right: 0;
+}
+
+/* A header sorts by its column; the caret says which way. */
+.tracks button.sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  box-shadow: none;
+  font: inherit;
+}
+
+.tracks button.sort:hover {
+  color: var(--ink);
+}
+
+.tracks .resizer {
+  position: absolute;
+  top: 25%;
+  right: 0;
+  width: 0.4rem;
+  height: 50%;
+  border-right: 2px solid transparent;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.tracks th:hover .resizer,
+.tracks .resizer.resizing {
+  border-color: var(--line);
+}
+
+.table-tools {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.25rem;
+}
+
+.columns-menu {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+details.dropdown.columns-menu > summary:not([role]) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: auto;
+  padding: 0.3rem 0.75rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+}
+
+details.dropdown.columns-menu > summary:not([role]):hover {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+details.dropdown.columns-menu > summary + ul {
+  right: 0;
+  left: auto;
+  min-width: 11rem;
+}
+
 .tracks tbody td {
   transition: background-color 120ms;
+}
+
+.tracks .spacer td {
+  padding: 0;
 }
 
 .tracks td:first-child {
@@ -340,7 +432,9 @@ button.text:hover:not(:disabled) {
 
 .tracks .artist,
 .tracks .album,
-.tracks .time {
+.tracks .time,
+.tracks .plays,
+.tracks .added {
   color: var(--muted);
   font-size: 0.9rem;
 }
@@ -352,7 +446,7 @@ button.text:hover:not(:disabled) {
   gap: 0.6rem;
 }
 
-.tracks .title {
+.tracks button.title {
   padding: 0;
   margin: 0;
   border: none;
@@ -370,11 +464,11 @@ button.text:hover:not(:disabled) {
   display: none;
 }
 
-.tracks .unplayable .title {
+.tracks .unplayable button.title {
   color: var(--muted);
 }
 
-.tracks tr[aria-current="true"] .title {
+.tracks tr[aria-current="true"] button.title {
   color: var(--accent);
   font-weight: 650;
 }
@@ -387,7 +481,8 @@ button.text:hover:not(:disabled) {
   font-size: 0.75rem;
 }
 
-.tracks .time {
+.tracks .time,
+.tracks .plays {
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
@@ -409,6 +504,44 @@ button.text:hover:not(:disabled) {
 .tracks tr:hover .actions button:disabled,
 .tracks tr:focus-within .actions button:disabled {
   opacity: 0.35;
+}
+
+/* A heart and five stars, quiet until a row is pointed at, unless already given. */
+.tracks button.heart {
+  width: 1.75rem;
+  height: 1.75rem;
+  font-size: 1rem;
+}
+
+.tracks .stars {
+  display: flex;
+  padding: 0;
+  margin: 0;
+  border: none;
+}
+
+.tracks button.star {
+  width: 1.45rem;
+  height: 1.75rem;
+  font-size: 0.95rem;
+}
+
+button.heart.on,
+button.icon.heart.on:hover,
+.tracks .stars:has([aria-pressed="true"]) button.star {
+  color: var(--accent);
+}
+
+.tracks button.heart:not(.on),
+.tracks .stars:not(:has([aria-pressed="true"])) button.star {
+  opacity: 0;
+}
+
+.tracks tr:hover button.heart,
+.tracks tr:focus-within button.heart,
+.tracks tr:hover .stars:not(:has([aria-pressed="true"])) button.star,
+.tracks tr:focus-within .stars:not(:has([aria-pressed="true"])) button.star {
+  opacity: 1;
 }
 
 /* Three bars beside the Track playing now. */
@@ -585,6 +718,10 @@ button.text:hover:not(:disabled) {
   background: var(--accent-soft);
   color: var(--accent);
   font-size: 1.4rem;
+}
+
+.player .now > .heart {
+  flex: none;
 }
 
 .player .names {
@@ -776,6 +913,8 @@ button.text:hover:not(:disabled) {
 
 @media (hover: none) {
   .tracks .actions button,
+  .tracks button.heart:not(.on),
+  .tracks .stars:not(:has([aria-pressed="true"])) button.star,
   .queue .remove {
     opacity: 1;
   }
@@ -791,7 +930,9 @@ button.text:hover:not(:disabled) {
 
 /* On a phone: one column, the queue under the Library, the player along the bottom. */
 
-@media (width <= 48rem) {
+/* On a tablet: the queue under the Library, so the song table has the width. */
+
+@media (width <= 64rem) {
   .library {
     grid-template:
       "top" auto
@@ -799,6 +940,18 @@ button.text:hover:not(:disabled) {
       "queue" auto / 1fr;
   }
 
+  .queue {
+    position: static;
+    max-height: none;
+    margin: 0 0.75rem 11rem;
+  }
+
+  .tracks .album {
+    display: none;
+  }
+}
+
+@media (width <= 48rem) {
   .top {
     padding: 0.6rem 1rem;
   }
@@ -813,12 +966,20 @@ button.text:hover:not(:disabled) {
 
   .tracks .album,
   .tracks .artist,
-  .tracks .time {
+  .tracks .time,
+  .tracks .rating,
+  .tracks .plays,
+  .tracks .added {
     display: none;
   }
 
-  .tracks th.title-column {
+  .tracks th.title {
     width: auto;
+  }
+
+  .table-tools,
+  .player .cover {
+    display: none;
   }
 
   .tracks .title-cell {
@@ -829,7 +990,7 @@ button.text:hover:not(:disabled) {
     margin-right: 0.5rem;
   }
 
-  .tracks .title-cell .title {
+  .tracks .title-cell button.title {
     line-height: 1.35;
   }
 
@@ -839,12 +1000,6 @@ button.text:hover:not(:disabled) {
     color: var(--muted);
     font-size: 0.8rem;
     text-overflow: ellipsis;
-  }
-
-  .queue {
-    position: static;
-    max-height: none;
-    margin: 0 0.75rem 11rem;
   }
 
   .player {

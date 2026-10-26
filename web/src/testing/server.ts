@@ -44,11 +44,15 @@ export function trackOf(id: number, title: string, change: Partial<Track> = {}):
     title,
     artist: "The Band",
     album: "Blue",
+    album_artist: "",
     duration_ms: 187_000,
+    added_at: "2026-10-01T12:00:00Z",
     favorite: false,
     rating: null,
     play_count: 0,
+    last_played_at: null,
     availability: "ok",
+    downloaded: false,
     ...change,
   };
 }

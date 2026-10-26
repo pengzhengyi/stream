@@ -220,6 +220,19 @@ def test_a_download_still_plays_when_its_source_is_unavailable_since(
     assert track.availability is Availability.OK
 
 
+def test_a_track_counts_as_downloaded_once_its_download_finishes(
+    site: Site, alice: Account
+) -> None:
+    added = _added(site, alice, "BV1Xx41117Tz")
+    before = site.catalog.get_track(alice.id, added.track_id)
+
+    _finished(site, added)
+
+    assert not before.downloaded
+    assert site.catalog.get_track(alice.id, added.track_id).downloaded
+    assert [track.downloaded for track in site.catalog.list_tracks(alice.id)] == [True]
+
+
 def test_a_source_without_a_download_answers_preparing_with_its_download(
     site: Site, alice: Account, units: sessionmaker[Session]
 ) -> None:
