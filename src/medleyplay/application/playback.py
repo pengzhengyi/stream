@@ -9,15 +9,17 @@ import hashlib
 import os
 import stat
 import threading
+import time
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
 
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
-from medleyplay.application.downloads import DownloadService
+from medleyplay.application.downloads import SERVED_EVERY, DownloadService
 from medleyplay.application.jobs import JobKind, JobService
 from medleyplay.application.plugins import PluginService
 from medleyplay.domain.accounts import Account
@@ -320,6 +322,9 @@ class PlaybackService:
         if not stat.S_ISREG(info.st_mode):
             os.close(descriptor)
             return None
+        # A busy database mustn't stop the audio; the next request records it.
+        with contextlib.suppress(SQLAlchemyError):
+            self._downloads.served(source_id)
         return AudioFile(descriptor, 0, info.st_size, media_type(name))
 
     def sweep_downloads(self) -> None:
@@ -387,6 +392,12 @@ class PlaybackService:
         if not stat.S_ISREG(info.st_mode) or info.st_size != location.length:
             os.close(descriptor)
             return _NeedsCopy(source, location)
+        now = time.time()
+        if now - info.st_atime >= SERVED_EVERY.total_seconds():
+            # The access time says when it was last served; the modified time, in the
+            # ETag, stays as it was.
+            with contextlib.suppress(OSError):
+                os.utime(copy, (now, info.st_mtime))
         return AudioFile(descriptor, 0, info.st_size, media_type(source.path))
 
     def _prepare(self, caller: Account, needed: _NeedsCopy) -> Job:

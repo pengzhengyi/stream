@@ -319,3 +319,39 @@ def test_playing_a_track_whose_download_failed_answers_that_job_rather_than_a_ne
     preparing = site.playback.play(alice, added.track_id)
 
     assert preparing == Preparing(added.source_id, failed.job)
+
+
+def test_serving_a_download_records_when_at_most_once_a_minute(
+    site: Site, alice: Account, units: sessionmaker[Session], clock: FakeClock
+) -> None:
+    added = _added(site, alice, "BV1Xx41117Tz")
+    _finished(site, added)
+    first_served = clock.now
+
+    site.playback.open_audio(added.source_id).close()
+    clock.advance(timedelta(seconds=30))
+    site.playback.open_audio(added.source_id).close()
+
+    with units() as db:
+        assert db.get_one(DownloadRow, added.source_id).last_served_at == first_served
+    clock.advance(timedelta(minutes=1))
+    site.playback.open_audio(added.source_id).close()
+    with units() as db:
+        assert db.get_one(DownloadRow, added.source_id).last_served_at == clock.now
+
+
+def test_the_policy_starts_a_download_again_after_one_failed(site: Site, alice: Account) -> None:
+    added = _added(site, alice, "BVSignedIn")
+    failed = _failed(site, added)
+
+    again = site.downloads.start_for(alice.id, added.source_id)
+
+    assert again is not None
+    assert again.id != failed.job.id
+
+
+def test_the_policy_never_downloads_a_source_already_downloaded(site: Site, alice: Account) -> None:
+    added = _added(site, alice, "BV1Xx41117Tz")
+    _finished(site, added)
+
+    assert site.downloads.start_for(alice.id, added.source_id) is None

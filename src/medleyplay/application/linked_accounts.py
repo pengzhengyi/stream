@@ -16,6 +16,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
+from medleyplay.application.changes import OnChange
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.secrets import Secrets
 from medleyplay.domain.accounts import Account, AccountId
@@ -37,9 +38,15 @@ class LinkedAccountService:
     """Save, list, and remove linked accounts, and lend their logins to Jobs."""
 
     def __init__(
-        self, units: sessionmaker[Session], clock: Clock, plugins: PluginService, secrets: Secrets
+        self,
+        units: sessionmaker[Session],
+        clock: Clock,
+        plugins: PluginService,
+        secrets: Secrets,
+        on_change: OnChange | None = None,
     ) -> None:
-        """Create a service keeping logins in `secrets`."""
+        """Create a service keeping logins in `secrets`, telling `on_change` when one changes."""
+        self._on_change = on_change
         self._units = units
         self._clock = clock
         self._plugins = plugins
@@ -88,7 +95,9 @@ class LinkedAccountService:
                 row.saved_at = self._clock()
                 row.revision += 1
                 db.flush()
-                return _to_linked(row)
+                saved = _to_linked(row)
+        self._changed()
+        return saved
 
     def remove(self, caller: Account, site: str) -> None:
         """Forget the caller's login on `site`; forgetting one that isn't there is fine."""
@@ -115,6 +124,11 @@ class LinkedAccountService:
                             LinkedAccountRow.site == each,
                         )
                     )
+        self._changed()
+
+    def _changed(self) -> None:
+        if self._on_change is not None:
+            self._on_change("logins")
 
     def has_valid(self, account_id: AccountId, site: str) -> bool:
         """Return whether the Account has a valid login on `site` now."""

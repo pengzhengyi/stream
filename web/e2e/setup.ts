@@ -11,19 +11,21 @@ import { ALICE, MUSIC, SIGNED_IN } from "./fixtures";
 setup("sign in as Alice and scan the music", async ({ request }) => {
   const created = await request.post("/api/setup", { data: ALICE });
   expect(created.status()).toBe(201);
-  for (const library of [
+  // One scan after the other, so the folder's Tracks come first in the Library,
+  // whichever scan would finish first.
+  const libraries = [
     { name: "Music", kind: "folder", path: `${MUSIC}/Music` },
     { name: "Old Mixes", kind: "zip", path: `${MUSIC}/Old Mixes.zip` },
-  ]) {
+  ];
+  for (const [scanned, library] of libraries.entries()) {
     const registered = await request.post("/api/libraries", { data: library });
     expect(registered.status()).toBe(201);
+    await expect
+      .poll(async () => {
+        const jobs = (await (await request.get("/api/jobs")).json()) as { state: string }[];
+        return jobs.map((job) => job.state);
+      })
+      .toEqual(Array<string>(scanned + 1).fill("succeeded"));
   }
-
-  await expect
-    .poll(async () => {
-      const jobs = (await (await request.get("/api/jobs")).json()) as { state: string }[];
-      return jobs.map((job) => job.state);
-    })
-    .toEqual(["succeeded", "succeeded"]);
   await request.storageState({ path: SIGNED_IN });
 });

@@ -1,5 +1,6 @@
 """The catalog API: Tracks with your own state, and Playlists under ids you choose."""
 
+import json
 import uuid
 
 from fastapi.testclient import TestClient
@@ -69,6 +70,53 @@ def test_putting_a_playlist_answers_201_then_200_with_the_same_body(
     assert created.json() == repeated.json()
     assert created.json()["track_ids"] == [track_id, track_id]
     assert client.get("/api/playlists").json() == [created.json()]
+
+
+FAVORITES = """
+{
+  "name": "Favorites",
+  "keep_downloaded": true,
+  "rules": {
+    "version": 1,
+    "match": "all",
+    "conditions": [{ "field": "favorite", "op": "is", "value": true }]
+  }
+}
+"""
+
+
+def test_a_smart_playlist_answers_with_its_rules_and_the_tracks_they_match(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    track_id = _one_track(catalog)
+    client.put(f"/api/tracks/{track_id}/favorite", json={"favorite": True})
+    body = json.loads(FAVORITES)
+
+    smart = client.put(f"/api/playlists/{MORNING}", json=body).json()
+
+    assert (smart["rules"], smart["keep_downloaded"], smart["track_ids"]) == (
+        body["rules"],
+        True,
+        [track_id],
+    )
+    assert smart["unreadable"] == ""
+
+
+def test_a_playlist_with_rules_the_schema_refuses_answers_422(client: TestClient) -> None:
+    set_up_as_alice(client)
+    body = json.loads(FAVORITES)
+    body["rules"]["conditions"][0]["field"] = "mood"
+
+    assert client.put(f"/api/playlists/{MORNING}", json=body).status_code == 422
+
+
+def test_a_playlist_with_both_tracks_and_rules_answers_422(client: TestClient) -> None:
+    set_up_as_alice(client)
+
+    both = client.put(f"/api/playlists/{MORNING}", json={**json.loads(FAVORITES), "track_ids": []})
+
+    assert both.status_code == 422
 
 
 def test_another_accounts_playlist_id_answers_409_and_its_playlist_404(

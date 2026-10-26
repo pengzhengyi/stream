@@ -313,3 +313,21 @@ def test_a_track_from_a_site_is_available(
     [track_id, *_] = _three_tracks(catalog)
 
     assert catalog.get_track(alice.id, track_id).availability is Availability.OK
+
+
+def test_each_change_tells_the_catalog_changed_and_repeating_it_tells_nothing(
+    catalog: CatalogService, accounts: AccountService, clock: FakeClock, changes: list[str]
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+    key, song = SourceKeyFactory.bilibili(), TrackDetailsFactory.song()
+
+    track_id = catalog.add_track(key, song)
+    catalog.add_track(key, song)
+    catalog.record_play(alice.id, FIRST_PLAY, track_id, clock.now)
+    catalog.record_play(alice.id, FIRST_PLAY, track_id, clock.now)
+    catalog.put_playlist(alice.id, MORNING, "Morning", [track_id])
+    catalog.put_playlist(alice.id, MORNING, "Morning", [track_id])
+    catalog.delete_playlist(alice.id, MORNING)
+    catalog.delete_playlist(alice.id, MORNING)
+
+    assert changes == ["catalog"] * 4

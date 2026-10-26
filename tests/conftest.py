@@ -3,6 +3,7 @@
 from collections.abc import Iterator
 from pathlib import Path
 
+import hypothesis
 import pytest
 from fastapi.testclient import TestClient
 from pwdlib import PasswordHash
@@ -20,6 +21,8 @@ from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.links import LinkService
 from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
+from medleyplay.application.policy import PolicyService
+from medleyplay.application.settings import SettingsService
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
 from medleyplay.web.app import create_app
@@ -27,6 +30,13 @@ from medleyplay.web.deps import Services
 from tests.support.fakes import FakeClock, MemorySecrets
 
 TEST_HOST = "testserver"
+
+# The suites run in parallel processes, so a busy machine slows each example and
+# its generation; the properties check what the code does, not how fast.
+hypothesis.settings.register_profile(
+    "medleyplay", deadline=None, suppress_health_check=[hypothesis.HealthCheck.too_slow]
+)
+hypothesis.settings.load_profile("medleyplay")
 
 
 @pytest.fixture
@@ -58,8 +68,19 @@ def accounts(
 
 
 @pytest.fixture
-def catalog(units: sessionmaker[Session], clock: FakeClock) -> CatalogService:
-    return CatalogService(units, clock)
+def changes() -> list[str]:
+    """What the services said changed, in order."""
+    return []
+
+
+@pytest.fixture
+def catalog(units: sessionmaker[Session], clock: FakeClock, changes: list[str]) -> CatalogService:
+    return CatalogService(units, clock, changes.append)
+
+
+@pytest.fixture
+def settings(units: sessionmaker[Session], clock: FakeClock, changes: list[str]) -> SettingsService:
+    return SettingsService(units, clock, changes.append)
 
 
 @pytest.fixture
@@ -102,7 +123,7 @@ def downloads(
 ) -> DownloadService:
     data_dir = tmp_path / "data"
     kind = download_source_kind(data_dir, tmp_path / "jobs", clock)
-    return DownloadService(units, plugins, jobs, kind, linked, data_dir)
+    return DownloadService(units, plugins, jobs, kind, linked, data_dir, clock)
 
 
 @pytest.fixture
@@ -129,6 +150,21 @@ def links(
 
 
 @pytest.fixture
+def policy(
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    downloads: DownloadService,
+    plugins: PluginService,
+    tmp_path: Path,
+) -> PolicyService:
+    # Not started: the suites evaluate when they mean to. The server always has its
+    # data folder, whose disk the policy measures.
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(exist_ok=True)
+    return PolicyService(units, clock, downloads, plugins, data_dir)
+
+
+@pytest.fixture
 def secrets() -> MemorySecrets:
     return MemorySecrets()
 
@@ -150,6 +186,8 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     playback: PlaybackService,
     linked: LinkedAccountService,
     links: LinkService,
+    settings: SettingsService,
+    policy: PolicyService,
 ) -> Services:
     """The services of a server with no plugins on; a suite replaces what it runs for real."""
     return Services(
@@ -162,6 +200,8 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         linked=linked,
         links=links,
         events=JobEvents(),
+        settings=settings,
+        policy=policy,
     )
 
 

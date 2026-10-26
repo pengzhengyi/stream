@@ -8,6 +8,7 @@ from enum import StrEnum
 from typing import Final, NewType
 
 from medleyplay.domain.errors import InvalidInputError
+from medleyplay.domain.rules import Rules
 
 TrackId = NewType("TrackId", int)
 SourceId = NewType("SourceId", int)
@@ -109,12 +110,20 @@ class Track:
 
 @dataclass(frozen=True)
 class Playlist:
-    """An Account's named, ordered list of Tracks; a Track may appear more than once."""
+    """An Account's named, ordered list of Tracks; a Track may appear more than once.
+
+    A smart playlist has `rules`, and its Tracks are the ones they match now,
+    newest added first. Stored rules the server can't read leave it with no
+    rules and no Tracks, and `unreadable` saying why.
+    """
 
     id: PlaylistId
     name: str
     track_ids: tuple[TrackId, ...]
     updated_at: datetime
+    rules: Rules | None = None
+    keep_downloaded: bool = False
+    unreadable: str = ""
 
 
 def check_rating(rating: int | None) -> None:

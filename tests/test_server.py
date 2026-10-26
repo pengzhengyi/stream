@@ -1,5 +1,6 @@
 """The composition root: settings from the environment, and a working app from them."""
 
+import time
 from pathlib import Path
 
 import pytest
@@ -60,6 +61,19 @@ def test_the_built_app_creates_its_database_and_answers(tmp_path: Path) -> None:
     assert response.json() == {"set_up": False, "multiple_accounts": False}
     assert (data_dir / "medleyplay.sqlite3").is_file()
     assert data_dir.stat().st_mode & 0o777 == 0o700
+
+
+def test_the_built_app_evaluates_the_download_policy_as_it_starts(tmp_path: Path) -> None:
+    app = build_app(Settings(data_dir=tmp_path, allowed_hosts=("testserver",)))
+
+    with TestClient(app, base_url="http://testserver") as client:
+        set_up_as_alice(client)
+        ends = time.monotonic() + 10
+        while (last := client.get("/api/storage").json()["last_evaluation"]) is None:
+            assert time.monotonic() < ends, "The policy never evaluated."
+            time.sleep(0.05)
+
+    assert (last["error"], last["started"], last["removed"]) == (None, 0, 0)
 
 
 def _data_dir_with_config(tmp_path: Path, config: str) -> Path:

@@ -5,6 +5,7 @@ Every command here is idempotent: repeating it leaves the same state as doing it
 
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from datetime import datetime
 
 from sqlalchemy import Select, case, delete, select
@@ -13,6 +14,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
+from medleyplay.application.changes import OnChange
+from medleyplay.application.rule_schema import read_rules, rules_document
+from medleyplay.application.track_facts import track_facts
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.catalog import (
     Availability,
@@ -32,6 +36,7 @@ from medleyplay.domain.catalog import (
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
 from medleyplay.domain.libraries import LIBRARY_SOURCE, LibraryState, library_of_locator
 from medleyplay.domain.playback import PlayId
+from medleyplay.domain.rules import Rules, matches
 from medleyplay.persistence.schema import (
     DownloadRow,
     LibraryRow,
@@ -47,10 +52,13 @@ from medleyplay.persistence.schema import (
 class CatalogService:
     """Read and change the catalog as one Account sees it."""
 
-    def __init__(self, units: sessionmaker[Session], clock: Clock) -> None:
-        """Create a service over the database `units` open."""
+    def __init__(
+        self, units: sessionmaker[Session], clock: Clock, on_change: OnChange | None = None
+    ) -> None:
+        """Create a service over the database `units` open, telling `on_change` what it changed."""
         self._units = units
         self._clock = clock
+        self._on_change = on_change
 
     def add_track(
         self,
@@ -86,13 +94,15 @@ class CatalogService:
                         details=dict(source_details or {}),
                     )
                 )
-                return TrackId(track.id)
+                added = TrackId(track.id)
         except IntegrityError:
             # Another request added the same Source between the lookup and the insert.
             raced = self._track_of(key)
             if raced is None:
                 raise
             return raced
+        self._changed("catalog")
+        return added
 
     def list_tracks(self, account_id: AccountId) -> list[Track]:
         """Return every Track, oldest first, with `account_id`'s own state."""
@@ -130,6 +140,7 @@ class CatalogService:
         sending its id with another Track is refused.
         """
         when = min(played_at, self._clock())
+        recorded_now = False
         try:
             with self._units.begin() as db:
                 if db.get(TrackRow, track_id) is None:
@@ -143,6 +154,7 @@ class CatalogService:
                     )
                     db.flush()
                     _count_play(db, account_id, track_id, when)
+                    recorded_now = True
                 elif recorded.track_id != track_id:
                     raise _another_track(play_id)
         except IntegrityError:
@@ -153,6 +165,8 @@ class CatalogService:
                 raise
             if raced.track_id != track_id:
                 raise _another_track(play_id) from None
+        if recorded_now:
+            self._changed("catalog")
         return self.get_track(account_id, track_id)
 
     def put_playlist(
@@ -160,15 +174,23 @@ class CatalogService:
         account_id: AccountId,
         playlist_id: PlaylistId,
         name: str,
-        track_ids: Sequence[TrackId],
+        track_ids: Sequence[TrackId] | None = None,
+        *,
+        rules: Rules | None = None,
+        keep_downloaded: bool = False,
     ) -> tuple[Playlist, bool]:
         """Create or replace a Playlist under a client-chosen id; return it and whether it is new.
 
-        Sending the same Playlist again changes nothing, not even its update time.
-        An id that belongs to another Account is refused.
+        A plain Playlist has `track_ids`, a smart one `rules`, never both. Sending
+        the same Playlist again changes nothing, not even its update time. An id
+        that belongs to another Account is refused.
         """
-        clean_name, entries = parse_playlist_name(name), tuple(track_ids)
+        if track_ids is not None and rules is not None:
+            message = "A Playlist has Tracks or rules, not both."
+            raise InvalidInputError(message)
+        clean_name, entries = parse_playlist_name(name), tuple(track_ids or ())
         check_playlist_length(entries)
+        document = None if rules is None else rules_document(rules)
         with self._units.begin() as db:
             _check_tracks_exist(db, entries)
             row = db.get(PlaylistRow, playlist_id)
@@ -182,8 +204,10 @@ class CatalogService:
             elif row.account_id != account_id:
                 message = f"The Playlist id {playlist_id} is already in use."
                 raise ConflictError(message)
-            if created or (row.name, _entries_of(db, playlist_id)) != (clean_name, entries):
-                row.name = clean_name
+            wanted = (clean_name, entries, document, keep_downloaded)
+            changed = created or _stored(db, row) != wanted
+            if changed:
+                row.name, row.rules, row.keep_downloaded = clean_name, document, keep_downloaded
                 row.updated_at = self._clock()
                 db.flush()
                 db.execute(delete(PlaylistEntryRow).where(PlaylistEntryRow.playlist_id == row.id))
@@ -191,7 +215,11 @@ class CatalogService:
                     PlaylistEntryRow(playlist_id=row.id, position=position, track_id=track_id)
                     for position, track_id in enumerate(entries)
                 )
-            return Playlist(playlist_id, row.name, entries, row.updated_at), created
+            db.flush()
+            saved = _to_playlist(db, row, self._clock()), created
+        if changed:
+            self._changed("catalog")
+        return saved
 
     def list_playlists(self, account_id: AccountId) -> list[Playlist]:
         """Return `account_id`'s Playlists by name."""
@@ -201,7 +229,7 @@ class CatalogService:
                 .where(PlaylistRow.account_id == account_id)
                 .order_by(PlaylistRow.name, PlaylistRow.id)
             ).all()
-            return [_to_playlist(db, row) for row in rows]
+            return [_to_playlist(db, row, self._clock()) for row in rows]
 
     def get_playlist(self, account_id: AccountId, playlist_id: PlaylistId) -> Playlist:
         """Return one of `account_id`'s Playlists; another Account's is not found."""
@@ -210,16 +238,22 @@ class CatalogService:
             if row is None or row.account_id != account_id:
                 message = f"No Playlist has the id {playlist_id}."
                 raise NotFoundError(message)
-            return _to_playlist(db, row)
+            return _to_playlist(db, row, self._clock())
 
     def delete_playlist(self, account_id: AccountId, playlist_id: PlaylistId) -> None:
         """Delete one of `account_id`'s Playlists; deleting a missing one does nothing."""
         with self._units.begin() as db:
-            db.execute(
-                delete(PlaylistRow).where(
-                    PlaylistRow.id == playlist_id, PlaylistRow.account_id == account_id
+            deleted = (
+                db.connection()
+                .execute(
+                    delete(PlaylistRow).where(
+                        PlaylistRow.id == playlist_id, PlaylistRow.account_id == account_id
+                    )
                 )
+                .rowcount
             )
+        if deleted:
+            self._changed("catalog")
 
     def _track_of(self, key: SourceKey) -> TrackId | None:
         with self._units() as db:
@@ -239,6 +273,11 @@ class CatalogService:
                 .values(account_id=account_id, track_id=track_id, **values)
                 .on_conflict_do_update(index_elements=["account_id", "track_id"], set_=values)
             )
+        self._changed("catalog")
+
+    def _changed(self, what: str) -> None:
+        if self._on_change is not None:
+            self._on_change(what)
 
 
 def _tracks_for(account_id: AccountId) -> Select[TrackRow, TrackStateRow]:
@@ -337,6 +376,35 @@ def _entries_of(db: Session, playlist_id: PlaylistId) -> tuple[TrackId, ...]:
     )
 
 
-def _to_playlist(db: Session, row: PlaylistRow) -> Playlist:
+def _stored(db: Session, row: PlaylistRow) -> tuple[object, ...]:
+    return (row.name, _entries_of(db, PlaylistId(row.id)), row.rules, row.keep_downloaded)
+
+
+def _to_playlist(db: Session, row: PlaylistRow, now: datetime) -> Playlist:
     playlist_id = PlaylistId(row.id)
-    return Playlist(playlist_id, row.name, _entries_of(db, playlist_id), row.updated_at)
+    playlist = Playlist(
+        playlist_id,
+        row.name,
+        _entries_of(db, playlist_id),
+        row.updated_at,
+        keep_downloaded=row.keep_downloaded,
+    )
+    if row.rules is None:
+        return playlist
+    try:
+        rules = read_rules(row.rules)
+    except InvalidInputError as error:
+        return replace(playlist, unreadable=str(error))
+    matched = _matching(db, AccountId(row.account_id), rules, now)
+    return replace(playlist, rules=rules, track_ids=matched)
+
+
+def _matching(
+    db: Session, account_id: AccountId, rules: Rules, now: datetime
+) -> tuple[TrackId, ...]:
+    """Return the Tracks `rules` match as `account_id` sees them, newest added first."""
+    facts = track_facts(db, account_id)
+    matched = [track_id for track_id, each in facts.items() if matches(rules, each, now)]
+    return tuple(
+        sorted(matched, key=lambda track_id: (facts[track_id].added_at, track_id), reverse=True)
+    )

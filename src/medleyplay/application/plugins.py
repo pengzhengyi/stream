@@ -16,6 +16,7 @@ from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
+from medleyplay.application.changes import OnChange
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.errors import (
     ForbiddenError,
@@ -77,9 +78,15 @@ class PluginService:
     """Call plugins through a host, and track each plugin's state."""
 
     def __init__(
-        self, units: sessionmaker[Session], clock: Clock, lineup: Lineup, host: Host | None
+        self,
+        units: sessionmaker[Session],
+        clock: Clock,
+        lineup: Lineup,
+        host: Host | None,
+        on_change: OnChange | None = None,
     ) -> None:
-        """Create a service; `host` is `None` when no plugin is on."""
+        """Create a service; `host` is `None` when no plugin is on. A reset tells `on_change`."""
+        self._on_change = on_change
         self._units = units
         self._clock = clock
         self._lineup = lineup
@@ -135,6 +142,8 @@ class PluginService:
         with self._lock:
             self._faults.pop(name, None)
             self._failures = {k: n for k, n in self._failures.items() if k[0] != name}
+        if self._on_change is not None:
+            self._on_change("plugins")
         return self._status(name)
 
     def call[P, I: BaseModel, O: BaseModel](

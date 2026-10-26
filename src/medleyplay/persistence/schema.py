@@ -152,7 +152,10 @@ class PlayRow(Base):
 
 
 class PlaylistRow(Base):
-    """An Account's Playlist; the id is chosen by the client, so creating it is retry-safe."""
+    """An Account's Playlist; the id is chosen by the client, so creating it is retry-safe.
+
+    A smart playlist has `rules`, its rules document, in place of entries.
+    """
 
     __tablename__ = "playlist"
 
@@ -161,6 +164,8 @@ class PlaylistRow(Base):
         ForeignKey("account.id", ondelete="CASCADE"), index=True
     )
     name: Mapped[str] = mapped_column(String(128))
+    rules: Mapped[dict[str, object] | None] = mapped_column(JSON)
+    keep_downloaded: Mapped[bool] = mapped_column(default=False, server_default=text("0"))
     created_at: Mapped[datetime] = mapped_column(UtcDateTime)
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
@@ -281,3 +286,20 @@ class DownloadRow(Base):
     backend: Mapped[str] = mapped_column(String(64))
     size: Mapped[int] = mapped_column(Integer)
     downloaded_at: Mapped[datetime] = mapped_column(UtcDateTime)
+    last_served_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    last_wanted_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+
+
+class SettingRow(Base):
+    """The household's settings, as one document; the only row has id 1."""
+
+    __tablename__ = "setting"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="single"),
+        CheckConstraint("revision >= 1", name="revision"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    document: Mapped[dict[str, object]] = mapped_column(JSON)
+    revision: Mapped[int] = mapped_column(Integer)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime)

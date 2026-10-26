@@ -74,7 +74,7 @@ def running_libraries(
                 jobs,
                 cache,
                 data_dir,
-                DownloadService(units, plugins, jobs, download, linked, data_dir),
+                DownloadService(units, plugins, jobs, download, linked, data_dir, clock),
             ),
         )
     finally:
