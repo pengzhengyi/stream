@@ -49,7 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [Playback](docs/contributing/design-notes/Playback.md#the-web-client) note.
 - **A redesigned web player** — a floating player with icons for every control,
   a light, dark, or system theme, and a queue you reorder by dragging, or from
-  the keyboard.
+  the keyboard. The seek bar is easier to drag and moves the Track only once
+  let go, and a row's actions show on touch screens.
 - **Play modes** — shuffle, and repeat the queue or the current Track, saved
   with the queue. Choosing a Track now queues its whole list, so *Previous*
   reaches the Tracks before it. See the

@@ -38,6 +38,27 @@ test("the seek bar moves the playing position", async ({ page }) => {
   await expect.poll(async () => (await audioState(page)).position).toBeGreaterThanOrEqual(40);
 });
 
+test("dragging the seek bar moves the audio only once let go", async ({ page }) => {
+  await play(page, "Alpha");
+  // The bar takes a drag once the Track's length is known.
+  await expect(player(page).getByLabel("Position")).toBeEnabled();
+  const bar = await player(page).getByLabel("Position").boundingBox();
+  if (bar === null) {
+    throw new Error("The seek bar isn't on the page.");
+  }
+  const y = bar.y + bar.height / 2;
+
+  await page.mouse.move(bar.x + bar.width * 0.05, y);
+  await page.mouse.down();
+  await page.mouse.move(bar.x + bar.width * 0.6, y, { steps: 12 });
+
+  await expect(player(page).getByText(/^0:3\d/)).toBeVisible();
+  expect((await audioState(page)).position).toBeLessThan(10);
+  await page.mouse.up();
+  await expect.poll(async () => (await audioState(page)).position).toBeGreaterThanOrEqual(30);
+  expect((await audioState(page)).playing).toBe(true);
+});
+
 test("pausing stops the audio, and playing goes on", async ({ page }) => {
   await play(page, "Alpha");
 
