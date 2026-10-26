@@ -2,6 +2,7 @@
 
 import sqlite3
 import time
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -83,7 +84,7 @@ def test_the_built_app_gives_an_account_without_favorites_its_favorites_as_it_st
     settings = Settings(data_dir=tmp_path, allowed_hosts=("testserver",))
     with TestClient(build_app(settings)) as client:
         set_up_as_alice(client)
-    with sqlite3.connect(tmp_path / "medleyplay.sqlite3") as database:
+    with closing(sqlite3.connect(tmp_path / "medleyplay.sqlite3")) as database, database:
         database.execute("DELETE FROM playlist")
 
     with TestClient(build_app(settings)) as client:
