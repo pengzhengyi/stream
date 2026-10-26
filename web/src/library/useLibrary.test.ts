@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { serve, signedIn, trackOf } from "../testing/server";
+import { favoritesPlaylistOf, playlistOf, serve, signedIn, trackOf } from "../testing/server";
 import { useLibrary } from "./useLibrary";
 
 /** A stand-in for the event stream: the test sends the events the server would. */
@@ -128,5 +128,103 @@ describe("the Library", () => {
       expect(result.current.error).toBe("No Track has the id 1.");
     });
     expect(result.current.tracks.get(1)?.favorite).toBe(false);
+  });
+});
+
+describe("adding a song to Playlists", () => {
+  /** Mornings holds Intro; Car is kept downloaded and holds nothing yet. */
+  const MORNINGS = playlistOf("p1", "Mornings", [1]);
+  const CAR = { ...playlistOf("p2", "Car", []), keep_downloaded: true };
+
+  async function libraryWith(routes: Parameters<typeof serve>[0]) {
+    const sent: { path: string; body: unknown }[] = [];
+    const answer = (path: string) => (body: unknown) => {
+      sent.push({ path, body });
+      const playlist = body as { name: string; track_ids: number[]; keep_downloaded: boolean };
+      return {
+        body: {
+          ...playlistOf(path.split("/").at(-1) ?? "", playlist.name, playlist.track_ids),
+          keep_downloaded: playlist.keep_downloaded,
+        },
+      };
+    };
+    serve({
+      ...signedIn(
+        [trackOf(1, "Intro"), trackOf(2, "Outro")],
+        [favoritesPlaylistOf(), MORNINGS, CAR],
+      ),
+      "PUT /api/playlists/p1": answer("/api/playlists/p1"),
+      "PUT /api/playlists/p2": answer("/api/playlists/p2"),
+      ...routes,
+    });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.playlists).toHaveLength(3);
+    });
+    return { result, sent };
+  }
+
+  it("puts each Playlist chosen with the song at its end, keeping its Keep downloaded", async () => {
+    const { result, sent } = await libraryWith({});
+
+    await act(() => result.current.addToPlaylists(trackOf(2, "Outro"), ["p1", "p2"], []));
+
+    expect(sent).toEqual([
+      {
+        path: "/api/playlists/p1",
+        body: { name: "Mornings", track_ids: [1, 2], keep_downloaded: false },
+      },
+      { path: "/api/playlists/p2", body: { name: "Car", track_ids: [2], keep_downloaded: true } },
+    ]);
+    expect(result.current.playlists.map((playlist) => playlist.track_ids)).toEqual([
+      [],
+      [2],
+      [1, 2],
+    ]);
+  });
+
+  it("makes each new Playlist named, holding just the song, listed by name", async () => {
+    const created: unknown[] = [];
+    vi.stubGlobal("crypto", { getRandomValues: (bytes: Uint8Array) => bytes.fill(0) });
+    const { result } = await libraryWith({
+      "PUT /api/playlists/00000000-0000-4000-8000-000000000000": (body: unknown) => {
+        created.push(body);
+        return { body: playlistOf("00000000-0000-4000-8000-000000000000", "Beach", [2]) };
+      },
+    });
+
+    await act(() => result.current.addToPlaylists(trackOf(2, "Outro"), [], ["Beach"]));
+
+    expect(created).toEqual([{ name: "Beach", track_ids: [2], keep_downloaded: false }]);
+    expect(result.current.playlists.map((playlist) => playlist.name)).toEqual([
+      "Favorites",
+      "Beach",
+      "Car",
+      "Mornings",
+    ]);
+  });
+
+  it("keeps the Playlists the server saved when another is refused, and says why", async () => {
+    const { result } = await libraryWith({
+      "PUT /api/playlists/p2": {
+        status: 409,
+        body: { detail: "The Playlist id p2 is already in use." },
+      },
+    });
+
+    let refused: unknown;
+    await act(async () => {
+      await result.current
+        .addToPlaylists(trackOf(2, "Outro"), ["p1", "p2"], [])
+        .catch((failure: unknown) => {
+          refused = failure;
+        });
+    });
+
+    expect(String(refused)).toContain("already in use");
+
+    expect(result.current.playlists.find((playlist) => playlist.id === "p1")?.track_ids).toEqual([
+      1, 2,
+    ]);
   });
 });

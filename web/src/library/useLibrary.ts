@@ -5,6 +5,7 @@
 import { useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
 
 import { ApiError, type JobEvent, type Playlist, type Track, api } from "../api";
+import { newId } from "../ids";
 import { EMPTY, type Field, reduce, tracksOf } from "./store";
 
 /** The Library as the page sees it. */
@@ -19,6 +20,16 @@ export interface Library {
   readonly error: string;
   readonly setFavorite: (id: number, favorite: boolean) => void;
   readonly setRating: (id: number, rating: number | null) => void;
+  /**
+   * Add `track` to the end of the Playlists `ids`, and to a new Playlist for each
+   * of `newNames`. The Playlists the server saves show at once; the promise rejects
+   * with why when it refuses any.
+   */
+  readonly addToPlaylists: (
+    track: Track,
+    ids: readonly string[],
+    newNames: readonly string[],
+  ) => Promise<void>;
 }
 
 /** The Jobs whose end can change the Tracks. */
@@ -26,6 +37,9 @@ const CHANGES_TRACKS = new Set(["scan_library", "download_source"]);
 const FINISHED = new Set<JobEvent["state"]>(["succeeded", "failed", "cancelled"]);
 /** How long after the last such Job the Tracks are asked for, so a busy scan asks once. */
 const SETTLE_MS = 1000;
+
+/** Compare names as people read them, as the Playlists view lists them. */
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
 /**
  * Load the Tracks and Playlists, and ask for them again whenever something may
@@ -115,7 +129,45 @@ export function useLibrary(onSignedOut: () => void): Library {
       setError("");
       write(id, "rating", rating, api.setRating(id, rating));
     },
+    addToPlaylists: async (track, ids, newNames) => {
+      const puts = [
+        ...playlists
+          .filter((playlist) => ids.includes(playlist.id))
+          .map((playlist) =>
+            api.putPlaylist(playlist.id, {
+              name: playlist.name,
+              track_ids: [...playlist.track_ids, track.id],
+              keep_downloaded: playlist.keep_downloaded,
+            }),
+          ),
+        ...newNames.map((name) =>
+          api.putPlaylist(newId(), { name, track_ids: [track.id], keep_downloaded: false }),
+        ),
+      ];
+      const results = await Promise.allSettled(puts);
+      const saved = results.flatMap((result) =>
+        result.status === "fulfilled" ? [result.value] : [],
+      );
+      setPlaylists((now) =>
+        listed([...now.filter((each) => !saved.some((s) => s.id === each.id)), ...saved]),
+      );
+      const refused = results.find((result) => result.status === "rejected");
+      if (refused !== undefined) {
+        if (refused.reason instanceof ApiError && refused.reason.status === 401) {
+          onSignedOut();
+        }
+        throw refused.reason;
+      }
+    },
   };
+}
+
+/** Return `playlists` as the server lists them: the built-in ones first, then by name. */
+function listed(playlists: readonly Playlist[]): Playlist[] {
+  return [...playlists].sort(
+    (a, b) =>
+      Number(a.builtin === null) - Number(b.builtin === null) || collator.compare(a.name, b.name),
+  );
 }
 
 /**

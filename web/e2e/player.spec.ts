@@ -60,15 +60,21 @@ test("clicking the seek bar moves playback to where it was clicked, at once", as
   expect((await audioState(page)).position).toBeLessThan(41.5);
 });
 
-test("the seek bar moves with the arrow keys", async ({ page }) => {
+test("the seek bar moves with the keys, each press from where the last one sent it", async ({
+  page,
+}) => {
   await play(page, "Alpha");
   const { bar } = await seekBar(page);
 
   await bar.focus();
-  await page.keyboard.press("End");
+  // Five tenths of the 60-second Track, then five seconds back: about 0:25.
+  for (let press = 0; press < 5; press++) {
+    await page.keyboard.press("PageUp");
+  }
   await page.keyboard.press("ArrowLeft");
 
-  await expect.poll(async () => (await audioState(page)).position).toBeGreaterThanOrEqual(54);
+  await expect.poll(async () => (await audioState(page)).position).toBeGreaterThanOrEqual(25);
+  expect((await audioState(page)).position).toBeLessThan(28);
 });
 
 test("dragging the seek bar moves the audio only once let go", async ({ page }) => {

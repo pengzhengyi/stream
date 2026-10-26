@@ -70,3 +70,51 @@ test("a large Library keeps only the rows on screen in the page", async ({ page 
   await expect(page.getByRole("button", { name: "Song 5000", exact: true })).toBeVisible();
   expect(await page.locator("table.tracks tbody tr:not(.spacer)").count()).toBeLessThan(100);
 });
+
+test("a song's menu adds it to a new Playlist, and then another song to the same one", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const menuOf = (title: string) =>
+    row(page, title).getByRole("button", { name: `More actions for ${title}` });
+  const dialog = page.getByRole("dialog");
+
+  await row(page, "Bravo").hover();
+  await menuOf("Bravo").click();
+  await page.getByRole("menuitem", { name: "Add to playlist…" }).click();
+  await dialog.getByRole("textbox", { name: "New playlist" }).fill("Road trip");
+  await dialog.getByRole("textbox", { name: "New playlist" }).press("Enter");
+  await dialog.getByRole("button", { name: "Add to 1 playlist" }).click();
+
+  await expect(
+    page.getByRole("status").filter({ hasText: "Added “Bravo” to Road trip." }),
+  ).toBeVisible();
+  await expect(dialog).toBeHidden();
+  await row(page, "Charlie").hover();
+  await menuOf("Charlie").click();
+  await page.getByRole("menuitem", { name: "Add to playlist…" }).click();
+  await dialog.getByRole("checkbox", { name: /Road trip/ }).check();
+  await dialog.getByRole("button", { name: "Add to 1 playlist" }).click();
+  await expect(dialog).toBeHidden();
+  await page.reload();
+  await page.goto("/#/playlists");
+
+  await page.getByRole("link", { name: /Road trip/ }).click();
+  await expect(page.getByRole("heading", { name: "Road trip" })).toBeVisible();
+  await expect(
+    page.getByRole("row").filter({ has: page.getByRole("button", { name: /^(Bravo|Charlie)$/ }) }),
+  ).toHaveCount(2);
+});
+
+test("the song playing has a menu too, which goes to its album", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Alpha", exact: true }).click();
+  const player = page.getByRole("region", { name: "Player" });
+
+  await player.getByRole("button", { name: "More actions for Alpha" }).click();
+
+  await expect(page.getByRole("menuitem", { name: "Play next" })).toHaveCount(0);
+  await page.getByRole("menuitem", { name: "Go to album" }).click();
+  await expect(page.getByRole("heading", { name: "Unknown album" })).toBeVisible();
+  expect(page.url()).toContain("#/album?");
+});

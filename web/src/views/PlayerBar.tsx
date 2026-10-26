@@ -26,6 +26,7 @@ import type { Repeat } from "../player/queue";
 import type { Player } from "../player/usePlayer";
 import { canSetVolume } from "../player/volume";
 import { SeekBar } from "./SeekBar";
+import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
 import { VolumeControl } from "./VolumeControl";
 
 /** Each repeat mode: the next one a click chooses, its label, and what is said on choosing it. */
@@ -43,12 +44,14 @@ export function PlayerBar({
   player,
   track,
   onFavorite,
+  menuActions,
   queueOpen,
   onToggleQueue,
 }: {
   readonly player: Player;
   readonly track: Track | undefined;
   readonly onFavorite: (track: Track, favorite: boolean) => void;
+  readonly menuActions: TrackMenuActions;
   /** Whether the queue is open over the page, as it can be on a narrow screen. */
   readonly queueOpen: boolean;
   readonly onToggleQueue: () => void;
@@ -82,6 +85,7 @@ export function PlayerBar({
             <HeartIcon weight={track.favorite ? "fill" : "regular"} aria-hidden />
           </button>
         )}
+        {track !== undefined && <TrackMenu track={track} actions={menuActions} queueing={false} />}
       </div>
       <div className="controls">
         <button

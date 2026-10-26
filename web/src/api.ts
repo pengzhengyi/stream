@@ -38,6 +38,13 @@ export interface Playlist {
   readonly updated_at: string;
 }
 
+/** A plain Playlist as it is sent: its name, its Tracks in order, and its Keep downloaded. */
+export interface PlainPlaylist {
+  readonly name: string;
+  readonly track_ids: readonly number[];
+  readonly keep_downloaded: boolean;
+}
+
 /** What this server can do now: for each extension point, the keys that answer it. */
 export interface Features {
   readonly multiple_accounts: boolean;
@@ -157,6 +164,9 @@ export const api = {
   me: () => call<Account>("GET", "/api/me"),
   tracks: () => call<Track[]>("GET", "/api/tracks"),
   playlists: () => call<Playlist[]>("GET", "/api/playlists"),
+  /** Create or replace a plain Playlist under an id the client chose. */
+  putPlaylist: (id: string, playlist: PlainPlaylist) =>
+    call<Playlist>("PUT", `/api/playlists/${id}`, playlist),
   features: () => call<Features>("GET", "/api/features"),
   settings: () => call<Settings>("GET", "/api/settings"),
   saveSettings: (settings: Settings) => call<Settings>("PUT", "/api/settings", settings),

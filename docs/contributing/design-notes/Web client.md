@@ -12,6 +12,7 @@
 - [Data](#data)
 - [Views](#views)
 - [The song table](#the-song-table)
+- [A song's menu](#a-songs-menu)
 - [Search](#search)
 - [Favorites and ratings](#favorites-and-ratings)
 - [Settings](#settings)
@@ -75,7 +76,8 @@ no router package.
   and works out its Tracks from the hearts it already holds, newest added first
   as the server orders them, so a heart counts at once. The server doesn't
   record when a Track became a favorite, so *recently liked* waits for that.
-- **Playlists are read-only for now:** they list and play.
+- **Playlists gain songs from a song's menu;** renaming, reordering, and
+  removing wait. See [A song's menu](#a-songs-menu).
 - **Playing from a view** queues the Tracks the view shows, in their order at
   the click; a later sort or a fresh list doesn't change the queue. A Track that
   can't play stays in the queue, and *Next* skips it.
@@ -98,6 +100,30 @@ no router package.
   choice is kept per browser, versioned, and ignored when it can't be read.
 - **One table module owns TanStack's types,** so the rest of the client sees
   Tracks and callbacks only.
+
+## A song's menu
+
+- **A "…" button holds a song's less frequent actions,** each an icon and
+  words: *Play next* and *Add to queue*, *Go to artist* and *Go to album*, and
+  *Add to playlist…*. Each song row has one, after its queue buttons, which a
+  phone hides, since the menu holds them; the player has one beside the heart,
+  without the queue actions.
+- **Go to** opens the artist's view, or the album's under its album artist, as
+  the Albums view groups it.
+- **Radix's dropdown menu** draws it: unstyled, it handles the arrow keys, Home
+  and End, typeahead, Escape returning focus to the button, and keeping the
+  menu on screen, and it draws in a portal, so a table row doesn't clip it. It
+  was chosen over Headless UI, Ariakit, React Aria, and writing one: it passed
+  every keyboard check in the spike, is the most used, and is the smallest of
+  the four. One module owns it, as with TanStack.
+- **Add to playlist** is a native modal `<dialog>`: it lists the Account's own
+  plain Playlists, those already holding the song checked and disabled, and one
+  or several are chosen. Naming a new Playlist adds it, chosen, but it is made
+  only when the song is added, so Cancel leaves nothing behind. Adding puts each
+  chosen Playlist whole with the song at its end, keeping its *Keep downloaded*;
+  the Playlists the server saves show at once, and the dialog says why if it
+  refuses one. Escape, Cancel, or a click outside close it. A notice above the
+  player says where the song went.
 
 ## Search
 
@@ -171,7 +197,7 @@ tab bar clear of the iPhone's home indicator (`env(safe-area-inset-bottom)`).
 
 - **Searching Bilibili,** the add dialog, the stage view, and the *Downloads*
   tab of Jobs.
-- **Editing Playlists** from the client: creating, renaming, and adding Tracks.
+- **Editing Playlists** from the client: renaming, reordering, and removing.
 - **Loading Tracks page by page,** if a Library outgrows loading whole, and
   answering an unchanged list with a 304.
 - **Recently liked,** which needs the server to record when a Track became a

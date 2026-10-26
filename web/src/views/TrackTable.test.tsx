@@ -19,6 +19,7 @@ function renderTable(tracks: readonly Track[] = TRACKS, playingId?: number) {
     onPlayAll: vi.fn(),
     onPlayNext: vi.fn(),
     onAdd: vi.fn(),
+    onAddToPlaylist: vi.fn(),
     onFavorite: vi.fn(),
     onRate: vi.fn(),
   };
