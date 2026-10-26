@@ -20,6 +20,7 @@ from sqlalchemy import Engine
 from medleyplay.application import Clock
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
+from medleyplay.application.changes import Changes
 from medleyplay.application.downloads import DownloadService, download_source_kind
 from medleyplay.application.events import JobEvents
 from medleyplay.application.job_runner import JobProcesses, JobRunner
@@ -29,7 +30,9 @@ from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.links import LinkService
 from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
+from medleyplay.application.policy import PolicyService
 from medleyplay.application.secrets import KeychainSecrets, Secrets
+from medleyplay.application.settings import SettingsService
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.config import CONFIG_FILE, Config, load_config
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
@@ -135,15 +138,18 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
 
     `kinds` are the Job kinds the server runs; Jobs keep their working folders in
     `jobs` in the data folder. Logins are kept in `secrets`, by default the Keychain.
+    Every change the download policy depends on, and every Job's change of state,
+    asks it to evaluate.
     """
     units = make_sessionmaker(engine)
+    changes = Changes()
     hasher = PasswordHash((Argon2Hasher(),))
     available = plugin_names(source.package)
     enabled = () if safe_mode else config.enabled_plugins(available)
     lineup = Lineup(available, enabled, config.unknown_plugins(available), safe_mode)
     host = PluginHost(enabled, package=source.package, command=source.command) if enabled else None
-    plugins = PluginService(units, clock, lineup, host)
-    linked = LinkedAccountService(units, clock, plugins, secrets or KeychainSecrets())
+    plugins = PluginService(units, clock, lineup, host, changes.tell)
+    linked = LinkedAccountService(units, clock, plugins, secrets or KeychainSecrets(), changes.tell)
     scan = scan_library_kind(clock)
     cache = cache_source_kind(data_dir)
     download = download_source_kind(data_dir, data_dir / JOBS_FOLDER, clock)
@@ -166,11 +172,19 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         events=events,
     )
     jobs = JobService(units, clock, job_kinds, runner, events)
-    catalog = CatalogService(units, clock)
+    catalog = CatalogService(units, clock, changes.tell)
     downloads = DownloadService(units, plugins, jobs, download, linked, data_dir, clock)
+    policy = PolicyService(units, clock, downloads, plugins, data_dir)
+    changes.listen(policy.request)
+    events.listen(policy.request)
     return Services(
         accounts=AccountService(
-            units, hasher, clock, SignInThrottle(clock), multiple_accounts=config.multiple_accounts
+            units,
+            hasher,
+            clock,
+            SignInThrottle(clock),
+            multiple_accounts=config.multiple_accounts,
+            on_change=changes.tell,
         ),
         catalog=catalog,
         plugins=plugins,
@@ -180,6 +194,8 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         linked=linked,
         links=LinkService(units, clock, plugins, catalog, downloads),
         events=events,
+        settings=SettingsService(units, clock, changes.tell),
+        policy=policy,
     )
 
 
@@ -187,9 +203,10 @@ def build_app(settings: Settings, source: PluginSource = PluginSource()) -> Fast
     """Return the server's app for `settings`.
 
     The app starts the plugin host, removes stale cache copies, and starts the Job
-    runner when it starts; it stops them and closes the database when it shuts
-    down. A config file that doesn't parse raises `ConfigError`; another server
-    using the same data folder raises `AlreadyRunningError` as the app starts.
+    runner and the download policy, which evaluates at once, when it starts; it
+    stops them and closes the database when it shuts down. A config file that
+    doesn't parse raises `ConfigError`; another server using the same data folder
+    raises `AlreadyRunningError` as the app starts.
     """
     config = load_config(settings.data_dir / CONFIG_FILE)
     engine = open_database(settings.data_dir)
@@ -205,9 +222,11 @@ def build_app(settings: Settings, source: PluginSource = PluginSource()) -> Fast
                 services.playback.sweep_cache()
                 services.playback.sweep_downloads()
                 services.jobs.start()
+                services.policy.start()
                 try:
                     yield
                 finally:
+                    services.policy.stop()
                     services.jobs.stop()
                     services.plugins.close()
         finally:

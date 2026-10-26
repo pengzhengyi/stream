@@ -186,6 +186,8 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     playback: PlaybackService,
     linked: LinkedAccountService,
     links: LinkService,
+    settings: SettingsService,
+    policy: PolicyService,
 ) -> Services:
     """The services of a server with no plugins on; a suite replaces what it runs for real."""
     return Services(
@@ -198,6 +200,8 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         linked=linked,
         links=links,
         events=JobEvents(),
+        settings=settings,
+        policy=policy,
     )
 
 

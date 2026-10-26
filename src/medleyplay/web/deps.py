@@ -14,6 +14,8 @@ from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.links import LinkService
 from medleyplay.application.playback import PlaybackService
 from medleyplay.application.plugins import PluginService
+from medleyplay.application.policy import PolicyService
+from medleyplay.application.settings import SettingsService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.errors import NotSignedInError
 
@@ -33,6 +35,8 @@ class Services:
     linked: LinkedAccountService
     links: LinkService
     events: JobEvents
+    settings: SettingsService
+    policy: PolicyService
 
 
 def _services(request: Request) -> Services:
@@ -79,6 +83,14 @@ def _events(services: Annotated[Services, Depends(_services)]) -> JobEvents:
     return services.events
 
 
+def _settings(services: Annotated[Services, Depends(_services)]) -> SettingsService:
+    return services.settings
+
+
+def _policy(services: Annotated[Services, Depends(_services)]) -> PolicyService:
+    return services.policy
+
+
 AccountsDep = Annotated[AccountService, Depends(_accounts)]
 CatalogDep = Annotated[CatalogService, Depends(_catalog)]
 PluginsDep = Annotated[PluginService, Depends(_plugins)]
@@ -88,6 +100,8 @@ PlaybackDep = Annotated[PlaybackService, Depends(_playback)]
 LinkedDep = Annotated[LinkedAccountService, Depends(_linked)]
 LinksDep = Annotated[LinkService, Depends(_links)]
 EventsDep = Annotated[JobEvents, Depends(_events)]
+SettingsDep = Annotated[SettingsService, Depends(_settings)]
+PolicyDep = Annotated[PolicyService, Depends(_policy)]
 SessionToken = Annotated[str | None, Cookie(alias=SESSION_COOKIE, include_in_schema=False)]
 
 
