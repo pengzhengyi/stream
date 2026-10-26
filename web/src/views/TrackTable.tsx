@@ -12,7 +12,9 @@ import {
   CaretUpIcon,
   HeartIcon,
   ListPlusIcon,
+  PlayIcon,
   QueueIcon,
+  ShuffleIcon,
   SlidersHorizontalIcon,
   StarIcon,
 } from "@phosphor-icons/react";
@@ -74,6 +76,8 @@ const byNumber = (a: Row<typeof features, Track>, b: Row<typeof features, Track>
 export interface TrackActions {
   /** Play `shown`, the Tracks in the order the table shows them, from its entry `index`. */
   readonly onPlay: (shown: readonly Track[], index: number) => void;
+  /** Play every Track of `playable` from the first, in the table's order or shuffled. */
+  readonly onPlayAll: (playable: readonly Track[], shuffled: boolean) => void;
   readonly onPlayNext: (track: Track) => void;
   readonly onAdd: (track: Track) => void;
   readonly onFavorite: (track: Track, favorite: boolean) => void;
@@ -177,6 +181,7 @@ export function TrackTable({
   const before = (items[0]?.start ?? top) - top;
   const after = virtual.getTotalSize() - ((items.at(-1)?.end ?? top) - top);
   const visibleColumns = table.getVisibleLeafColumns().length;
+  const playable = rows.map((row) => row.original).filter((track) => track.availability === "ok");
 
   if (tracks.length === 0) {
     return <>{empty}</>;
@@ -184,6 +189,31 @@ export function TrackTable({
   return (
     <>
       <div className="table-tools">
+        <div className="play-all">
+          <button
+            type="button"
+            aria-label="Play all"
+            disabled={playable.length === 0}
+            onClick={() => {
+              actions.onPlayAll(playable, false);
+            }}
+          >
+            <PlayIcon weight="fill" aria-hidden />
+            Play
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            aria-label="Shuffle all"
+            disabled={playable.length === 0}
+            onClick={() => {
+              actions.onPlayAll(playable, true);
+            }}
+          >
+            <ShuffleIcon weight="bold" aria-hidden />
+            Shuffle
+          </button>
+        </div>
         <details className="dropdown columns-menu">
           <summary>
             <SlidersHorizontalIcon weight="regular" aria-hidden />

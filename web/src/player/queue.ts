@@ -39,6 +39,12 @@ export type QueueAction =
       readonly start: number;
       readonly random: Random;
     }
+  | {
+      readonly type: "playAll";
+      readonly entries: readonly Entry[];
+      readonly shuffled: boolean;
+      readonly random: Random;
+    }
   | { readonly type: "playNext"; readonly entry: Entry }
   | { readonly type: "add"; readonly entry: Entry }
   | { readonly type: "next" }
@@ -75,6 +81,14 @@ export function reduce(queue: Queue, action: QueueAction): Queue {
   switch (action.type) {
     case "play":
       return play(queue, action.entries, action.start, action.random);
+    case "playAll":
+      // The whole list from its start: in its own order, or every entry at random.
+      return {
+        ...queue,
+        entries: action.shuffled ? inRandomOrder(action.entries, action.random) : action.entries,
+        position: 0,
+        order: action.shuffled ? action.entries.map((entry) => entry.key) : undefined,
+      };
     case "playNext": {
       // In the queue's own order, it follows the Track playing, or ends a finished queue.
       const after = current(queue)?.key;

@@ -209,3 +209,71 @@ test("a theme chosen holds over the system's, and across a reload", async ({ pag
   await page.getByRole("radio", { name: "Match the system" }).click();
   await expect(html).not.toHaveAttribute("data-theme");
 });
+
+const volumeOf = (page: Page) =>
+  page.locator("audio").evaluate((audio: HTMLAudioElement) => audio.volume);
+
+test("the volume buttons step it one mark, and the volume stays after a reload", async ({
+  page,
+}) => {
+  await play(page, "Alpha");
+
+  await player(page).getByRole("button", { name: "Volume down" }).click();
+  await player(page).getByRole("button", { name: "Volume down" }).click();
+  await player(page).getByRole("button", { name: "Volume up" }).click();
+
+  await expect.poll(() => volumeOf(page)).toBeCloseTo(0.9);
+  await page.reload();
+  await expect.poll(() => volumeOf(page)).toBeCloseTo(0.9);
+  await expect(player(page).getByRole("slider", { name: "Volume" })).toHaveAttribute(
+    "aria-valuetext",
+    "90%",
+  );
+});
+
+test("dragging the volume bar changes the volume only once let go", async ({ page }) => {
+  await play(page, "Alpha");
+  const bar = await player(page).getByRole("slider", { name: "Volume" }).boundingBox();
+  if (bar === null) {
+    throw new Error("The volume bar isn't on the page.");
+  }
+  const y = bar.y + bar.height / 2;
+
+  await page.mouse.move(bar.x + bar.width - 2, y);
+  await page.mouse.down();
+  await page.mouse.move(bar.x + bar.width * 0.3, y, { steps: 8 });
+
+  expect(await volumeOf(page)).toBe(1);
+  await page.mouse.up();
+  await expect.poll(() => volumeOf(page)).toBeLessThan(0.5);
+});
+
+test("Play all plays the view's songs in its order", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Play all" }).click();
+
+  await expect(player(page).getByText("Alpha", { exact: true })).toBeVisible();
+  await expect(upNext(page)).toHaveText([/Bravo/, /Charlie/, /Delta/]);
+  await expect(player(page).getByRole("button", { name: "Shuffle" })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+});
+
+test("Shuffle all plays every song of the view, shuffled", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Shuffle all" }).click();
+
+  await expect(player(page).getByRole("button", { name: "Shuffle" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(upNext(page)).toHaveCount(3);
+  const playing = await player(page).locator(".names strong").textContent();
+  const next = (await upNext(page).allTextContents()).map(
+    (text) => /Alpha|Bravo|Charlie|Delta/.exec(text)?.[0],
+  );
+  expect([playing, ...next].sort()).toEqual(["Alpha", "Bravo", "Charlie", "Delta"]);
+});

@@ -16,6 +16,7 @@ const TRACKS = [
 function renderTable(tracks: readonly Track[] = TRACKS, playingId?: number) {
   const actions: TrackActions = {
     onPlay: vi.fn(),
+    onPlayAll: vi.fn(),
     onPlayNext: vi.fn(),
     onAdd: vi.fn(),
     onFavorite: vi.fn(),
@@ -128,6 +129,34 @@ describe("sorting", () => {
     await userEvent.click(screen.getByRole("button", { name: "Outro" }));
 
     expect(actions.onPlay).toHaveBeenCalledWith([TRACKS[0], TRACKS[2], TRACKS[1]], 1);
+  });
+});
+
+describe("playing them all", () => {
+  it("plays every Track that can play, in the order shown", async () => {
+    const { actions } = renderTable();
+    const title = screen.getByRole("button", { name: "Title" });
+    await userEvent.click(title);
+    await userEvent.click(title);
+
+    await userEvent.click(screen.getByRole("button", { name: "Play all" }));
+
+    expect(actions.onPlayAll).toHaveBeenCalledExactlyOnceWith([TRACKS[2], TRACKS[0]], false);
+  });
+
+  it("shuffles every Track that can play", async () => {
+    const { actions } = renderTable();
+
+    await userEvent.click(screen.getByRole("button", { name: "Shuffle all" }));
+
+    expect(actions.onPlayAll).toHaveBeenCalledExactlyOnceWith([TRACKS[0], TRACKS[2]], true);
+  });
+
+  it("can't play them all when none can play", () => {
+    renderTable([trackOf(2, "Long Road", { availability: "missing" })]);
+
+    expect(screen.getByRole("button", { name: "Play all" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Shuffle all" })).toBeDisabled();
   });
 });
 

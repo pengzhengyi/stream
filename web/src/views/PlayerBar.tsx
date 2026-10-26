@@ -18,12 +18,15 @@ import {
   SkipForwardIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react";
-import { type CSSProperties, useEffect, useEffectEvent, useRef, useState } from "react";
+import { type CSSProperties, useRef, useState } from "react";
 
 import type { Track } from "../api";
 import { formatTime } from "../format";
 import type { Repeat } from "../player/queue";
 import type { Player } from "../player/usePlayer";
+import { canSetVolume } from "../player/volume";
+import { VolumeControl } from "./VolumeControl";
+import { useHeldRange } from "./useHeldRange";
 
 /** Each repeat mode: the next one a click chooses, its label, and what is said on choosing it. */
 const REPEATS: Record<
@@ -56,28 +59,10 @@ export function PlayerBar({
   const playing = status.kind === "playing";
   // While the position is dragged, it shows where it would go and seeks once let go.
   const seekBar = useRef<HTMLInputElement>(null);
-  const [dragged, setDragged] = useState<number | undefined>(undefined);
-  const shown = dragged ?? position;
+  const seeking = useHeldRange(seekBar, player.seek);
+  const shown = seeking.held ?? position;
   const length = duration ?? 0;
   const played = length > 0 ? Math.min(shown / length, 1) : 0;
-  const letGo = useEffectEvent((element: HTMLInputElement) => {
-    player.seek(Number(element.value));
-    setDragged(undefined);
-  });
-  useEffect(() => {
-    const element = seekBar.current;
-    if (element === null) {
-      return;
-    }
-    // `change` fires when the drag ends, or at once for a key; `input` fires all along.
-    const onChange = () => {
-      letGo(element);
-    };
-    element.addEventListener("change", onChange);
-    return () => {
-      element.removeEventListener("change", onChange);
-    };
-  }, []);
   return (
     <section className="player" aria-label="Player">
       <input
@@ -91,9 +76,7 @@ export function PlayerBar({
         value={Math.min(shown, length)}
         disabled={duration === undefined}
         style={{ "--played": `${String(played * 100)}%` } as CSSProperties}
-        onChange={(event) => {
-          setDragged(Number(event.currentTarget.value));
-        }}
+        onChange={seeking.onChange}
       />
       <div className="now">
         <span className="cover" aria-hidden>
@@ -208,6 +191,7 @@ export function PlayerBar({
             {status.message}
           </span>
         )}
+        {canSetVolume() && <VolumeControl volume={player.volume} onVolume={player.setVolume} />}
         <span className="time">
           {formatTime(shown)} <span aria-hidden>/</span> {formatTime(duration)}
         </span>

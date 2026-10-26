@@ -237,6 +237,69 @@ describe("shuffle", () => {
   });
 });
 
+describe("playing a whole list", () => {
+  it("plays it in its own order from the first entry, turning shuffle off", () => {
+    const shuffled = reduce(PLAYING_2_OF_5, { type: "shuffle", random: seeded(1) });
+
+    const queue = reduce(shuffled, {
+      type: "playAll",
+      entries: entries(4, 5, 6),
+      shuffled: false,
+      random: seeded(1),
+    });
+
+    expect(tracksOf(queue.entries)).toEqual([4, 5, 6]);
+    expect(current(queue)?.trackId).toBe(4);
+    expect(queue.order).toBeUndefined();
+  });
+
+  it.each(SEEDS)("shuffled, plays every entry once and remembers its order (seed %i)", (seed) => {
+    const queue = reduce(EMPTY, {
+      type: "playAll",
+      entries: entries(4, 5, 6, 7),
+      shuffled: true,
+      random: seeded(seed),
+    });
+
+    expect(queue.position).toBe(0);
+    expect(sorted(tracksOf(queue.entries))).toEqual([4, 5, 6, 7]);
+    expect(tracksOf(reduce(queue, { type: "unshuffle" }).entries)).toEqual([4, 5, 6, 7]);
+  });
+
+  it("shuffled, starts from any entry, not always the first", () => {
+    const firsts = new Set(
+      SEEDS.map(
+        (seed) =>
+          current(
+            reduce(EMPTY, {
+              type: "playAll",
+              entries: entries(4, 5, 6, 7),
+              shuffled: true,
+              random: seeded(seed),
+            }),
+          )?.trackId,
+      ),
+    );
+
+    expect(firsts.size).toBeGreaterThan(1);
+  });
+
+  it("keeps the repeat mode, so repeating an album plays only that album again", () => {
+    const repeating = reduce(PLAYING_2_OF_5, { type: "repeat", repeat: "all" });
+    const album = reduce(repeating, {
+      type: "playAll",
+      entries: entries(4, 5),
+      shuffled: false,
+      random: seeded(1),
+    });
+
+    const afterLast = reduce(reduce(album, { type: "next" }), { type: "next" });
+
+    expect(album.repeat).toBe("all");
+    expect(current(afterLast)?.trackId).toBe(4);
+  });
+});
+
 describe("repeat", () => {
   const playingLastOf3: Queue = { ...EMPTY, entries: entries(1, 2, 3), position: 2 };
 
@@ -278,16 +341,13 @@ describe("any sequence of changes", () => {
     const pick = <T>(items: readonly T[]): T => items[Math.floor(random() * items.length)] as T;
     const entry = { key: `n${String(made)}`, trackId: made };
     const some = Math.floor(random() * 6);
+    const list = Array.from({ length: some }, (_, i) => ({
+      key: `p${String(made)}-${String(i)}`,
+      trackId: i,
+    }));
     return pick<QueueAction>([
-      {
-        type: "play",
-        entries: Array.from({ length: some }, (_, i) => ({
-          key: `p${String(made)}-${String(i)}`,
-          trackId: i,
-        })),
-        start: Math.floor(random() * some),
-        random,
-      },
+      { type: "play", entries: list, start: Math.floor(random() * some), random },
+      { type: "playAll", entries: list, shuffled: random() < 0.5, random },
       { type: "playNext", entry },
       { type: "add", entry },
       { type: "next" },
