@@ -150,6 +150,8 @@ no router package.
   or menu keeps every key.
 - **Holding a key** repeats seeking and the volume, but not the others, so
   holding Space doesn't flicker between play and pause.
+- **A screen reader's browse mode** takes bare letters and arrows for itself,
+  so the shortcuts work in its focus mode, as on any page.
 - **A control names its keys** in its hover text, such as *Next (Shift + →)*,
   and in `aria-keyshortcuts`. The header's keyboard button, or *?*, lists them
   all, with a link to change them; a phone, which has no keyboard, hides the
@@ -157,9 +159,12 @@ no router package.
 - **Changing a shortcut** is in Settings: *Change* waits for the next press,
   modifiers included, and gives it to the command, unless another command has
   it, which it names, waiting for other keys. Escape, or moving away, keeps the
-  keys the command had, and *Reset to defaults* puts every command back.
-  The keys are kept in this browser, versioned, and the defaults return when
-  they can't be read or two commands share keys.
+  keys the command had, and *Reset to defaults* puts every command back. Keys
+  the browser or the system keeps, such as ⌘ + W or F5, are refused too, since
+  the page would never see them or would take them from the browser. The keys
+  are kept in this browser, versioned, and every tab follows a change. A saved
+  command on keys another command has, as when a new command's default is keys
+  already saved, goes back to its default; the rest stay as saved.
 - **react-hotkeys-hook** listens for them: it matches physical keys with their
   modifiers and leaves out form fields, and the page decides which keys a
   focused control keeps. It was chosen over tinykeys, hotkeys-js, and writing

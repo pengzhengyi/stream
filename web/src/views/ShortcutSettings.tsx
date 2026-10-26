@@ -6,12 +6,13 @@
  * Escape, or moving away, keeps the keys it had.
  */
 
-import { type KeyboardEvent, useState } from "react";
+import { type KeyboardEvent, useRef, useState } from "react";
 
 import {
   COMMANDS,
   type Command,
   DEFAULT_BINDINGS,
+  belongsToBrowser,
   bindingOf,
   labelOf,
   rebind,
@@ -34,6 +35,8 @@ export function ShortcutSettings() {
   const bindings = useBindings();
   const [recording, setRecording] = useState<Command | undefined>(undefined);
   const [note, setNote] = useState<Note>(QUIET);
+  // Some browsers click a button as Space comes up, so the release of a press taken is kept too.
+  const taken = useRef<string | undefined>(undefined);
   const defaults = COMMANDS.every(({ command }) => bindings[command] === DEFAULT_BINDINGS[command]);
 
   const record = (command: Command, event: KeyboardEvent<HTMLButtonElement>) => {
@@ -52,6 +55,11 @@ export function ShortcutSettings() {
     // The press is the new keys, not a press of the button or a shortcut.
     event.preventDefault();
     event.stopPropagation();
+    taken.current = event.code;
+    if (belongsToBrowser(keys)) {
+      setNote({ text: `The browser keeps ${labelOf(keys)}. Press other keys.`, refused: true });
+      return;
+    }
     const changed = rebind(bindings, command, keys);
     if ("taken" in changed) {
       setNote({
@@ -87,6 +95,12 @@ export function ShortcutSettings() {
                 onKeyDown={(event) => {
                   if (waiting) {
                     record(command, event);
+                  }
+                }}
+                onKeyUp={(event) => {
+                  if (event.code === taken.current) {
+                    taken.current = undefined;
+                    event.preventDefault();
                   }
                 }}
                 onBlur={() => {

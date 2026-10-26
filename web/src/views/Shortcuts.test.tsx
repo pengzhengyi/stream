@@ -71,9 +71,9 @@ describe("the keyboard shortcuts", () => {
   it("leave a key held with Ctrl or ⌘ to the browser", async () => {
     const on = listening();
 
-    await userEvent.keyboard("{Meta>}l{/Meta}{Control>}s{/Control}");
+    await userEvent.keyboard("{Meta>}l{/Meta}{Control>}s{/Control}l");
 
-    expect(on.favorite).not.toHaveBeenCalled();
+    expect(on.favorite).toHaveBeenCalledOnce();
     expect(on.shuffle).not.toHaveBeenCalled();
   });
 

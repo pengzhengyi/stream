@@ -134,24 +134,33 @@ export function bindingOf(event: KeyboardEvent): string | undefined {
   return [...MODIFIERS.filter((modifier) => held[modifier]), key].join("+");
 }
 
-/** Return the name of the physical key `code`, or `undefined` for a modifier or a key kept. */
+/**
+ * Return the name of the physical key `code`, or `undefined` for a modifier or a key kept.
+ *
+ * Names are react-hotkeys-hook's, so the same key has one name: `KeyA` is `a`,
+ * and `Digit1` and `Numpad1` are both `1`, as the hook treats them alike.
+ */
 function keyOf(code: string): string | undefined {
   if (NOT_ALONE.has(code) || /^(Shift|Control|Alt|Meta|OS)(Left|Right)?$/.test(code)) {
     return undefined;
-  }
-  const letter = /^Key([A-Z])$/.exec(code);
-  if (letter !== null) {
-    return letter[1]?.toLowerCase();
-  }
-  const digit = /^Digit(\d)$/.exec(code);
-  if (digit !== null) {
-    return digit[1];
   }
   const arrow = /^Arrow(Left|Right|Up|Down)$/.exec(code);
   if (arrow !== null) {
     return arrow[1]?.toLowerCase();
   }
-  return code.toLowerCase();
+  return code.toLowerCase().replace(/key|digit|numpad/, "");
+}
+
+/** Keys the browser or the system keeps, which a page never sees or shouldn't take. */
+const BROWSERS = new Set(["f5", "f11", "f12"]);
+const BROWSER_LETTERS = new Set(["l", "n", "q", "r", "t", "w"]);
+
+/** Whether the browser or the system keeps `keys`, such as ⌘ + W, which closes the tab. */
+export function belongsToBrowser(keys: string): boolean {
+  const parts = keys.split("+");
+  const key = parts.at(-1) ?? "";
+  const held = parts.includes("ctrl") || parts.includes("meta");
+  return BROWSERS.has(key) || (held && BROWSER_LETTERS.has(key));
 }
 
 /** Return `bindings` with `command` on `keys`, or the command that already has them. */
@@ -168,23 +177,36 @@ export function rebind(
     : { taken: taken.command };
 }
 
-/** Return the bindings this browser kept, or the defaults. */
+/** Return the bindings this browser kept, each command on its default where none was. */
 export function loadBindings(): Bindings {
   try {
     const saved: unknown = JSON.parse(localStorage.getItem(KEY) ?? "null");
     if (typeof saved !== "object" || saved === null || Array.isArray(saved)) {
       return DEFAULT_BINDINGS;
     }
-    const kept = Object.fromEntries(
+    const kept = new Map(
       Object.entries(saved).filter(
         (entry): entry is [Command, string] =>
           entry[0] in DEFAULT_BINDINGS && typeof entry[1] === "string" && entry[1] !== "",
       ),
     );
-    const bindings: Bindings = { ...DEFAULT_BINDINGS, ...kept };
-    // Two commands on the same keys would leave one unreachable.
-    const keys = Object.values(bindings);
-    return new Set(keys).size === keys.length ? bindings : DEFAULT_BINDINGS;
+    // Two commands on the same keys would leave one unreachable, as when a new
+    // command's default is keys already saved for another. A saved command that
+    // shares keys goes back to its default, until no two share.
+    for (;;) {
+      const bindings: Bindings = { ...DEFAULT_BINDINGS, ...Object.fromEntries(kept) };
+      const clashing = [...kept.keys()].filter((command) =>
+        COMMANDS.some(
+          (other) => other.command !== command && bindings[other.command] === bindings[command],
+        ),
+      );
+      if (clashing.length === 0) {
+        return bindings;
+      }
+      for (const command of clashing) {
+        kept.delete(command);
+      }
+    }
   } catch {
     return DEFAULT_BINDINGS;
   }
@@ -207,9 +229,18 @@ let shown: Bindings | undefined;
 const listeners = new Set<() => void>();
 
 function subscribe(listener: () => void): () => void {
+  // Another tab that changes them says so here.
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === KEY) {
+      shown = loadBindings();
+      listener();
+    }
+  };
   listeners.add(listener);
+  window.addEventListener("storage", onStorage);
   return () => {
     listeners.delete(listener);
+    window.removeEventListener("storage", onStorage);
   };
 }
 

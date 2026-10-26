@@ -1,14 +1,17 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { act, renderHook } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   DEFAULT_BINDINGS,
   ariaKeysOf,
+  belongsToBrowser,
   bindingOf,
   hintOf,
   labelOf,
   loadBindings,
   rebind,
   saveBindings,
+  useBindings,
 } from "./shortcuts";
 
 const pressed = (code: string, change: Partial<KeyboardEventInit> = {}) =>
@@ -46,6 +49,8 @@ describe("recording a binding", () => {
     [pressed("Space"), "space"],
     [pressed("Slash", { shiftKey: true }), "shift+slash"],
     [pressed("Equal", { metaKey: true }), "meta+equal"],
+    [pressed("Numpad1"), "1"],
+    [pressed("Comma"), "comma"],
   ])("takes a key pressed as the binding it would be", (event, keys) => {
     expect(bindingOf(event)).toBe(keys);
   });
@@ -56,6 +61,19 @@ describe("recording a binding", () => {
       expect(bindingOf(pressed(code))).toBeUndefined();
     },
   );
+});
+
+describe("keys the browser keeps", () => {
+  it.each(["meta+w", "ctrl+t", "meta+q", "ctrl+r", "f5", "f11", "shift+f12"])(
+    "include %s",
+    (keys) => {
+      expect(belongsToBrowser(keys)).toBe(true);
+    },
+  );
+
+  it.each(["w", "shift+w", "alt+t", "k", "meta+k"])("leave out %s", (keys) => {
+    expect(belongsToBrowser(keys)).toBe(false);
+  });
 });
 
 describe("changing a binding", () => {
@@ -108,9 +126,36 @@ describe("the saved bindings", () => {
     expect(loadBindings()).toEqual({ ...DEFAULT_BINDINGS, next: "n" });
   });
 
-  it("fall back to the defaults when two commands were saved with the same keys", () => {
-    localStorage.setItem("medleyplay.shortcuts.v1", JSON.stringify({ next: "space" }));
+  it("put a command saved on another's keys back on its default, keeping the rest", () => {
+    localStorage.setItem(
+      "medleyplay.shortcuts.v1",
+      JSON.stringify({ next: "space", shuffle: "x" }),
+    );
 
-    expect(loadBindings()).toEqual(DEFAULT_BINDINGS);
+    expect(loadBindings()).toEqual({ ...DEFAULT_BINDINGS, shuffle: "x" });
+  });
+
+  it("put back each command whose default the first one put back now clashes with", () => {
+    localStorage.setItem(
+      "medleyplay.shortcuts.v1",
+      JSON.stringify({ next: "space", previous: "shift+right", shuffle: "x" }),
+    );
+
+    expect(loadBindings()).toEqual({ ...DEFAULT_BINDINGS, shuffle: "x" });
+  });
+
+  it("follow a change another tab saved", () => {
+    const changed = vi.fn();
+    const { unmount } = renderHook(() => {
+      changed(useBindings().toggle);
+    });
+
+    localStorage.setItem("medleyplay.shortcuts.v1", JSON.stringify({ toggle: "k" }));
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", { key: "medleyplay.shortcuts.v1" }));
+    });
+
+    expect(changed).toHaveBeenLastCalledWith("k");
+    unmount();
   });
 });

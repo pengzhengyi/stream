@@ -70,9 +70,21 @@ describe("changing the keyboard shortcuts", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Change keys for Shuffle" }));
     await userEvent.tab();
+    await userEvent.tab({ shift: true });
     await userEvent.keyboard("k");
 
     expect(keysShownFor("Shuffle")).toBe("S");
+    expect(screen.getByRole("button", { name: "Change keys for Shuffle" })).toHaveFocus();
+  });
+
+  it("refuses keys the browser keeps, and waits for others", async () => {
+    render(<ShortcutSettings />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Change keys for Shuffle" }));
+    await userEvent.keyboard("{Meta>}w{/Meta}");
+
+    expect(screen.getByRole("status")).toHaveTextContent("The browser keeps ⌘ + W.");
+    expect(screen.getByRole("button", { name: "Press new keys for Shuffle" })).toBeInTheDocument();
   });
 
   it("puts every command back on its usual keys", async () => {
