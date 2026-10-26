@@ -293,6 +293,20 @@ class DownloadRow(Base):
     last_wanted_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
 
 
+class PreferenceRow(Base):
+    """An Account's preferences, as one document."""
+
+    __tablename__ = "preference"
+    __table_args__ = (CheckConstraint("revision >= 1", name="revision"),)
+
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("account.id", ondelete="CASCADE"), primary_key=True
+    )
+    document: Mapped[dict[str, object]] = mapped_column(JSON)
+    revision: Mapped[int] = mapped_column(Integer)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
 class SettingRow(Base):
     """The household's settings, as one document; the only row has id 1."""
 

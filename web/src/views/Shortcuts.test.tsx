@@ -1,9 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_BINDINGS, rebind, saveBindings } from "../shortcuts";
+import { openWithShortcuts } from "../testing/server";
 import { type ShortcutHandlers, Shortcuts } from "./Shortcuts";
 
 /** A handler for every command, each one a spy. */
@@ -16,6 +16,7 @@ function spies() {
     next: vi.fn(),
     volumeDown: vi.fn(),
     volumeUp: vi.fn(),
+    mute: vi.fn(),
     shuffle: vi.fn(),
     repeat: vi.fn(),
     favorite: vi.fn(),
@@ -36,11 +37,6 @@ function listening(page?: ReactNode) {
   );
   return on;
 }
-
-afterEach(() => {
-  saveBindings(DEFAULT_BINDINGS);
-  localStorage.clear();
-});
 
 describe("the keyboard shortcuts", () => {
   it("play or pause with Space", async () => {
@@ -169,16 +165,29 @@ describe("the keyboard shortcuts", () => {
     expect(on.shuffle).not.toHaveBeenCalled();
   });
 
+  it("play or pause with either of its keys", async () => {
+    const on = listening();
+
+    await userEvent.keyboard(" k");
+
+    expect(on.toggle).toHaveBeenCalledTimes(2);
+  });
+
   it("follow a command moved to other keys", async () => {
     const on = listening();
-    const moved = rebind(DEFAULT_BINDINGS, "toggle", "k");
-    if (!("bindings" in moved)) {
-      throw new Error("k should be free");
-    }
 
-    saveBindings(moved.bindings);
-    await userEvent.keyboard("k ");
+    await openWithShortcuts({ toggle: ["j"] });
+    await userEvent.keyboard("j k ");
 
     expect(on.toggle).toHaveBeenCalledOnce();
+  });
+
+  it("listen for nothing for a command with no keys", async () => {
+    const on = listening();
+
+    await openWithShortcuts({ mute: [] });
+    await userEvent.keyboard("m");
+
+    expect(on.mute).not.toHaveBeenCalled();
   });
 });

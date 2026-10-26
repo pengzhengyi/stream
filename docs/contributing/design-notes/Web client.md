@@ -130,10 +130,11 @@ no router package.
 
 | Keys | Command |
 | --- | --- |
-| Space | Play or pause |
+| Space or K | Play or pause |
 | ← and → | Back or ahead 5 seconds |
 | Shift + ← and Shift + → | Previous and Next |
 | - and = | Volume down and up, a mark at a time |
+| M | Mute or unmute; changing the volume turns the sound back on |
 | S, R, and L | Shuffle, Repeat, and favorite the song playing |
 | / | Go to the search box |
 | Q | Open or close *Up next*; where it is always open, go to it |
@@ -141,8 +142,12 @@ no router package.
 
 - **Keys are physical keys,** as `KeyboardEvent.code` names them, so a shortcut
   sits in the same place on any keyboard layout; *?* is Shift and the */* key.
-  A key held with Ctrl, Alt, or ⌘ is left to the browser unless a binding names
-  that modifier.
+  A label names the key as the keyboard prints it, where the browser says
+  (`navigator.keyboard.getLayoutMap()`, in Chromium), so the key a French
+  keyboard prints *A* reads *A*; elsewhere, labels are a US keyboard's. A key
+  held with Ctrl, Alt, or ⌘ is left to the browser unless a binding names that
+  modifier.
+- **A command has any number of keys,** none included, up to four.
 - **The focused control keeps the keys it uses:** typing goes into a text box,
   an arrow moves a focused slider, and Space or Enter presses a button reached
   with the keyboard. A button focused by a click doesn't keep Space, so Space
@@ -152,19 +157,27 @@ no router package.
   holding Space doesn't flicker between play and pause.
 - **A screen reader's browse mode** takes bare letters and arrows for itself,
   so the shortcuts work in its focus mode, as on any page.
-- **A control names its keys** in its hover text, such as *Next (Shift + →)*,
+- **A control names its keys** in its hover text, such as *Play (Space or K)*,
   and in `aria-keyshortcuts`. The header's keyboard button, or *?*, lists them
   all, with a link to change them; a phone, which has no keyboard, hides the
   button.
-- **Changing a shortcut** is in Settings: *Change* waits for the next press,
-  modifiers included, and gives it to the command, unless another command has
-  it, which it names, waiting for other keys. Escape, or moving away, keeps the
-  keys the command had, and *Reset to defaults* puts every command back. Keys
-  the browser or the system keeps, such as ⌘ + W or F5, are refused too, since
-  the page would never see them or would take them from the browser. The keys
-  are kept in this browser, versioned, and every tab follows a change. A saved
-  command on keys another command has, as when a new command's default is keys
-  already saved, goes back to its default; the rest stay as saved.
+- **Changing a shortcut** is in Settings: each key of a command has a remove
+  button, and *Add keys* waits for the next press, modifiers included, and adds
+  it, unless another command has it, which it names, waiting for other keys.
+  Escape, or moving away, adds nothing, and *Reset to defaults* puts every
+  command back. Keys the browser or the system keeps, such as ⌘ + W or F5, are
+  refused too, since the page would never see them or would take them from the
+  browser.
+- **The shortcuts are the Account's,** so they follow it to any browser or
+  device: `GET` and `PUT /api/me/preferences` hold the commands changed from
+  the defaults, at the revision read, and a command left on its defaults takes
+  a new default when the page gains one. The server keeps the keys without
+  knowing the commands. The page shows this browser's copy of the Account's
+  at once, then the server's, and reads them again when it is shown. A save
+  that finds them saved elsewhere since reads the revision and saves again: the
+  change chosen last wins. A saved command on keys another command has, as when
+  a new command's default is keys already saved, goes back to its default; the
+  rest stay as saved.
 - **react-hotkeys-hook** listens for them: it matches physical keys with their
   modifiers and leaves out form fields, and the page decides which keys a
   focused control keeps. It was chosen over tinykeys, hotkeys-js, and writing

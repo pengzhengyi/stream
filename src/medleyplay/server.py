@@ -31,6 +31,7 @@ from medleyplay.application.links import LinkService
 from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.policy import PolicyService
+from medleyplay.application.preferences import PreferencesService
 from medleyplay.application.secrets import KeychainSecrets, Secrets
 from medleyplay.application.settings import SettingsService
 from medleyplay.application.throttle import SignInThrottle
@@ -198,6 +199,7 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         events=events,
         settings=SettingsService(units, clock, changes.tell),
         policy=policy,
+        preferences=PreferencesService(units, clock),
     )
 
 

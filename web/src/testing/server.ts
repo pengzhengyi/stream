@@ -4,7 +4,8 @@
 
 import { vi } from "vitest";
 
-import type { Account, Features, Playlist, Track } from "../api";
+import type { Account, Features, Playlist, Preferences, Track } from "../api";
+import { type SavedShortcuts, openAccount } from "../shortcuts";
 
 /** An answer: a status and a JSON body. */
 export interface Answer {
@@ -97,5 +98,28 @@ export function signedIn(
     "GET /api/tracks": { body: tracks },
     "GET /api/playlists": { body: playlists },
     "GET /api/features": { body: features },
+    ...preferencesOf(),
   };
+}
+
+/**
+ * The routes of a server keeping `shortcuts` for the signed-in Account, which
+ * keeps what the page saves, at the next revision.
+ */
+export function preferencesOf(shortcuts: SavedShortcuts = null): Routes {
+  let kept: Preferences = { shortcuts, revision: shortcuts === null ? 0 : 1 };
+  return {
+    "GET /api/me/preferences": () => ({ body: kept }),
+    "PUT /api/me/preferences": (body) => {
+      const sent = body as Preferences;
+      kept = { shortcuts: sent.shortcuts, revision: sent.revision + 1 };
+      return { body: kept };
+    },
+  };
+}
+
+/** Sign Alice's page in with `shortcuts` saved, as the Library does. */
+export async function openWithShortcuts(shortcuts: SavedShortcuts): Promise<void> {
+  serve(preferencesOf(shortcuts));
+  await openAccount(ALICE.id);
 }

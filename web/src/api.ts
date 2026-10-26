@@ -67,6 +67,13 @@ export interface Settings {
 }
 
 /** What a plan at another storage limit would remove. */
+/** An Account's own preferences, and their revision; 0 if never saved. */
+export interface Preferences {
+  /** The keyboard shortcuts changed from the page's defaults, or `null` for none. */
+  readonly shortcuts: Readonly<Record<string, readonly string[]>> | null;
+  readonly revision: number;
+}
+
 export interface Preview {
   readonly removals: readonly {
     readonly kind: "download" | "cache";
@@ -168,6 +175,9 @@ export const api = {
   putPlaylist: (id: string, playlist: PlainPlaylist) =>
     call<Playlist>("PUT", `/api/playlists/${id}`, playlist),
   features: () => call<Features>("GET", "/api/features"),
+  preferences: () => call<Preferences>("GET", "/api/me/preferences"),
+  savePreferences: (preferences: Preferences) =>
+    call<Preferences>("PUT", "/api/me/preferences", preferences),
   settings: () => call<Settings>("GET", "/api/settings"),
   saveSettings: (settings: Settings) => call<Settings>("PUT", "/api/settings", settings),
   storage: (previewLimit?: number) =>

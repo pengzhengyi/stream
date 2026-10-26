@@ -11,7 +11,7 @@ import { current, repeatAfter } from "../player/queue";
 import { usePlayer } from "../player/usePlayer";
 import { stepVolume } from "../player/volume";
 import { hrefOf, useRoute } from "../routes";
-import { hintOf, useBindings } from "../shortcuts";
+import { hintOf, learnLayout, openAccount, useBindings } from "../shortcuts";
 import { AddToPlaylist } from "./AddToPlaylist";
 import { Nav } from "./Nav";
 import { PlayerBar } from "./PlayerBar";
@@ -54,6 +54,26 @@ export function Library({
   const [notice, setNotice] = useState("");
   const [listingShortcuts, setListingShortcuts] = useState(false);
   const keys = useBindings();
+  // The Account's shortcuts, read again when the page is shown, as they may have
+  // changed on another device.
+  useEffect(() => {
+    learnLayout();
+    const load = () => {
+      openAccount(account.id).catch(() => {
+        // This browser's copy, or the defaults, serve until the server answers.
+      });
+    };
+    const onShown = () => {
+      if (document.visibilityState === "visible") {
+        load();
+      }
+    };
+    load();
+    document.addEventListener("visibilitychange", onShown);
+    return () => {
+      document.removeEventListener("visibilitychange", onShown);
+    };
+  }, [account.id]);
   useEffect(() => {
     if (notice === "") {
       return;
@@ -111,6 +131,10 @@ export function Library({
     },
     volumeUp: () => {
       player.setVolume(stepVolume(player.volume, 1));
+    },
+    mute: () => {
+      player.setMuted(!player.muted);
+      setNotice(player.muted ? "Sound on." : "Muted.");
     },
     shuffle: () => {
       player.shuffle(!player.shuffled);

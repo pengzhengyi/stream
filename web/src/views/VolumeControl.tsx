@@ -2,19 +2,25 @@
  * @file The volume: a button down, a bar to drag, and a button up.
  */
 
-import { SpeakerHighIcon, SpeakerLowIcon } from "@phosphor-icons/react";
+import { SpeakerHighIcon, SpeakerLowIcon, SpeakerSlashIcon } from "@phosphor-icons/react";
 import { type CSSProperties, useRef } from "react";
 
 import { stepVolume } from "../player/volume";
-import { hintOf, useBindings } from "../shortcuts";
+import { hintOf, labelsOf, useBindings } from "../shortcuts";
 import { useHeldRange } from "./useHeldRange";
 
-/** Change `volume`, from 0 to 1: a button moves it one mark, and the bar once it is let go. */
+/**
+ * Change `volume`, from 0 to 1: a button moves it one mark, and the bar once it
+ * is let go. While `muted`, the bar says so, and changing the volume turns the
+ * sound back on.
+ */
 export function VolumeControl({
   volume,
+  muted = false,
   onVolume,
 }: {
   readonly volume: number;
+  readonly muted?: boolean;
   readonly onVolume: (volume: number) => void;
 }) {
   const bar = useRef<HTMLInputElement>(null);
@@ -23,7 +29,7 @@ export function VolumeControl({
   const percent = Math.round(shown * 100);
   const keys = useBindings();
   return (
-    <div className="volume" role="group" aria-label="Volume">
+    <div className={muted ? "volume muted" : "volume"} role="group" aria-label="Volume">
       <button
         type="button"
         className="icon"
@@ -33,14 +39,18 @@ export function VolumeControl({
           onVolume(stepVolume(volume, -1));
         }}
       >
-        <SpeakerLowIcon weight="regular" aria-hidden />
+        {muted ? (
+          <SpeakerSlashIcon weight="regular" aria-hidden />
+        ) : (
+          <SpeakerLowIcon weight="regular" aria-hidden />
+        )}
       </button>
       <input
         ref={bar}
         type="range"
         aria-label="Volume"
-        aria-valuetext={`${String(percent)}%`}
-        title={`Volume ${String(percent)}%`}
+        aria-valuetext={muted ? `Muted, ${String(percent)}%` : `${String(percent)}%`}
+        title={muted ? `Muted (${labelsOf(keys.mute)} for sound)` : `Volume ${String(percent)}%`}
         min={0}
         max={1}
         step={0.01}

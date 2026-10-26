@@ -6,6 +6,8 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach } from "vitest";
 
+import { forgetBindings } from "./shortcuts";
+
 // jsdom has media elements but can't play them; Playwright tests real playback.
 HTMLMediaElement.prototype.load = () => undefined;
 HTMLMediaElement.prototype.pause = () => undefined;
@@ -29,4 +31,6 @@ HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
 
 afterEach(() => {
   cleanup();
+  // The shortcuts live in one place for the whole page; each test is a new page.
+  forgetBindings();
 });

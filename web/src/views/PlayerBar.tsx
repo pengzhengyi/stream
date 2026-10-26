@@ -170,7 +170,9 @@ export function PlayerBar({
             {status.message}
           </span>
         )}
-        {canSetVolume() && <VolumeControl volume={player.volume} onVolume={player.setVolume} />}
+        {canSetVolume() && (
+          <VolumeControl volume={player.volume} muted={player.muted} onVolume={player.setVolume} />
+        )}
         <span className="time">
           {formatTime(position)} <span aria-hidden>/</span> {formatTime(duration)}
         </span>

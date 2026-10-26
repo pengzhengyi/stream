@@ -1,26 +1,32 @@
 /**
- * @file Changing the keyboard shortcuts: each command's keys, recorded from the next press.
+ * @file Changing the keyboard shortcuts: each command's keys, added from the next press or removed.
  *
- * Choosing Change waits for keys on that button: the next press, with any
- * modifiers held, becomes the command's keys, unless another command has them.
- * Escape, or moving away, keeps the keys it had.
+ * Choosing Add keys waits for keys on that button: the next press, with any
+ * modifiers held, joins the command's keys, unless another command has them.
+ * Escape, or moving away, adds nothing. The keys are the Account's, so they
+ * follow it to any browser.
  */
 
+import { XIcon } from "@phosphor-icons/react";
 import { type KeyboardEvent, useRef, useState } from "react";
 
 import {
+  type Bindings,
   COMMANDS,
   type Command,
   DEFAULT_BINDINGS,
+  MAX_KEYS,
+  addKeys,
   belongsToBrowser,
   bindingOf,
+  changesOf,
   labelOf,
-  rebind,
+  removeKeys,
   saveBindings,
   useBindings,
 } from "../shortcuts";
 
-/** What was last said about a change; `refused` when the keys were another command's. */
+/** What was last said about a change; `refused` when it didn't happen, or wasn't kept. */
 interface Note {
   readonly text: string;
   readonly refused: boolean;
@@ -37,7 +43,19 @@ export function ShortcutSettings() {
   const [note, setNote] = useState<Note>(QUIET);
   // Some browsers click a button as Space comes up, so the release of a press taken is kept too.
   const taken = useRef<string | undefined>(undefined);
-  const defaults = COMMANDS.every(({ command }) => bindings[command] === DEFAULT_BINDINGS[command]);
+  const defaults = changesOf(bindings) === null;
+
+  /** Use `next` from now on, saying `said`, or why the server didn't keep it. */
+  const save = (next: Bindings, said: string) => {
+    setNote({ text: said, refused: false });
+    saveBindings(next).catch((failure: unknown) => {
+      const reason = failure instanceof Error ? failure.message : String(failure);
+      setNote({
+        text: `The server didn't keep them: ${reason}. This browser has them until it does.`,
+        refused: true,
+      });
+    });
+  };
 
   const record = (command: Command, event: KeyboardEvent<HTMLButtonElement>) => {
     if (event.key === "Escape") {
@@ -60,34 +78,61 @@ export function ShortcutSettings() {
       setNote({ text: `The browser keeps ${labelOf(keys)}. Press other keys.`, refused: true });
       return;
     }
-    const changed = rebind(bindings, command, keys);
-    if ("taken" in changed) {
+    const added = addKeys(bindings, command, keys);
+    if ("taken" in added) {
       setNote({
-        text: `${labelOf(keys)} is already ${nameOf(changed.taken) ?? ""}. Press other keys.`,
+        text: `${labelOf(keys)} is already ${nameOf(added.taken) ?? ""}. Press other keys.`,
         refused: true,
       });
       return;
     }
-    saveBindings(changed.bindings);
     setRecording(undefined);
-    setNote({ text: `${nameOf(command) ?? ""} is now ${labelOf(keys)}.`, refused: false });
+    if ("full" in added) {
+      setNote({
+        text: `${nameOf(command) ?? ""} has ${String(MAX_KEYS)} keys; remove one first.`,
+        refused: true,
+      });
+      return;
+    }
+    save(added.bindings, `${nameOf(command) ?? ""} now also has ${labelOf(keys)}.`);
   };
 
   return (
     <section className="settings-section" aria-labelledby="keyboard-shortcuts">
       <h3 id="keyboard-shortcuts">Keyboard shortcuts</h3>
-      <p className="hint">Keys for the player, kept in this browser.</p>
+      <p className="hint">Keys for the player, kept with your account.</p>
       <ul className="shortcut-settings">
         {COMMANDS.map(({ command, name }) => {
           const waiting = recording === command;
           return (
             <li key={command} className="shortcut-row">
               <span className="shortcut-name">{name}</span>
-              <kbd>{labelOf(bindings[command])}</kbd>
+              <span className="shortcut-keys">
+                {bindings[command].length === 0 && <span className="no-keys">None</span>}
+                {bindings[command].map((keys) => (
+                  <span key={keys} className="key-chip">
+                    <kbd>{labelOf(keys)}</kbd>
+                    <button
+                      type="button"
+                      className="icon remove-keys"
+                      aria-label={`Remove ${labelOf(keys)} from ${name}`}
+                      title={`Remove ${labelOf(keys)}`}
+                      onClick={() => {
+                        save(
+                          removeKeys(bindings, command, keys),
+                          `${name} no longer has ${labelOf(keys)}.`,
+                        );
+                      }}
+                    >
+                      <XIcon weight="bold" aria-hidden />
+                    </button>
+                  </span>
+                ))}
+              </span>
               <button
                 type="button"
                 className={waiting ? "outline change-keys waiting" : "outline change-keys"}
-                aria-label={waiting ? `Press new keys for ${name}` : `Change keys for ${name}`}
+                aria-label={waiting ? `Press keys to add to ${name}` : `Add keys to ${name}`}
                 onClick={() => {
                   setRecording(command);
                   setNote(QUIET);
@@ -109,7 +154,7 @@ export function ShortcutSettings() {
                   }
                 }}
               >
-                {waiting ? "Press keys…" : "Change"}
+                {waiting ? "Press keys…" : "Add keys"}
               </button>
             </li>
           );
@@ -123,9 +168,8 @@ export function ShortcutSettings() {
         className="secondary outline"
         disabled={defaults}
         onClick={() => {
-          saveBindings(DEFAULT_BINDINGS);
           setRecording(undefined);
-          setNote({ text: "Back to the usual keys.", refused: false });
+          save(DEFAULT_BINDINGS, "Back to the usual keys.");
         }}
       >
         Reset to defaults

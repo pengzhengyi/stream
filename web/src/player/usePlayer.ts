@@ -32,6 +32,8 @@ export interface Player {
   readonly duration: number | undefined;
   /** How loud it plays, from 0 to 1. */
   readonly volume: number;
+  /** Whether it is silent for now; the volume comes back as it was. */
+  readonly muted: boolean;
   readonly playList: (tracks: readonly Track[], start: number) => void;
   /** Play every Track of `tracks` from the first, in their order or shuffled. */
   readonly playAll: (tracks: readonly Track[], shuffled: boolean) => void;
@@ -47,7 +49,9 @@ export interface Player {
   readonly clear: () => void;
   readonly shuffle: (on: boolean) => void;
   readonly setRepeat: (repeat: Repeat) => void;
+  /** Change the volume, and turn the sound back on. */
   readonly setVolume: (volume: number) => void;
+  readonly setMuted: (muted: boolean) => void;
 }
 
 /** What the page shows about one entry of the queue. */
@@ -107,6 +111,7 @@ export function usePlayer(
   const listening = useRef<{ play: Play; time: PlayTime; counted: boolean } | undefined>(undefined);
   const lastSaved = useRef(0);
   const [volume, setVolume] = useState(loadVolume);
+  const [muted, setMuted] = useState(false);
 
   const playing = current(queue);
   const key = playing?.key;
@@ -376,6 +381,11 @@ export function usePlayer(
       audio.current.volume = volume;
     }
   }, [volume]);
+  useEffect(() => {
+    if (audio.current !== null) {
+      audio.current.muted = muted;
+    }
+  }, [muted]);
 
   // Save the queue whenever it changes.
   useEffect(() => {
@@ -454,6 +464,7 @@ export function usePlayer(
     position: shown?.position ?? 0,
     duration: shown?.duration,
     volume,
+    muted,
     playList: (list, start) => {
       dispatch({ type: "play", entries: list.map(entryOf), start, random: Math.random });
     },
@@ -488,8 +499,10 @@ export function usePlayer(
     setVolume: (chosen) => {
       const within = Math.min(Math.max(chosen, 0), 1);
       setVolume(within);
+      setMuted(false);
       saveVolume(within);
     },
+    setMuted,
   };
   return [player, audio];
 }
