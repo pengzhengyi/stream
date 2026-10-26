@@ -55,6 +55,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [Bilibili](docs/contributing/design-notes/Bilibili.md) note.
 - **Job progress over SSE** — `GET /api/events` tells every open browser each
   time a Job changes.
+- **Download policy** — mark any Playlist *Keep downloaded*, and its Bilibili
+  Tracks download in the background, two at a time, and stay. Smart playlists
+  pick their Tracks by rules on favorites, ratings, plays, text, and when a
+  Track was added or played. An admin's storage limit makes room by removing the
+  least favorite Downloads nothing keeps, never one downloaded, played, or kept
+  within the last day, nor the only copy of a video gone from the site.
+  `GET /api/storage` shows the space in use and previews another limit. See the
+  [Download policy](docs/contributing/design-notes/Download%20policy.md) note.
 
 ### Changed
 

@@ -208,9 +208,9 @@ valid linked accounts, the limit, the free space, and the time.
    removing all of them wouldn't get there, because what may not be removed is
    over the limit alone, nothing is removed: removing would cost files and still
    not meet the limit.
-4. **At most two policy Downloads are active at once,** counting those already
-   running or queued; the rest wait for the next evaluation, which a finishing
-   Download requests. So a large Playlist never floods the queue, and a Track
+4. **At most two Downloads are active at once,** counting every download Job
+   already waiting, queued, or running, the household's own included; the rest
+   wait for the next evaluation, which a finishing Download requests. So a large Playlist never floods the queue, and a Track
    someone plays never waits behind hundreds.
 5. **The plan reports what it couldn't do:** wanted Tracks waiting their turn,
    wanted Tracks that don't fit under the limit, ones blocked by the disk guard,
@@ -238,7 +238,9 @@ quality is the one the Source was added at.
   all. Then it waits for the household to retry it, and `GET /api/storage` lists
   it as failing.
 - **Saving a login again** makes every wanted Source that failed for want of one
-  due at once, as does an admin resetting a faulted plugin.
+  due at once. Resetting a faulted plugin asks for an evaluation but clears no
+  failure: the plugin's fault isn't the Source's, and its retry is a day away at
+  most.
 
 ## Removal order
 
@@ -268,11 +270,14 @@ first:
 - **A Download action** submits a download Job as adding does, through
   `DownloadService`, whose entry point for the policy takes the requesting
   Account and doesn't return a failed Job in place of a new one.
-- **A cache removal** unlinks the copy; the next play prepares it again.
+- **A cache removal** unlinks the copy if it is still at rest; the next play
+  prepares it again.
 - **Last served** is a new `last_served_at` column on `download`, set when the
   audio route opens the Download, and written at most once a minute per
   Download. **Last wanted** is `last_wanted_at`, set for every wanted Download
-  by each evaluation that applies.
+  by each evaluation that applies. A cache copy's last served time is its access
+  time, which the audio route sets at most once a minute, so its modified time,
+  part of the audio's `ETag`, never changes.
 
 ## Evaluating
 
@@ -295,7 +300,7 @@ first:
 | Route | Who | Does |
 | --- | --- | --- |
 | `PUT /api/playlists/{id}` | The owner | Saves a plain or smart Playlist and its *Keep downloaded* switch |
-| `GET /api/playlists/{id}` | The owner | A smart playlist's current Tracks, their count, and the size not yet downloaded |
+| `GET /api/playlists/{id}` | The owner | A smart playlist's current Tracks |
 | `GET /api/settings` | Signed in | The household's settings and their revision |
 | `PUT /api/settings` | An admin | Replaces the settings at a revision, and evaluates |
 | `GET /api/storage` | Signed in | Use by Downloads, cache copies, and reservations; the limit and the free space; the wanted size, in total and by Account; what the last evaluation couldn't do, and why; and its error, if it failed |
@@ -308,7 +313,7 @@ first:
   - nothing that [may not be removed](#what-may-be-removed) is removed:
     wanted, irreplaceable, at rest, or with an active Job;
   - every Download started is a candidate, no Source gets a second Job, and at
-    most two policy Downloads are active after the plan;
+    most two Downloads are active after the plan;
   - the reservations started, and the use left, are within the limit and the
     disk guard, counted together;
   - the files removed are a prefix of the removable ones in order, cache copies
@@ -323,14 +328,16 @@ first:
 - **Rules:** each field, operator, and `negate` by example, with the table of
   untouched Tracks; rules round-trip through JSON; a newer version, an unknown
   field, and too many conditions are refused.
-- **Applying:** a removal whose Download was served, wanted, or given a Job since
-  the snapshot is skipped; a crash between the rename and the commit, and after
-  it, both recover; a plan whose snapshot is stale removes nothing.
+- **Applying:** a removal whose Download was served since the snapshot is
+  skipped, judged again in the transaction that deletes it; a plan whose
+  snapshot is stale removes nothing and still starts its Downloads.
 - **Through the services:** a *Keep downloaded* Playlist downloads its Tracks
   two at a time through the `tube` test plugin; lowering the limit removes
   removable Downloads, files and rows, and nothing else; a removed video's
   Download stays; a failed Job is retried a day later, and at once when the
-  login is saved again; an unreadable rule stops every removal.
+  login is saved again; an unreadable rule stops every removal; a cache copy at
+  rest goes first; the storage report counts what each Account keeps; an admin's
+  preview removes nothing.
 
 ## Left for later steps
 
@@ -339,4 +346,4 @@ first:
 - **A limit per Account**, and other removal orders.
 - **The Mode**, which holds policy Downloads while Offline: step 6b.
 - **The client views** for rules, the switch, storage, and the preview of a new
-  limit: step 7.
+  limit, with the size a Playlist has yet to download: step 7.

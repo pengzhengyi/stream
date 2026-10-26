@@ -49,6 +49,14 @@ music through the API at `http://<this machine>:8000/docs` with
 is copied once into the cache in the data folder, and shows *Preparing* until
 then.
 
+To keep songs on this machine, turn a Playlist's `keep_downloaded` on with
+`PUT /api/playlists/{id}`; its Bilibili songs download in the background and
+stay. A smart playlist's `rules`, such as *favorites added in the last 30
+days*, choose its songs as they change. An admin can cap the space downloads use
+with `PUT /api/settings`; the least favorite downloads no Playlist keeps then make
+room, but never one played or kept in the last day. `GET /api/storage` shows the
+space in use, and `GET /api/storage?limit=<bytes>` what a new cap would remove.
+
 The config file is optional; a missing setting takes its default, and a change
 applies on restart. This one lets the admin add Accounts beyond the first,
 turns the `bilibili` plugin on, and turns the tag reader off:
