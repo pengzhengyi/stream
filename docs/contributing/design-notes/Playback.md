@@ -206,7 +206,8 @@ come in step 7.
   Phosphor's icons in the weight each control's prominence calls for: filled for
   play and pause, regular for the rest, light for a row's actions. The page
   follows the system's light or dark scheme unless a browser chooses one in the
-  header's theme switch, which it remembers.
+  header's theme switch, which it remembers. On a touch screen, which can't
+  point at a row, a row's actions and the seek bar's thumb always show.
 - **The player** shows the Track, shuffle, previous, play and pause, next,
   repeat, a seek bar, and the time.
   - **One persistent `<audio>` element;** the next Track swaps its `src`, so
@@ -216,6 +217,10 @@ come in step 7.
     `src` and plays: iOS may suspend a locked page during a network round trip.
     Asking ahead also starts preparing a compressed next Track.
   - **The queue advances on the `ended` event,** never on a timer.
+  - **The seek bar seeks once it is let go.** While it is dragged, the bar and
+    the time show where it would go and the Track plays on undisturbed; the
+    range's `change` event, which fires on release, or at once for a key, moves
+    the audio.
   - **Previous** restarts the Track after its first three seconds, and goes to
     the previous Track before that.
   - **A Track that is preparing** shows *Preparing*; the client polls its Job,

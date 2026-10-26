@@ -704,9 +704,9 @@ button.text:hover:not(:disabled) {
 
 .player .seek {
   position: absolute;
-  inset: -0.4rem 1.25rem auto;
+  inset: -0.6rem 1.25rem auto;
   width: auto;
-  height: 0.8rem;
+  height: 1.2rem;
   margin: 0;
   background: transparent;
   cursor: pointer;
@@ -714,7 +714,7 @@ button.text:hover:not(:disabled) {
 }
 
 .player .seek::-webkit-slider-runnable-track {
-  height: 3px;
+  height: 6px;
   border-radius: 999px;
   background: linear-gradient(
     to right,
@@ -725,7 +725,7 @@ button.text:hover:not(:disabled) {
 }
 
 .player .seek::-moz-range-track {
-  height: 3px;
+  height: 6px;
   border-radius: 999px;
   background: linear-gradient(
     to right,
@@ -735,9 +735,9 @@ button.text:hover:not(:disabled) {
 }
 
 .player .seek::-webkit-slider-thumb {
-  width: 0.8rem;
-  height: 0.8rem;
-  margin-top: calc(1.5px - 0.4rem);
+  width: 1rem;
+  height: 1rem;
+  margin-top: calc(3px - 0.5rem);
   border: none;
   border-radius: 50%;
   background: var(--accent);
@@ -748,8 +748,8 @@ button.text:hover:not(:disabled) {
 }
 
 .player .seek::-moz-range-thumb {
-  width: 0.8rem;
-  height: 0.8rem;
+  width: 1rem;
+  height: 1rem;
   border: none;
   border-radius: 50%;
   background: var(--accent);
@@ -757,17 +757,36 @@ button.text:hover:not(:disabled) {
 }
 
 .player .seek:hover::-webkit-slider-thumb,
+.player .seek:active::-webkit-slider-thumb,
 .player .seek:focus-visible::-webkit-slider-thumb {
   opacity: 1;
 }
 
 .player .seek:hover::-moz-range-thumb,
+.player .seek:active::-moz-range-thumb,
 .player .seek:focus-visible::-moz-range-thumb {
   opacity: 1;
 }
 
 .player .seek:disabled {
   cursor: default;
+}
+
+/* A touch screen can't point at a row, so its actions and the thumb always show. */
+
+@media (hover: none) {
+  .tracks .actions button,
+  .queue .remove {
+    opacity: 1;
+  }
+
+  .player .seek::-webkit-slider-thumb {
+    opacity: 1;
+  }
+
+  .player .seek::-moz-range-thumb {
+    opacity: 1;
+  }
 }
 
 /* On a phone: one column, the queue under the Library, the player along the bottom. */
@@ -822,18 +841,10 @@ button.text:hover:not(:disabled) {
     text-overflow: ellipsis;
   }
 
-  .tracks .actions button {
-    opacity: 1;
-  }
-
   .queue {
     position: static;
     max-height: none;
     margin: 0 0.75rem 11rem;
-  }
-
-  .queue .remove {
-    opacity: 1;
   }
 
   .player {
