@@ -28,7 +28,7 @@ RETRY_AFTER: Final = timedelta(days=1)
 MAX_FAILURES: Final = 3
 """A wanted Source the policy has seen fail this many times in a row waits for the household."""
 MAX_ACTIVE: Final = 2
-"""The most policy Downloads queued or running at once."""
+"""The most download Jobs active at once that the policy starts more beside."""
 MIN_FREE: Final = 2 * 1024**3
 MIN_FREE_SHARE: Final = 0.05
 BEST_KBPS: Final = 192
@@ -71,8 +71,7 @@ class Standing:
 class Failure:
     """A wanted Source's last download failures in a row, and whether their cause changed since.
 
-    `cleared` says the cause is gone: a login saved again after a login failure,
-    or a plugin reset after a plugin fault.
+    `cleared` says the cause is gone: a login saved again after a login failure.
     """
 
     failed_at: datetime

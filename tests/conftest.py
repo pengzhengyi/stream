@@ -3,6 +3,7 @@
 from collections.abc import Iterator
 from pathlib import Path
 
+import hypothesis
 import pytest
 from fastapi.testclient import TestClient
 from pwdlib import PasswordHash
@@ -20,6 +21,7 @@ from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.links import LinkService
 from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
+from medleyplay.application.policy import PolicyService
 from medleyplay.application.settings import SettingsService
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
@@ -28,6 +30,13 @@ from medleyplay.web.deps import Services
 from tests.support.fakes import FakeClock, MemorySecrets
 
 TEST_HOST = "testserver"
+
+# The suites run in parallel processes, so a busy machine slows each example and
+# its generation; the properties check what the code does, not how fast.
+hypothesis.settings.register_profile(
+    "medleyplay", deadline=None, suppress_health_check=[hypothesis.HealthCheck.too_slow]
+)
+hypothesis.settings.load_profile("medleyplay")
 
 
 @pytest.fixture
@@ -138,6 +147,21 @@ def links(
     downloads: DownloadService,
 ) -> LinkService:
     return LinkService(units, clock, plugins, catalog, downloads)
+
+
+@pytest.fixture
+def policy(
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    downloads: DownloadService,
+    plugins: PluginService,
+    tmp_path: Path,
+) -> PolicyService:
+    # Not started: the suites evaluate when they mean to. The server always has its
+    # data folder, whose disk the policy measures.
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(exist_ok=True)
+    return PolicyService(units, clock, downloads, plugins, data_dir)
 
 
 @pytest.fixture

@@ -19,6 +19,14 @@ DOWNLOADS_FOLDER: Final = "downloads"
 DOWNLOAD_EXTENSIONS: Final = frozenset({"m4a"})
 """The types a Download may have: AAC audio, which every household browser plays."""
 MAX_DOWNLOAD_BYTES: Final = 1024**3
+BEST_QUALITY_KBPS: Final = 192
+QUALITY_KBPS: Final = {"30280": 192, "30232": 132, "30216": 64}
+"""The bitrate of each of Bilibili's AAC qualities; `best` counts as the highest."""
+
+
+def quality_kbps(quality: str) -> int:
+    """Return the bitrate a download at `quality` is estimated at."""
+    return QUALITY_KBPS.get(quality, BEST_QUALITY_KBPS)
 
 
 @dataclass(frozen=True)

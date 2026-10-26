@@ -4,7 +4,6 @@ The revision guards every change, so a form left open in a forgotten tab can't
 lower the limit over a newer change.
 """
 
-from collections.abc import Callable
 from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -13,15 +12,13 @@ from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
+from medleyplay.application.changes import OnChange
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.errors import ConflictError, ForbiddenError, InvalidInputError
 from medleyplay.domain.settings import RemovalOrder, Settings
 from medleyplay.persistence.schema import SettingRow
 
 SETTINGS_ROW: Final = 1
-
-type OnChange = Callable[[str], None]
-"""Told what changed, such as `settings`, after the change is committed."""
 
 
 class SettingsDocument(BaseModel):
@@ -48,11 +45,7 @@ class SettingsService:
     def get(self) -> Settings:
         """Return the settings, or the defaults at revision 0 if they were never saved."""
         with self._units() as db:
-            row = db.get(SettingRow, SETTINGS_ROW)
-            if row is None:
-                return Settings()
-            document = SettingsDocument.model_validate(row.document)
-            return Settings(document.storage_limit, document.removal_order, row.revision)
+            return read_settings(db)
 
     def put(self, caller: Account, settings: Settings) -> Settings:
         """Replace the settings read at `settings.revision`; return them at their new revision.
@@ -105,3 +98,12 @@ class SettingsService:
         if self._on_change is not None:
             self._on_change("settings")
         return self.get()
+
+
+def read_settings(db: Session) -> Settings:
+    """Return the settings as `db` sees them, or the defaults at revision 0."""
+    row = db.get(SettingRow, SETTINGS_ROW)
+    if row is None:
+        return Settings()
+    document = SettingsDocument.model_validate(row.document)
+    return Settings(document.storage_limit, document.removal_order, row.revision)

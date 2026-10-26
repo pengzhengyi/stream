@@ -117,6 +117,26 @@ def test_a_compressed_member_is_prepared_once_then_plays_from_the_cache(
     assert _read(running.playback.open_audio(source_id)) == wav_bytes(Song("Deflated"))
 
 
+def test_serving_a_cache_copy_marks_when_it_was_served_and_keeps_its_version(
+    running: Libraries, alice: Account, units: sessionmaker[Session], tmp_path: Path
+) -> None:
+    _scanned(running, alice, LibraryKind.ZIP, _old_mixes(tmp_path))
+    track_id, source_id = _sources(units)["deflated.wav"]
+    preparing = running.playback.play(alice, track_id)
+    assert isinstance(preparing, Preparing)
+    running.wait_for(preparing.job.id, JobState.SUCCEEDED)
+    [copy] = (tmp_path / "data" / "cache" / "sources").iterdir()
+    os.utime(copy, (1_000_000, 1_000_000))
+    before = running.playback.open_audio(source_id)
+    before.close()
+
+    after = running.playback.open_audio(source_id)
+    after.close()
+
+    assert copy.stat().st_atime > 1_000_000
+    assert (copy.stat().st_mtime, after.version) == (1_000_000, before.version)
+
+
 def test_a_ready_source_wins_over_an_older_one_that_must_be_prepared(
     running: Libraries, alice: Account, units: sessionmaker[Session], tmp_path: Path
 ) -> None:

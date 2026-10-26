@@ -4,6 +4,7 @@ import dataclasses
 from datetime import UTC, datetime, timedelta
 from random import Random
 
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -360,6 +361,49 @@ def _applied(state: PolicyState, planned: Plan) -> PolicyState:
 @given(_states())
 def test_planning_again_after_applying_a_plan_plans_nothing(state: PolicyState) -> None:
     assert plan(_applied(state, plan(state))).is_empty()
+
+
+def _completed(state: PolicyState, planned: Plan, sizes: list[int]) -> PolicyState:
+    """The state after the plan's Downloads finish at `sizes`, each wanted and new."""
+    started = {each.track_id: size for each, size in zip(planned.starts, sizes, strict=True)}
+    finished = tuple(
+        StoredDownload(
+            source_id=each.source_id,
+            size=started[each.track_id],
+            standing=each.standing,
+            downloaded_at=state.now,
+            wanted=True,
+        )
+        for each in state.wanted
+        if each.track_id in started
+    )
+    return dataclasses.replace(
+        state,
+        downloads=state.downloads + finished,
+        wanted=tuple(each for each in state.wanted if each.track_id not in started),
+        free=state.free + sum(each.estimate for each in planned.starts) - sum(sizes),
+        reserved=state.reserved - sum(each.estimate for each in planned.starts),
+        active_policy_jobs=state.active_policy_jobs - len(planned.starts),
+    )
+
+
+@settings(max_examples=200)
+@given(_states(), st.data())
+def test_planning_until_nothing_changes_ends_whatever_size_each_download_turns_out(
+    state: PolicyState, data: st.DataObject
+) -> None:
+    rounds = len(state.wanted) + 2
+
+    for _ in range(rounds):
+        planned = plan(state)
+        if planned.is_empty():
+            return
+        sizes = data.draw(
+            st.lists(_SIZES, min_size=len(planned.starts), max_size=len(planned.starts))
+        )
+        state = _completed(_applied(state, planned), planned, sizes)
+
+    pytest.fail(f"Still planning after {rounds} rounds: {plan(state)}")
 
 
 @settings(max_examples=300)
