@@ -1,5 +1,8 @@
 """Reading the network the server is on from the output of macOS's own commands."""
 
+# cspell:ignore hopcount ifscope listallhardwareports networksetup prcloning
+# cspell:ignore recvpipe rttvar sendpipe ssthresh utun
+
 import pytest
 
 from medleyplay.application.network import (

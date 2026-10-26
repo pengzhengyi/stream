@@ -4,6 +4,8 @@ Each reader is a pure function of a command's output, so the tests read recorded
 output; the probe runs the commands, each with a short timeout.
 """
 
+# cspell:ignore listallhardwareports networksetup
+
 import re
 from dataclasses import dataclass
 
