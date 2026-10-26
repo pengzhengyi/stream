@@ -25,6 +25,30 @@ export interface Track {
   readonly downloaded: boolean;
 }
 
+/** A Playlist; a smart one's Tracks are the ones its rules match now. */
+export interface Playlist {
+  readonly id: string;
+  readonly name: string;
+  readonly track_ids: readonly number[];
+  readonly rules: Record<string, unknown> | null;
+  readonly keep_downloaded: boolean;
+  readonly unreadable: string;
+  readonly updated_at: string;
+}
+
+/** What this server can do now: for each extension point, the keys that answer it. */
+export interface Features {
+  readonly multiple_accounts: boolean;
+  readonly providers: Readonly<Record<string, readonly string[]>>;
+}
+
+/** A Job as the event stream sends it, as far as the client follows one. */
+export interface JobEvent {
+  readonly id: number;
+  readonly kind: string;
+  readonly state: Job["state"];
+}
+
 /** The signed-in Account. */
 export interface Account {
   readonly id: number;
@@ -94,6 +118,8 @@ export const api = {
   signOut: () => call<undefined>("DELETE", "/api/session"),
   me: () => call<Account>("GET", "/api/me"),
   tracks: () => call<Track[]>("GET", "/api/tracks"),
+  playlists: () => call<Playlist[]>("GET", "/api/playlists"),
+  features: () => call<Features>("GET", "/api/features"),
   setFavorite: (trackId: number, favorite: boolean) =>
     call<Track>("PUT", `/api/tracks/${String(trackId)}/favorite`, { favorite }),
   setRating: (trackId: number, rating: number | null) =>

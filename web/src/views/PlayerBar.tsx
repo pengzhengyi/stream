@@ -10,6 +10,7 @@ import {
   MusicNotesIcon,
   PauseIcon,
   PlayIcon,
+  QueueIcon,
   RepeatIcon,
   RepeatOnceIcon,
   ShuffleIcon,
@@ -39,10 +40,15 @@ export function PlayerBar({
   player,
   track,
   onFavorite,
+  queueOpen,
+  onToggleQueue,
 }: {
   readonly player: Player;
   readonly track: Track | undefined;
   readonly onFavorite: (track: Track, favorite: boolean) => void;
+  /** Whether the queue is open over the page, as it can be on a narrow screen. */
+  readonly queueOpen: boolean;
+  readonly onToggleQueue: () => void;
 }) {
   const { status, position, duration, shuffled, repeat } = player;
   // A label that changes on a focused button isn't always read out, so the change is said.
@@ -184,6 +190,17 @@ export function PlayerBar({
         </span>
       </div>
       <div className="status">
+        <button
+          type="button"
+          className={queueOpen ? "icon queue-toggle on" : "icon queue-toggle"}
+          aria-label="Up next"
+          aria-expanded={queueOpen}
+          aria-controls="queue"
+          title="Up next"
+          onClick={onToggleQueue}
+        >
+          <QueueIcon weight={queueOpen ? "bold" : "regular"} aria-hidden />
+        </button>
         {status.kind === "preparing" && <span className="note">Preparing…</span>}
         {status.kind === "failed" && (
           <span className="note failed" role="alert">

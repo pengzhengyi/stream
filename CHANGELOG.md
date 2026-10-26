@@ -51,6 +51,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a light, dark, or system theme, and a queue you reorder by dragging, or from
   the keyboard. The seek bar is easier to drag and moves the Track only once
   let go, and a row's actions show on touch screens.
+- **Views and search** — Songs, Artists, Albums, Downloaded, and Playlists, with
+  a built-in *Favorites*, worked out in the browser from the Library, so moving
+  between them asks the server nothing; Back, Forward, and bookmarks work. One
+  search box finds songs, artists, and albums as you type, ignoring case, width,
+  and hiragana or katakana. On a tablet the views are tabs and the queue opens
+  from the player; on a phone they are a tab bar. The Library refreshes when the
+  page is shown again or a scan or download finishes.
 - **The song table** — sort by any column, hide and resize columns, and mark
   favorites and rate Tracks from five stars, in the table and the player. It
   draws only the rows on screen, so a large Library scrolls smoothly. Each Track

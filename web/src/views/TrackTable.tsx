@@ -131,7 +131,8 @@ export function TrackTable({
     // The columns stay put, so a new callback or Track playing doesn't sort again.
     meta: { actions, playingId },
     data: tracks,
-    getRowId: (track) => String(track.id),
+    // A Playlist may hold a Track twice, so a row is a Track at its place.
+    getRowId: (track, index) => `${String(track.id)}:${String(index)}`,
     enableMultiSort: false,
     columnResizeMode: "onChange",
     state: { columnVisibility: layout.visibility, columnSizing: layout.sizing },
