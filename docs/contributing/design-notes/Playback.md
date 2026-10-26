@@ -169,9 +169,17 @@ come in step 7.
 - **The Track list** shows title, artist, album, and duration. Clicking a Track
   plays it and queues the Tracks after it in the list; *Play next* and *Add to
   queue* put a Track in the queue without interrupting.
-- **The queue** lists what plays next; a Track can be moved up or down, or
-  removed, and the queue cleared. It is a pure reducer, so its rules are unit
-  tested apart from the page.
+- **The queue** lists what plays next; a Track is dragged by its handle into
+  another place, with a pointer or a finger, or moved from the keyboard (Space
+  picks it up, the arrow keys move it, Space drops it, and a screen reader hears
+  each step), and it can be removed, or the queue cleared. Dragging is dnd-kit's
+  sortable list. The queue is a pure reducer, so its rules are unit tested apart
+  from the page.
+- **The look** is Pico's jade theme under the client's own palette, with
+  Phosphor's icons in the weight each control's prominence calls for: filled for
+  play and pause, regular for the rest, light for a row's actions. The page
+  follows the system's light or dark scheme unless a browser chooses one in the
+  header's theme switch, which it remembers.
 - **The player** shows the Track, play and pause, previous and next, a seek bar,
   and the time.
   - **One persistent `<audio>` element;** the next Track swaps its `src`, so

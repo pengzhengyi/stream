@@ -28,7 +28,7 @@ export type QueueAction =
   | { readonly type: "add"; readonly entry: Entry }
   | { readonly type: "next" }
   | { readonly type: "previous" }
-  | { readonly type: "move"; readonly key: string; readonly by: -1 | 1 }
+  | { readonly type: "move"; readonly key: string; readonly to: number }
   | { readonly type: "remove"; readonly key: string }
   | { readonly type: "clear" }
   | { readonly type: "restore"; readonly queue: Queue };
@@ -63,7 +63,7 @@ export function reduce(queue: Queue, action: QueueAction): Queue {
     case "previous":
       return { entries, position: Math.max(position - 1, 0) };
     case "move":
-      return move(queue, action.key, action.by);
+      return move(queue, action.key, action.to);
     case "remove": {
       const index = upcomingIndex(queue, action.key);
       return index === undefined
@@ -77,27 +77,21 @@ export function reduce(queue: Queue, action: QueueAction): Queue {
   }
 }
 
-function move(queue: Queue, key: string, by: -1 | 1): Queue {
+/** Move an upcoming entry to place `to` among the upcoming ones, 0 being next. */
+function move(queue: Queue, key: string, to: number): Queue {
   const from = upcomingIndex(queue, key);
-  const to = from === undefined ? undefined : from + by;
+  const moving = from === undefined ? undefined : queue.entries[from];
   // Only what plays next moves, and only among itself.
-  if (
-    from === undefined ||
-    to === undefined ||
-    to <= queue.position ||
-    to >= queue.entries.length
-  ) {
+  if (from === undefined || moving === undefined) {
     return queue;
   }
-  const entries = [...queue.entries];
-  const moving = entries[from];
-  const other = entries[to];
-  if (moving === undefined || other === undefined) {
+  const first = queue.position + 1;
+  const target = Math.min(Math.max(first + to, first), queue.entries.length - 1);
+  if (target === from) {
     return queue;
   }
-  entries[from] = other;
-  entries[to] = moving;
-  return { entries, position: queue.position };
+  const entries = queue.entries.filter((_, i) => i !== from);
+  return { entries: insert(entries, target, moving), position: queue.position };
 }
 
 function upcomingIndex(queue: Queue, key: string): number | undefined {

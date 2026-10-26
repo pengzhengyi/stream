@@ -63,16 +63,32 @@ describe("the queue", () => {
     expect(reduce(PLAYING_1_OF_3, { type: "previous" })).toEqual(PLAYING_1_OF_3);
   });
 
-  it("moves an upcoming entry up or down among the upcoming ones", () => {
-    const queue = reduce(PLAYING_1_OF_3, { type: "move", key: "c", by: -1 });
+  it("moves an upcoming entry to any place among the upcoming ones", () => {
+    const playing1Of4: Queue = { entries: entries(1, 2, 3, 4), position: 0 };
 
-    expect(tracksOf(queue.entries)).toEqual([1, 3, 2]);
-    expect(reduce(queue, { type: "move", key: "c", by: -1 })).toEqual(queue);
-    expect(reduce(queue, { type: "move", key: "b", by: 1 })).toEqual(queue);
+    const lastFirst = reduce(playing1Of4, { type: "move", key: "d", to: 0 });
+    const firstLast = reduce(playing1Of4, { type: "move", key: "b", to: 2 });
+
+    expect(tracksOf(lastFirst.entries)).toEqual([1, 4, 2, 3]);
+    expect(tracksOf(firstLast.entries)).toEqual([1, 3, 4, 2]);
   });
 
-  it("never moves or removes the current entry", () => {
-    expect(reduce(PLAYING_1_OF_3, { type: "move", key: "a", by: 1 })).toEqual(PLAYING_1_OF_3);
+  it("keeps a move within what plays next, and a move to its own place changes nothing", () => {
+    const playing2Of4: Queue = { entries: entries(1, 2, 3, 4), position: 1 };
+
+    const beforeTheStart = reduce(playing2Of4, { type: "move", key: "d", to: -5 });
+    const pastTheEnd = reduce(playing2Of4, { type: "move", key: "c", to: 9 });
+
+    expect(tracksOf(beforeTheStart.entries)).toEqual([1, 2, 4, 3]);
+    expect(tracksOf(pastTheEnd.entries)).toEqual([1, 2, 4, 3]);
+    expect(reduce(playing2Of4, { type: "move", key: "c", to: 0 })).toBe(playing2Of4);
+  });
+
+  it("never moves or removes the current entry, or one already played", () => {
+    const playing2Of3: Queue = { entries: entries(1, 2, 3), position: 1 };
+
+    expect(reduce(PLAYING_1_OF_3, { type: "move", key: "a", to: 1 })).toEqual(PLAYING_1_OF_3);
+    expect(reduce(playing2Of3, { type: "move", key: "a", to: 0 })).toEqual(playing2Of3);
     expect(reduce(PLAYING_1_OF_3, { type: "remove", key: "a" })).toEqual(PLAYING_1_OF_3);
   });
 

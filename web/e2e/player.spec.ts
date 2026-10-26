@@ -83,3 +83,46 @@ test("a reload keeps the queue, paused where it was", async ({ page }) => {
   expect((await audioState(page)).playing).toBe(false);
   await expect(upNext(page)).toHaveText([/Bravo/, /Charlie/, /Delta/]);
 });
+
+test("dragging a Track by its handle puts it in another place in the queue", async ({ page }) => {
+  await play(page, "Alpha");
+  await expect(upNext(page)).toHaveText([/Bravo/, /Charlie/, /Delta/]);
+  const queue = page.getByRole("region", { name: "Up next" });
+
+  await queue
+    .getByRole("button", { name: "Reorder Delta" })
+    .dragTo(queue.getByRole("button", { name: "Reorder Bravo" }), { steps: 12 });
+
+  await expect(upNext(page)).toHaveText([/Delta/, /Bravo/, /Charlie/]);
+});
+
+test("the keyboard moves a Track in the queue as dragging does", async ({ page }) => {
+  await play(page, "Alpha");
+  await expect(upNext(page)).toHaveText([/Bravo/, /Charlie/, /Delta/]);
+
+  // Each step waits for what a screen reader hears, as a listener would.
+  await page.getByRole("button", { name: "Reorder Bravo" }).focus();
+  await page.keyboard.press("Space");
+  await expect(page.getByText("Picked up Bravo.")).toBeAttached();
+  // The sensor starts hearing keys a timeout after the pickup; this one runs after it.
+  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByText("Bravo would play second.")).toBeAttached();
+  await page.keyboard.press("Space");
+
+  await expect(upNext(page)).toHaveText([/Charlie/, /Bravo/, /Delta/]);
+});
+
+test("a theme chosen holds over the system's, and across a reload", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.goto("/");
+  const html = page.locator("html");
+
+  await page.getByRole("radio", { name: "Dark" }).click();
+  await page.reload();
+
+  await expect(html).toHaveAttribute("data-theme", "dark");
+  await expect(page.getByRole("radio", { name: "Dark" })).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("radio", { name: "Match the system" }).click();
+  await expect(html).not.toHaveAttribute("data-theme");
+});

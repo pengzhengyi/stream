@@ -2,6 +2,7 @@
  * @file Signing in, or creating the first Account on a new server.
  */
 
+import { WaveformIcon } from "@phosphor-icons/react";
 import { type SubmitEvent, useEffect, useState } from "react";
 
 import { type Account, api } from "../api";
@@ -48,7 +49,10 @@ export function SignIn({ onSignedIn }: { readonly onSignedIn: (account: Account)
   const firstRun = setUp === false;
   return (
     <main className="sign-in">
-      <h1>medleyplay</h1>
+      <h1>
+        <WaveformIcon weight="bold" aria-hidden />
+        medleyplay
+      </h1>
       <form onSubmit={submit} aria-label={firstRun ? "Create the admin Account" : "Sign in"}>
         {firstRun && <p>Create the first Account. It is the admin.</p>}
         <label>

@@ -1,60 +1,98 @@
-:root {
-  color-scheme: light dark;
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    sans-serif;
-  line-height: 1.4;
+/*
+ * medleyplay's look, on top of Pico's jade theme.
+ *
+ * The palette: misted greens by day, deep slate-green by night, one jade accent.
+ * Each scheme sets the page's own tokens; Pico's variables read them below, so
+ * Pico's forms and focus rings match. The selectors follow Pico's: light unless
+ * forced dark, dark when the system is and nothing is forced, and dark forced.
+ */
 
-  --page: #f7f7f9;
+:root:not([data-theme="dark"]),
+[data-theme="light"] {
+  --page: #eef2f0;
   --surface: #fff;
-  --ink: #1d1d22;
-  --muted: #6b6b76;
-  --line: #e3e3e8;
-  --accent: #d6336c;
+  --raised: #f5f8f6;
+  --ink: #17201d;
+  --muted: #5d6b67;
+  --line: #dbe2df;
+  --accent: #0b8a70;
+  --accent-soft: rgb(11 138 112 / 12%);
   --accent-ink: #fff;
+  --shadow-color: 160deg 30% 20%;
+  --lift: 0 1px 2px hsl(var(--shadow-color) / 8%), 0 6px 16px -6px hsl(var(--shadow-color) / 16%);
+  --float:
+    0 1px 1px hsl(var(--shadow-color) / 6%), 0 8px 18px -6px hsl(var(--shadow-color) / 18%),
+    0 24px 48px -16px hsl(var(--shadow-color) / 28%);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --page: #141418;
-    --surface: #1e1e24;
-    --ink: #ececf1;
-    --muted: #9a9aa6;
-    --line: #2e2e36;
-    --accent: #f06595;
-    --accent-ink: #141418;
+@media only screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --page: #0e1514;
+    --surface: #151e1c;
+    --raised: #1b2624;
+    --ink: #e3ebe8;
+    --muted: #8d9d98;
+    --line: #24312e;
+    --accent: #3dc4a4;
+    --accent-soft: rgb(61 196 164 / 14%);
+    --accent-ink: #062019;
+    --lift: 0 1px 2px rgb(0 0 0 / 40%), 0 6px 16px -6px rgb(0 0 0 / 50%);
+    --float:
+      0 1px 0 rgb(255 255 255 / 4%) inset, 0 8px 18px -6px rgb(0 0 0 / 50%),
+      0 28px 56px -16px rgb(0 0 0 / 70%);
   }
 }
 
-* {
-  box-sizing: border-box;
+[data-theme="dark"] {
+  --page: #0e1514;
+  --surface: #151e1c;
+  --raised: #1b2624;
+  --ink: #e3ebe8;
+  --muted: #8d9d98;
+  --line: #24312e;
+  --accent: #3dc4a4;
+  --accent-soft: rgb(61 196 164 / 14%);
+  --accent-ink: #062019;
+  --lift: 0 1px 2px rgb(0 0 0 / 40%), 0 6px 16px -6px rgb(0 0 0 / 50%);
+  --float:
+    0 1px 0 rgb(255 255 255 / 4%) inset, 0 8px 18px -6px rgb(0 0 0 / 50%),
+    0 28px 56px -16px rgb(0 0 0 / 70%);
+}
+
+/* As specific as Pico's own, and later, so it wins in every scheme. */
+:root:not([data-theme]),
+[data-theme] {
+  --pico-font-family:
+    system-ui, -apple-system, "Hiragino Sans", "PingFang SC", "Segoe UI", sans-serif;
+  --pico-background-color: var(--page);
+  --pico-color: var(--ink);
+  --pico-muted-color: var(--muted);
+  --pico-muted-border-color: var(--line);
+  --pico-primary: var(--accent);
+  --pico-primary-background: var(--accent);
+  --pico-primary-border: var(--accent);
+  --pico-primary-hover-background: var(--accent);
+  --pico-primary-inverse: var(--accent-ink);
+  --pico-primary-focus: var(--accent-soft);
+  --pico-form-element-background-color: var(--raised);
+  --pico-form-element-border-color: var(--line);
+  --pico-form-element-focus-color: var(--accent);
+  --pico-border-radius: 0.75rem;
+
+  /* Pico grows the type on wide screens; a list of songs reads better steady. */
+  --pico-font-size: 100%;
 }
 
 body {
-  margin: 0;
   background: var(--page);
+}
+
+h1,
+h2 {
   color: var(--ink);
 }
 
-button {
-  font: inherit;
-  color: inherit;
-  background: none;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 0.25rem 0.6rem;
-  cursor: pointer;
-}
-
-button:disabled {
-  cursor: default;
-  opacity: 0.4;
-}
-
-button:focus-visible,
-input:focus-visible {
+:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -72,112 +110,281 @@ input:focus-visible {
   color: var(--muted);
 }
 
-/* Signing in */
-
-.sign-in {
-  max-width: 22rem;
-  margin: 15vh auto 0;
-  padding: 0 1rem;
+[role="alert"] {
+  color: #d1495b;
 }
 
-.sign-in form {
-  display: grid;
-  gap: 0.75rem;
-}
+/* Icon buttons: quiet until pointed at. */
 
-.sign-in label {
-  display: grid;
-  gap: 0.25rem;
+button.icon {
+  display: inline-grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
   color: var(--muted);
+  box-shadow: none;
+  font-size: 1.25rem;
+  line-height: 0;
+  transition:
+    background-color 120ms,
+    color 120ms;
 }
 
-.sign-in input {
-  font: inherit;
-  padding: 0.5rem;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--surface);
+button.icon:disabled {
+  opacity: 0.35;
+}
+
+button.icon:hover:not(:disabled) {
+  background: var(--accent-soft);
   color: var(--ink);
 }
 
-.sign-in button[type="submit"] {
-  background: var(--accent);
-  color: var(--accent-ink);
-  border-color: var(--accent);
-  padding: 0.5rem;
+button.text {
+  padding: 0.25rem 0.75rem;
+  margin: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 
-[role="alert"] {
+button.text:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+/* The wordmark: the waveform in jade, the name tight and lowercase. */
+
+.top h1,
+.sign-in h1 {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.top h1 svg,
+.sign-in h1 svg {
   color: var(--accent);
+  font-size: 1.4rem;
 }
 
-/* The signed-in page: the Tracks beside the queue, the player along the bottom. */
+/* Signing in: one card, centred. */
+
+.sign-in {
+  max-width: 24rem;
+  margin: 14vh auto 0;
+  padding: 2rem;
+  border-radius: 1.25rem;
+  background: var(--surface);
+  box-shadow: var(--float);
+}
+
+.sign-in h1 {
+  margin-bottom: 1.5rem;
+  font-size: 1.4rem;
+}
+
+.sign-in label {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.sign-in button[type="submit"] {
+  width: 100%;
+  border-radius: 999px;
+}
+
+/* The signed-in page: the Library beside the queue, the player floating below. */
 
 .library {
   display: grid;
   grid-template:
     "top top" auto
-    "main queue" 1fr
-    "player player" auto / 1fr 18rem;
+    "main queue" 1fr / minmax(0, 1fr) 20rem;
   min-height: 100dvh;
 }
 
 .top {
   grid-area: top;
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--line);
+  gap: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  background: color-mix(in srgb, var(--page) 82%, transparent);
+  backdrop-filter: blur(12px);
 }
 
 .top h1 {
-  margin: 0 auto 0 0;
-  font-size: 1.1rem;
+  margin-right: auto;
+}
+
+.top .account {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.theme-switch {
+  display: inline-flex;
+  gap: 0.125rem;
+  padding: 0.2rem;
+  border-radius: 999px;
+  background: var(--raised);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.theme-switch button {
+  display: inline-grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+  font-size: 1rem;
+  line-height: 0;
+}
+
+.theme-switch button[aria-checked="true"] {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: var(--lift);
 }
 
 .library main {
   grid-area: main;
-  padding: 0.5rem 1rem 6rem;
+  padding: 0.5rem 1.5rem 9rem;
   overflow: auto;
 }
 
+.section {
+  margin: 0.5rem 0 1rem 0.75rem;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+/* The Library: borderless rows, each lit when pointed at. */
+
 .tracks {
   width: 100%;
-  border-collapse: collapse;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.tracks th.title-column {
+  width: 40%;
+}
+
+.tracks th.artist {
+  width: 22%;
+}
+
+.tracks th.time {
+  width: 4.5rem;
+}
+
+.tracks th.actions {
+  width: 6rem;
+}
+
+.tracks th,
+.tracks td {
+  overflow: hidden;
+  padding: 0.55rem 0.75rem;
+  border: none;
+  background: transparent;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tracks th {
-  text-align: left;
-  font-weight: 500;
   color: var(--muted);
-  padding: 0.5rem;
-  border-bottom: 1px solid var(--line);
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-align: left;
 }
 
-.tracks td {
-  padding: 0.35rem 0.5rem;
-  border-bottom: 1px solid var(--line);
+.tracks tbody td {
+  transition: background-color 120ms;
+}
+
+.tracks td:first-child {
+  border-radius: 0.75rem 0 0 0.75rem;
+}
+
+.tracks td:last-child {
+  border-radius: 0 0.75rem 0.75rem 0;
+}
+
+.tracks tbody tr:hover td {
+  background: var(--surface);
+}
+
+.tracks .artist,
+.tracks .album,
+.tracks .time {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.tracks .title-cell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.6rem;
 }
 
 .tracks .title {
-  border: none;
   padding: 0;
+  margin: 0;
+  border: none;
+  background: none;
+  color: var(--ink);
+  box-shadow: none;
+  font-weight: 500;
+  overflow: hidden;
   text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracks .subtitle {
+  display: none;
+}
+
+.tracks .unplayable .title {
+  color: var(--muted);
 }
 
 .tracks tr[aria-current="true"] .title {
   color: var(--accent);
-  font-weight: 600;
-}
-
-.tracks .unplayable {
-  color: var(--muted);
+  font-weight: 650;
 }
 
 .tracks .why {
-  margin-left: 0.5rem;
-  font-size: 0.8rem;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  background: var(--raised);
+  color: var(--muted);
+  font-size: 0.75rem;
 }
 
 .tracks .time {
@@ -191,24 +398,82 @@ input:focus-visible {
 }
 
 .tracks .actions button {
-  margin-left: 0.25rem;
-  font-size: 0.8rem;
+  opacity: 0;
 }
+
+.tracks tr:hover .actions button,
+.tracks tr:focus-within .actions button {
+  opacity: 1;
+}
+
+.tracks tr:hover .actions button:disabled,
+.tracks tr:focus-within .actions button:disabled {
+  opacity: 0.35;
+}
+
+/* Three bars beside the Track playing now. */
+
+.bars {
+  display: inline-block;
+  flex: none;
+  width: 0.85rem;
+  height: 0.8rem;
+  background:
+    linear-gradient(var(--accent) 0 0) left bottom / 22% 60% no-repeat,
+    linear-gradient(var(--accent) 0 0) center bottom / 22% 100% no-repeat,
+    linear-gradient(var(--accent) 0 0) right bottom / 22% 40% no-repeat;
+  animation: bars 1.1s ease-in-out infinite alternate;
+}
+
+@keyframes bars {
+  50% {
+    background-size:
+      22% 100%,
+      22% 35%,
+      22% 80%;
+  }
+
+  100% {
+    background-size:
+      22% 40%,
+      22% 75%,
+      22% 100%;
+  }
+}
+
+/* The queue: a raised panel; a dragged Track lifts off it. */
 
 .queue {
   grid-area: queue;
-  padding: 0.5rem 1rem 6rem;
-  border-left: 1px solid var(--line);
+  align-self: start;
+  position: sticky;
+  top: 4.25rem;
+  max-height: calc(100dvh - 12rem);
+  margin: 0.5rem 1.5rem 0 0;
+  padding: 1rem 0.75rem;
+  overflow: auto;
+  border-radius: 1.25rem;
+  background: var(--surface);
+  box-shadow: var(--lift);
 }
 
 .queue header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 0 0.5rem 0.5rem;
 }
 
 .queue h2 {
+  margin: 0;
   font-size: 1rem;
+  font-weight: 650;
+}
+
+.queue .empty {
+  margin: 0;
+  padding: 0.5rem;
+  font-size: 0.9rem;
 }
 
 .queue ol {
@@ -218,112 +483,353 @@ input:focus-visible {
 }
 
 .queue li {
-  display: flex;
+  display: grid;
+  grid-template:
+    "handle title remove" auto
+    "handle artist remove" auto / auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.35rem 0;
-  border-bottom: 1px solid var(--line);
+  column-gap: 0.35rem;
+  margin: 0;
+  padding: 0.4rem 0.25rem;
+  border-radius: 0.75rem;
+  list-style: none;
 }
 
-.queue li span {
-  flex: 1;
+.queue li:hover {
+  background: var(--raised);
+}
+
+.queue li.dragging {
+  position: relative;
+  z-index: 1;
+  background: var(--surface);
+  box-shadow: var(--float);
+}
+
+.queue .handle {
+  grid-area: handle;
+  width: 1.75rem;
+  cursor: grab;
+  touch-action: none;
+}
+
+.queue li.dragging .handle {
+  cursor: grabbing;
+}
+
+.queue .entry-title,
+.queue .entry-artist {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.queue .entry-title {
+  grid-area: title;
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+
+.queue .entry-artist {
+  grid-area: artist;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.queue .remove {
+  grid-area: remove;
+  width: 1.9rem;
+  height: 1.9rem;
+  font-size: 0.95rem;
+  opacity: 0;
+}
+
+.queue li:hover .remove,
+.queue li:focus-within .remove {
+  opacity: 1;
+}
+
+/* The player: a deck floating over the page, its position along the top edge. */
+
 .player {
-  grid-area: player;
-  position: sticky;
-  bottom: 0;
+  position: fixed;
+  inset: auto 1.5rem 1.25rem;
+  z-index: 3;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.5fr);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 1rem;
-  padding: 0.75rem 1rem;
-  background: var(--surface);
-  border-top: 1px solid var(--line);
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 0.85rem 1.25rem;
+  border-radius: 1.25rem;
+  background: color-mix(in srgb, var(--surface) 97%, transparent);
+  box-shadow: var(--float);
+  backdrop-filter: blur(16px);
 }
 
 .player .now {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.player .cover {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.75rem;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 1.4rem;
+}
+
+.player .names {
   display: grid;
   min-width: 0;
 }
 
-.player .now > * {
+.player .names > * {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.player .now span {
-  color: var(--muted);
-  font-size: 0.9rem;
+.player .names strong {
+  font-weight: 600;
 }
 
-.player .note {
-  color: var(--accent);
-}
-
-.player .controls {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.player .play {
-  min-width: 4.5rem;
-  background: var(--accent);
-  color: var(--accent-ink);
-  border-color: var(--accent);
-}
-
-.player .progress {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-variant-numeric: tabular-nums;
+.player .names span {
   color: var(--muted);
   font-size: 0.85rem;
 }
 
-.player input[type="range"] {
-  flex: 1;
-  accent-color: var(--accent);
+.player .controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
-/* On a phone: one column, the queue under the Tracks, the player pinned. */
+.player .controls button.icon {
+  color: var(--ink);
+}
 
-@media (width <= 40rem) {
+.player button.play {
+  width: 3rem;
+  height: 3rem;
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: 0 6px 16px -4px color-mix(in srgb, var(--accent) 55%, transparent);
+  font-size: 1.35rem;
+  transition:
+    transform 120ms,
+    box-shadow 120ms;
+}
+
+.player button.play:disabled {
+  opacity: 0.5;
+}
+
+.player button.play:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-ink);
+  transform: scale(1.05);
+}
+
+.player .status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.player .time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.player .note {
+  overflow: hidden;
+  color: var(--accent);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player .note.failed {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: #d1495b;
+}
+
+.spin {
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/* The position: a hairline along the deck's top edge, which thickens to be held. */
+
+.player .seek {
+  position: absolute;
+  inset: -0.4rem 1.25rem auto;
+  width: auto;
+  height: 0.8rem;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  appearance: none;
+}
+
+.player .seek::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--accent) var(--played, 0%),
+    var(--line) var(--played, 0%)
+  );
+  transition: height 120ms;
+}
+
+.player .seek::-moz-range-track {
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--accent) var(--played, 0%),
+    var(--line) var(--played, 0%)
+  );
+}
+
+.player .seek::-webkit-slider-thumb {
+  width: 0.8rem;
+  height: 0.8rem;
+  margin-top: calc(1.5px - 0.4rem);
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: var(--lift);
+  opacity: 0;
+  transition: opacity 120ms;
+  appearance: none;
+}
+
+.player .seek::-moz-range-thumb {
+  width: 0.8rem;
+  height: 0.8rem;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0;
+}
+
+.player .seek:hover::-webkit-slider-thumb,
+.player .seek:focus-visible::-webkit-slider-thumb {
+  opacity: 1;
+}
+
+.player .seek:hover::-moz-range-thumb,
+.player .seek:focus-visible::-moz-range-thumb {
+  opacity: 1;
+}
+
+.player .seek:disabled {
+  cursor: default;
+}
+
+/* On a phone: one column, the queue under the Library, the player along the bottom. */
+
+@media (width <= 48rem) {
   .library {
     grid-template:
       "top" auto
       "main" auto
-      "queue" auto
-      "player" auto / 1fr;
+      "queue" auto / 1fr;
   }
 
-  .library main,
-  .queue {
-    padding-bottom: 1rem;
+  .top {
+    padding: 0.6rem 1rem;
   }
 
-  .queue {
-    border-left: none;
-    border-top: 1px solid var(--line);
-  }
-
-  .tracks .album {
+  .top .account {
     display: none;
   }
 
-  .player {
-    position: fixed;
-    inset: auto 0 0;
-    grid-template-columns: 1fr;
-    gap: 0.5rem;
+  .library main {
+    padding: 0.5rem 0.5rem 1rem;
   }
 
-  .player .controls {
-    justify-content: center;
+  .tracks .album,
+  .tracks .artist,
+  .tracks .time {
+    display: none;
+  }
+
+  .tracks th.title-column {
+    width: auto;
+  }
+
+  .tracks .title-cell {
+    display: block;
+  }
+
+  .tracks .title-cell .bars {
+    margin-right: 0.5rem;
+  }
+
+  .tracks .title-cell .title {
+    line-height: 1.35;
+  }
+
+  .tracks .subtitle {
+    display: block;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.8rem;
+    text-overflow: ellipsis;
+  }
+
+  .tracks .actions button {
+    opacity: 1;
+  }
+
+  .queue {
+    position: static;
+    max-height: none;
+    margin: 0 0.75rem 11rem;
+  }
+
+  .queue .remove {
+    opacity: 1;
+  }
+
+  .player {
+    inset: auto 0.5rem 0.5rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.5rem 0.75rem;
+    padding: 0.85rem 1rem 0.75rem;
+  }
+
+  .player .status {
+    grid-column: 1 / -1;
+    justify-content: space-between;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bars,
+  .spin {
+    animation: none;
   }
 }
