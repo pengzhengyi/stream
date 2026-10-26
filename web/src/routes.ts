@@ -17,7 +17,8 @@ export type Route =
   | { readonly view: "downloaded" }
   | { readonly view: "playlists" }
   | { readonly view: "playlist"; readonly id: string }
-  | { readonly view: "search"; readonly query: string };
+  | { readonly view: "search"; readonly query: string }
+  | { readonly view: "settings" };
 
 const SONGS: Route = { view: "songs" };
 
@@ -32,6 +33,7 @@ export function routeOf(hash: string): Route {
     case "albums":
     case "downloaded":
     case "playlists":
+    case "settings":
       return { view: path };
     case "artist":
       return name === null ? SONGS : { view: "artist", name };

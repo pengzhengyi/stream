@@ -82,6 +82,7 @@ export function Library({
             playlists={library.playlists}
             playingId={playingId}
             actions={actions}
+            admin={account.role === "admin"}
           />
         ) : (
           <p className="empty" aria-busy="true">

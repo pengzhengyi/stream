@@ -4,6 +4,7 @@
 
 import {
   DownloadSimpleIcon,
+  GearSixIcon,
   type Icon,
   MicrophoneStageIcon,
   MusicNotesSimpleIcon,
@@ -13,7 +14,7 @@ import {
 
 import { type Route, hrefOf } from "../routes";
 
-type Top = "songs" | "artists" | "albums" | "downloaded" | "playlists";
+type Top = "songs" | "artists" | "albums" | "downloaded" | "playlists" | "settings";
 
 const TOPS: readonly { readonly view: Top; readonly label: string; readonly icon: Icon }[] = [
   { view: "songs", label: "Songs", icon: MusicNotesSimpleIcon },
@@ -21,6 +22,7 @@ const TOPS: readonly { readonly view: Top; readonly label: string; readonly icon
   { view: "albums", label: "Albums", icon: VinylRecordIcon },
   { view: "downloaded", label: "Downloaded", icon: DownloadSimpleIcon },
   { view: "playlists", label: "Playlists", icon: PlaylistIcon },
+  { view: "settings", label: "Settings", icon: GearSixIcon },
 ];
 
 /** The top view a route belongs to: an artist's Tracks belong to Artists, and so on. */

@@ -5,7 +5,7 @@
  * without it, the page follows the system.
  */
 
-import { useState } from "react";
+import { useSyncExternalStore } from "react";
 
 /** Which colors the page uses. */
 export type Theme = "system" | "light" | "dark";
@@ -23,8 +23,15 @@ export function savedTheme(): Theme {
   }
 }
 
+let shown: Theme | undefined;
+const listeners = new Set<() => void>();
+
 /** Show the page in `theme`, and remember it for this browser. */
 export function applyTheme(theme: Theme): void {
+  shown = theme;
+  for (const listener of listeners) {
+    listener();
+  }
   const root = document.documentElement;
   if (theme === "system") {
     delete root.dataset.theme;
@@ -38,14 +45,16 @@ export function applyTheme(theme: Theme): void {
   }
 }
 
-/** The theme chosen, and a way to choose another. */
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+const current = () => shown ?? savedTheme();
+
+/** The theme chosen, and a way to choose another; every switch on the page agrees. */
 export function useTheme(): [Theme, (theme: Theme) => void] {
-  const [theme, setTheme] = useState(savedTheme);
-  return [
-    theme,
-    (chosen) => {
-      applyTheme(chosen);
-      setTheme(chosen);
-    },
-  ];
+  return [useSyncExternalStore(subscribe, current), applyTheme];
 }

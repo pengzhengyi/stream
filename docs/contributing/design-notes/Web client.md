@@ -1,8 +1,7 @@
 # Web client
 
 > [!NOTE]
-> **Status: in progress; the song table, favorites, ratings, views, and search
-> are built, and Settings is next.** This note describes the client's views: the song
+> **Status: implemented.** This note describes the client's views: the song
 > table, Artists, Albums, Downloaded, Playlists, search, and Settings, and how
 > they get their data. What the client must do is in [MVP](MVP.md#client-notes);
 > the player, the queue, and play modes are in
@@ -129,11 +128,19 @@ no router package.
 
 One view, in sections, each saved on its own:
 
-- **Appearance:** the theme, as in the header.
-- **Downloads and storage:** the storage limit, the removal order, and what
-  is used, from `GET` and `PUT /api/settings` and `GET /api/storage`, with a
-  preview of what a lower limit would remove. Admin only, as the server
-  requires.
+- **Appearance:** the theme, the same choice as the header's switch; every
+  switch on the page shows the one chosen.
+- **Downloads and storage:** what the Downloads, prepared copies, and Downloads
+  under way use, against the limit or the free disk, and what kept Playlists
+  want, from `GET /api/storage`; and the storage limit, from `GET` and `PUT
+  /api/settings`. Sizes are in decimal units, as Finder shows them.
+  - **An admin changes the limit:** no limit, or a size in GB. A moment after
+    the size stops changing, the page asks `GET /api/storage?limit=` what that
+    limit would remove, and says so before saving. Saving sends the revision
+    read; if someone saved first, the page shows the settings as they are now.
+  - **A member sees the limit** and what it holds, with nothing to change.
+  - **The removal order** has one choice today, so it is said in a sentence
+    rather than offered as a menu.
 - **Later sections** come with their features: Mode, linked accounts,
   Libraries, Accounts, and plugins.
 

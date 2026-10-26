@@ -407,6 +407,133 @@ button.text:hover:not(:disabled) {
   font-weight: 600;
 }
 
+/* Settings: a raised card for each section. */
+.settings-section {
+  max-width: 42rem;
+  margin: 0 0 1.25rem;
+  padding: 1.25rem 1.5rem;
+  border-radius: 1.25rem;
+  background: var(--surface);
+  box-shadow: var(--lift);
+}
+
+.settings-section h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1.1rem;
+  font-weight: 650;
+}
+
+.settings-section .hint {
+  margin: 0.5rem 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.settings-section .hint.saved {
+  color: var(--accent);
+}
+
+.usage-total {
+  margin: 0.75rem 0 0.5rem;
+}
+
+.usage-total strong {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.meter {
+  display: flex;
+  overflow: hidden;
+  height: 0.6rem;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.meter span,
+.swatch {
+  background: var(--accent);
+}
+
+.meter span.cache,
+.swatch.cache {
+  background: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+
+.meter span.reserved,
+.swatch.reserved {
+  background: var(--muted);
+}
+
+.legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.5rem 1.5rem;
+  margin: 0.85rem 0 0;
+}
+
+.legend div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.9rem;
+}
+
+.legend dt {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.legend dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.swatch {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 999px;
+}
+
+.limit {
+  margin-top: 1rem;
+}
+
+.limit fieldset {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.limit legend {
+  margin-bottom: 0.25rem;
+  font-weight: 600;
+}
+
+.limit-choice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.limit input[type="number"] {
+  width: 6rem;
+  height: auto;
+  margin: 0;
+  padding: 0.3rem 0.6rem;
+}
+
+.limit button[type="submit"] {
+  width: auto;
+  padding: 0.45rem 1.4rem;
+  border-radius: 999px;
+}
+
 /* Artists, albums, and Playlists: tiles, each lifting when pointed at. */
 .groups {
   display: grid;

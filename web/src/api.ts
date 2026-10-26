@@ -49,6 +49,42 @@ export interface JobEvent {
   readonly state: Job["state"];
 }
 
+/** The household's settings, and the revision they were read at; 0 if never saved. */
+export interface Settings {
+  /** The most the Downloads and cache may use, in bytes, or `null` for no limit. */
+  readonly storage_limit: number | null;
+  readonly removal_order: "least_favorite";
+  readonly revision: number;
+}
+
+/** What a plan at another storage limit would remove. */
+export interface Preview {
+  readonly removals: readonly {
+    readonly kind: "download" | "cache";
+    readonly size: number;
+  }[];
+}
+
+/** The storage the download policy governs; the figures are `null` when `error` says why. */
+export interface Storage {
+  readonly limit: number | null;
+  readonly downloads: number | null;
+  readonly cache: number | null;
+  readonly reserved: number | null;
+  readonly free: number | null;
+  readonly disk_size: number | null;
+  readonly wanted: number | null;
+  readonly last_evaluation: {
+    readonly at: string;
+    readonly removed: number;
+    readonly started: number;
+    readonly shortfalls: readonly unknown[];
+    readonly error: string | null;
+  } | null;
+  readonly error: string | null;
+  readonly preview: Preview | null;
+}
+
 /** The signed-in Account. */
 export interface Account {
   readonly id: number;
@@ -120,6 +156,13 @@ export const api = {
   tracks: () => call<Track[]>("GET", "/api/tracks"),
   playlists: () => call<Playlist[]>("GET", "/api/playlists"),
   features: () => call<Features>("GET", "/api/features"),
+  settings: () => call<Settings>("GET", "/api/settings"),
+  saveSettings: (settings: Settings) => call<Settings>("PUT", "/api/settings", settings),
+  storage: (previewLimit?: number) =>
+    call<Storage>(
+      "GET",
+      previewLimit === undefined ? "/api/storage" : `/api/storage?limit=${String(previewLimit)}`,
+    ),
   setFavorite: (trackId: number, favorite: boolean) =>
     call<Track>("PUT", `/api/tracks/${String(trackId)}/favorite`, { favorite }),
   setRating: (trackId: number, rating: number | null) =>

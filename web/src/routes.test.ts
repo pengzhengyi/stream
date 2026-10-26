@@ -15,6 +15,7 @@ describe("routes", () => {
     ["#/playlists", { view: "playlists" }],
     ["#/playlist?id=favorites", { view: "playlist", id: "favorites" }],
     ["#/search?q=melt", { view: "search", query: "melt" }],
+    ["#/settings", { view: "settings" }],
   ])("reads %s", (hash, route) => {
     expect(routeOf(hash)).toEqual(route);
   });

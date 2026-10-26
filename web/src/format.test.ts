@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatLength, formatTime } from "./format";
+import { formatBytes, formatLength, formatTime } from "./format";
 
 describe("formatTime", () => {
   it("writes minutes and two-digit seconds", () => {
@@ -23,5 +23,14 @@ describe("formatLength", () => {
 
   it("leaves the length out when it is unknown", () => {
     expect(formatLength(2, 0)).toBe("2 songs");
+  });
+});
+
+describe("formatBytes", () => {
+  it("writes sizes in decimal units, with a decimal place below a hundred when it counts", () => {
+    expect(formatBytes(512)).toBe("512 bytes");
+    expect(formatBytes(420_000_000)).toBe("420 MB");
+    expect(formatBytes(3_210_000_000)).toBe("3.2 GB");
+    expect(formatBytes(2_000_000_000_000)).toBe("2 TB");
   });
 });
