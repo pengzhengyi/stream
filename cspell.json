@@ -107,6 +107,7 @@
     "typecheck",
     "unintrusive",
     "unreviewed",
+    "unshuffle",
     "unstartable",
     "unstub",
     "usefixtures",

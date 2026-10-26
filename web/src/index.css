@@ -617,6 +617,28 @@ button.text:hover:not(:disabled) {
   color: var(--ink);
 }
 
+/* A play mode that is on keeps the accent, with a dot beneath. */
+.player .controls button.mode {
+  position: relative;
+  color: var(--muted);
+}
+
+.player .controls button.mode.on {
+  color: var(--accent);
+}
+
+.player .controls button.mode.on::after {
+  position: absolute;
+  bottom: 0.15rem;
+  left: 50%;
+  width: 0.25rem;
+  height: 0.25rem;
+  border-radius: 999px;
+  background: currentcolor;
+  content: "";
+  translate: -50% 0;
+}
+
 .player button.play {
   width: 3rem;
   height: 3rem;
@@ -819,6 +841,14 @@ button.text:hover:not(:disabled) {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 0.5rem 0.75rem;
     padding: 0.85rem 1rem 0.75rem;
+  }
+
+  .player .controls {
+    gap: 0.1rem;
+  }
+
+  .player .controls button.icon:not(.play) {
+    width: 2rem;
   }
 
   .player .status {

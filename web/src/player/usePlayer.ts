@@ -7,7 +7,7 @@ import { type RefObject, useEffect, useEffectEvent, useReducer, useRef, useState
 import { ApiError, type PlaybackAnswer, type Track, api } from "../api";
 import { newId } from "../ids";
 import { PlayTime, countsAsPlayed } from "./playCount";
-import { EMPTY, type Entry, type Queue, current, reduce, upNext } from "./queue";
+import { EMPTY, type Entry, type Queue, type Repeat, current, following, reduce } from "./queue";
 import { type Play, forgetPlay, keepPlay, keptPlays, loadQueue, saveQueue } from "./storage";
 
 /** What the player is doing. */
@@ -23,6 +23,8 @@ export type Status =
 export interface Player {
   readonly queue: Queue;
   readonly status: Status;
+  readonly shuffled: boolean;
+  readonly repeat: Repeat;
   /** Seconds into the current Track. */
   readonly position: number;
   /** The current Track's length in seconds, once known. */
@@ -38,6 +40,8 @@ export interface Player {
   readonly move: (key: string, to: number) => void;
   readonly remove: (key: string) => void;
   readonly clear: () => void;
+  readonly shuffle: (on: boolean) => void;
+  readonly setRepeat: (repeat: Repeat) => void;
 }
 
 /** What the page shows about one entry of the queue. */
@@ -120,6 +124,16 @@ export function usePlayer(
   };
   const fail = useEffectEvent(failed);
 
+  /** Start counting a new play of `forTrack`, the Track now starting from its beginning. */
+  const startListening = (forTrack: number) => {
+    listening.current = {
+      play: { id: newId(), trackId: forTrack, playedAt: new Date().toISOString() },
+      time: new PlayTime(),
+      counted: false,
+    };
+  };
+  const listen = useEffectEvent(startListening);
+
   // Restore the saved queue paused, and send any plays a closed page left behind.
   useEffect(() => {
     void loadQueue().then((saved) => {
@@ -171,11 +185,7 @@ export function usePlayer(
           show(key, { status: { kind: "failed", message: "This browser can't play this file." } });
           return;
         }
-        listening.current = {
-          play: { id: newId(), trackId, playedAt: new Date().toISOString() },
-          time: new PlayTime(),
-          counted: false,
-        };
+        listen(trackId);
         element.src = answer.audio_url;
         if (restoring === undefined) {
           await element.play();
@@ -190,6 +200,58 @@ export function usePlayer(
     })();
     // A new entry for the same Track is a new play, so its key decides.
   }, [key, trackId]);
+
+  const toggle = () => {
+    const element = audio.current;
+    if (element?.getAttribute("src") == null) {
+      return;
+    }
+    if (element.paused) {
+      const forKey = playingKey.current;
+      element.play().catch((error: unknown) => {
+        failed(forKey, error);
+      });
+    } else {
+      element.pause();
+    }
+  };
+  /** Start the current Track over, as a new play, and play it if `play`. */
+  const restart = (play: boolean) => {
+    const element = audio.current;
+    if (element === null || trackId === undefined) {
+      return;
+    }
+    element.currentTime = 0;
+    startListening(trackId);
+    if (play) {
+      const forKey = playingKey.current;
+      element.play().catch((error: unknown) => {
+        failed(forKey, error);
+      });
+    }
+  };
+  const previous = () => {
+    const element = audio.current;
+    if (element !== null && (element.currentTime > RESTART_AFTER || queue.position === 0)) {
+      restart(false);
+      return;
+    }
+    dispatch({ type: "previous" });
+  };
+  const next = () => {
+    // A queue that starts over on the same entry keeps its key, so it plays again in place.
+    if (key !== undefined && following(queue)?.key === key) {
+      restart(true);
+      return;
+    }
+    dispatch({ type: "next" });
+  };
+  const seek = (seconds: number) => {
+    const element = audio.current;
+    if (element !== null && Number.isFinite(seconds)) {
+      element.currentTime = seconds;
+    }
+  };
 
   const onTime = useEffectEvent((element: HTMLAudioElement) => {
     show(playingKey.current, { position: element.currentTime });
@@ -216,7 +278,14 @@ export function usePlayer(
     const length = Number.isFinite(element.duration) ? element.duration : undefined;
     show(playingKey.current, { duration: length });
     updatePositionState(element);
-    void lookAhead(queue, ahead.current);
+  });
+
+  const onEnded = useEffectEvent(() => {
+    if (queue.repeat === "one") {
+      restart(true);
+    } else {
+      next();
+    }
   });
 
   // Follow the audio element.
@@ -244,7 +313,7 @@ export function usePlayer(
       [
         "ended",
         () => {
-          dispatch({ type: "next" });
+          onEnded();
         },
       ],
       [
@@ -301,42 +370,21 @@ export function usePlayer(
     void saveQueue({ queue, seconds: 0 });
   }, [queue]);
 
-  const toggle = () => {
-    const element = audio.current;
-    if (element?.getAttribute("src") == null) {
-      return;
-    }
-    if (element.paused) {
-      const forKey = playingKey.current;
-      element.play().catch((error: unknown) => {
-        failed(forKey, error);
-      });
-    } else {
-      element.pause();
-    }
-  };
-  const previous = () => {
-    const element = audio.current;
-    if (element !== null && (element.currentTime > RESTART_AFTER || queue.position === 0)) {
-      element.currentTime = 0;
-      return;
-    }
-    dispatch({ type: "previous" });
-  };
-  const next = () => {
-    dispatch({ type: "next" });
-  };
-  const seek = (seconds: number) => {
-    const element = audio.current;
-    if (element !== null && Number.isFinite(seconds)) {
-      element.currentTime = seconds;
-    }
-  };
-
   // The lock screen: the Track's details, and only the controls iOS shows as buttons.
   const track = trackId === undefined ? undefined : tracks.get(trackId);
   const status: Status =
     key === undefined ? { kind: "idle" } : view.key === key ? view.status : { kind: "loading" };
+
+  // Once the current Track is ready, ask how the next plays, again whenever the next changes.
+  const loaded = status.kind === "playing" || status.kind === "paused";
+  const coming = following(queue);
+  const comingKey = coming?.key;
+  const comingTrack = coming?.trackId;
+  useEffect(() => {
+    if (loaded && comingTrack !== undefined && comingKey !== key) {
+      void lookAhead(comingTrack, ahead.current);
+    }
+  }, [loaded, key, comingKey, comingTrack]);
   useEffect(() => {
     if ("mediaSession" in navigator) {
       navigator.mediaSession.metadata =
@@ -388,10 +436,12 @@ export function usePlayer(
   const player: Player = {
     queue,
     status,
+    shuffled: queue.order !== undefined,
+    repeat: queue.repeat,
     position: shown?.position ?? 0,
     duration: shown?.duration,
     playList: (list, start) => {
-      dispatch({ type: "play", entries: list.slice(start).map(entryOf) });
+      dispatch({ type: "play", entries: list.map(entryOf), start, random: Math.random });
     },
     playNext: (chosen) => {
       dispatch({ type: "playNext", entry: entryOf(chosen) });
@@ -411,6 +461,12 @@ export function usePlayer(
     },
     clear: () => {
       dispatch({ type: "clear" });
+    },
+    shuffle: (on) => {
+      dispatch(on ? { type: "shuffle", random: Math.random } : { type: "unshuffle" });
+    },
+    setRepeat: (repeat) => {
+      dispatch({ type: "repeat", repeat });
     },
   };
   return [player, audio];
@@ -466,14 +522,13 @@ async function finishedJob(jobId: number) {
   }
 }
 
-/** Ask now how the next entry plays, so `ended` only swaps the source; it starts preparing too. */
-async function lookAhead(queue: Queue, ahead: Map<number, PlaybackAnswer>): Promise<void> {
-  const [following] = upNext(queue);
-  if (following === undefined || ahead.has(following.trackId)) {
+/** Ask now how `trackId` plays, so `ended` only swaps the source; it starts preparing too. */
+async function lookAhead(trackId: number, ahead: Map<number, PlaybackAnswer>): Promise<void> {
+  if (ahead.has(trackId)) {
     return;
   }
   try {
-    ahead.set(following.trackId, await api.playback(following.trackId));
+    ahead.set(trackId, await api.playback(trackId));
   } catch {
     // The next Track asks again when its turn comes.
   }
