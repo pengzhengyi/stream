@@ -59,14 +59,14 @@ def accounts(
 
 
 @pytest.fixture
-def catalog(units: sessionmaker[Session], clock: FakeClock) -> CatalogService:
-    return CatalogService(units, clock)
-
-
-@pytest.fixture
 def changes() -> list[str]:
     """What the services said changed, in order."""
     return []
+
+
+@pytest.fixture
+def catalog(units: sessionmaker[Session], clock: FakeClock, changes: list[str]) -> CatalogService:
+    return CatalogService(units, clock, changes.append)
 
 
 @pytest.fixture

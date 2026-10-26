@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
+from medleyplay.application.changes import OnChange
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.domain.accounts import (
     Account,
@@ -58,7 +59,7 @@ class SignedIn:
 class AccountService:
     """Create and manage Accounts, and turn passwords into sessions."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 -- the database and boundaries, then keyword options
         self,
         units: sessionmaker[Session],
         hasher: PasswordHash,
@@ -68,12 +69,15 @@ class AccountService:
         idle_timeout: timedelta = SESSION_IDLE_TIMEOUT,
         new_token: Callable[[], str] = lambda: secrets.token_urlsafe(32),
         multiple_accounts: bool = False,
+        on_change: OnChange | None = None,
     ) -> None:
         """Create a service over the database `units` open.
 
         With `multiple_accounts` off, the household uses its first Account and no
-        more can be created; Accounts that already exist keep working.
+        more can be created; Accounts that already exist keep working. Deleting
+        an Account tells `on_change`.
         """
+        self._on_change = on_change
         self._units = units
         self._hasher = hasher
         self._clock = clock
@@ -169,6 +173,8 @@ class AccountService:
             removed = db.connection().execute(removal).rowcount
             if removed != 1 and db.get(AccountRow, account_id) is not None:
                 _raise_missing_or_last_admin(db, account_id)
+        if removed and self._on_change is not None:
+            self._on_change("accounts")
 
     def sign_in(self, username: str, password: str) -> SignedIn:
         """Check a username and password and start a session.

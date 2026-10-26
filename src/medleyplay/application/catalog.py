@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
+from medleyplay.application.changes import OnChange
 from medleyplay.application.rule_schema import read_rules, rules_document
 from medleyplay.application.track_facts import track_facts
 from medleyplay.domain.accounts import AccountId
@@ -51,10 +52,13 @@ from medleyplay.persistence.schema import (
 class CatalogService:
     """Read and change the catalog as one Account sees it."""
 
-    def __init__(self, units: sessionmaker[Session], clock: Clock) -> None:
-        """Create a service over the database `units` open."""
+    def __init__(
+        self, units: sessionmaker[Session], clock: Clock, on_change: OnChange | None = None
+    ) -> None:
+        """Create a service over the database `units` open, telling `on_change` what it changed."""
         self._units = units
         self._clock = clock
+        self._on_change = on_change
 
     def add_track(
         self,
@@ -90,13 +94,15 @@ class CatalogService:
                         details=dict(source_details or {}),
                     )
                 )
-                return TrackId(track.id)
+                added = TrackId(track.id)
         except IntegrityError:
             # Another request added the same Source between the lookup and the insert.
             raced = self._track_of(key)
             if raced is None:
                 raise
             return raced
+        self._changed("catalog")
+        return added
 
     def list_tracks(self, account_id: AccountId) -> list[Track]:
         """Return every Track, oldest first, with `account_id`'s own state."""
@@ -134,6 +140,7 @@ class CatalogService:
         sending its id with another Track is refused.
         """
         when = min(played_at, self._clock())
+        recorded_now = False
         try:
             with self._units.begin() as db:
                 if db.get(TrackRow, track_id) is None:
@@ -147,6 +154,7 @@ class CatalogService:
                     )
                     db.flush()
                     _count_play(db, account_id, track_id, when)
+                    recorded_now = True
                 elif recorded.track_id != track_id:
                     raise _another_track(play_id)
         except IntegrityError:
@@ -157,6 +165,8 @@ class CatalogService:
                 raise
             if raced.track_id != track_id:
                 raise _another_track(play_id) from None
+        if recorded_now:
+            self._changed("catalog")
         return self.get_track(account_id, track_id)
 
     def put_playlist(
@@ -195,7 +205,8 @@ class CatalogService:
                 message = f"The Playlist id {playlist_id} is already in use."
                 raise ConflictError(message)
             wanted = (clean_name, entries, document, keep_downloaded)
-            if created or _stored(db, row) != wanted:
+            changed = created or _stored(db, row) != wanted
+            if changed:
                 row.name, row.rules, row.keep_downloaded = clean_name, document, keep_downloaded
                 row.updated_at = self._clock()
                 db.flush()
@@ -205,7 +216,10 @@ class CatalogService:
                     for position, track_id in enumerate(entries)
                 )
             db.flush()
-            return _to_playlist(db, row, self._clock()), created
+            saved = _to_playlist(db, row, self._clock()), created
+        if changed:
+            self._changed("catalog")
+        return saved
 
     def list_playlists(self, account_id: AccountId) -> list[Playlist]:
         """Return `account_id`'s Playlists by name."""
@@ -229,11 +243,17 @@ class CatalogService:
     def delete_playlist(self, account_id: AccountId, playlist_id: PlaylistId) -> None:
         """Delete one of `account_id`'s Playlists; deleting a missing one does nothing."""
         with self._units.begin() as db:
-            db.execute(
-                delete(PlaylistRow).where(
-                    PlaylistRow.id == playlist_id, PlaylistRow.account_id == account_id
+            deleted = (
+                db.connection()
+                .execute(
+                    delete(PlaylistRow).where(
+                        PlaylistRow.id == playlist_id, PlaylistRow.account_id == account_id
+                    )
                 )
+                .rowcount
             )
+        if deleted:
+            self._changed("catalog")
 
     def _track_of(self, key: SourceKey) -> TrackId | None:
         with self._units() as db:
@@ -253,6 +273,11 @@ class CatalogService:
                 .values(account_id=account_id, track_id=track_id, **values)
                 .on_conflict_do_update(index_elements=["account_id", "track_id"], set_=values)
             )
+        self._changed("catalog")
+
+    def _changed(self, what: str) -> None:
+        if self._on_change is not None:
+            self._on_change(what)
 
 
 def _tracks_for(account_id: AccountId) -> Select[TrackRow, TrackStateRow]:

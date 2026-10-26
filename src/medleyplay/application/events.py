@@ -70,7 +70,13 @@ class JobEvents:
         self._clock = clock
         self._lock = threading.Lock()
         self._subscriptions: set[Subscription] = set()
+        self._listeners: list[Callable[[JobId], None]] = []
         self._last_progress: dict[JobId, float] = {}
+
+    def listen(self, listener: Callable[[JobId], None]) -> None:
+        """Call `listener` with each Job whose state changes, on the publishing thread."""
+        with self._lock:
+            self._listeners.append(listener)
 
     def publish(self, job_id: JobId, *, progress: bool = False) -> None:
         """Tell every subscriber the Job changed; callable from any thread.
@@ -88,6 +94,9 @@ class JobEvents:
             else:
                 self._last_progress.pop(job_id, None)
             subscriptions = tuple(self._subscriptions)
+            listeners = () if progress else tuple(self._listeners)
+        for listener in listeners:
+            listener(job_id)
         for subscription in subscriptions:
             with contextlib.suppress(RuntimeError):  # its loop closed
                 subscription.loop.call_soon_threadsafe(

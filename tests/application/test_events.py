@@ -102,3 +102,15 @@ def test_a_change_after_the_subscription_closed_reaches_nobody() -> None:
         return subscription
 
     assert asyncio.run(scenario()).queue.empty()
+
+
+def test_a_listener_hears_each_change_of_state_but_not_progress() -> None:
+    events = JobEvents()
+    heard: list[JobId] = []
+    events.listen(heard.append)
+
+    events.publish(JobId(1), progress=True)
+    events.publish(JobId(1))
+    events.publish(JobId(2))
+
+    assert heard == [1, 2]
