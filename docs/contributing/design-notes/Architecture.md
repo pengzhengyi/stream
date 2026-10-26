@@ -281,8 +281,9 @@ one downloader, and one credential spec, never the tools.
 - **Online:** requested Downloads start at once.
 - **Offline:** medleyplay contacts no music site.
   - Downloads wait in the *Downloads* tab.
-  - A pasted link is saved raw; it is canonicalized, and merged with any
-    existing Source, once Online.
+  - A pasted link is saved raw with the add dialog; it is canonicalized, and
+    merged with any existing Source, once Online. How Auto decides is in
+    [Mode](Mode.md).
   - A Track whose audio isn't downloaded shows *available when online*. In the
     MVP, adding a Bilibili Track downloads it, so this happens only after the
     policy removed its Download.
