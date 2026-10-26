@@ -51,6 +51,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a light, dark, or system theme, and a queue you reorder by dragging, or from
   the keyboard. The seek bar is easier to drag and moves the Track only once
   let go, and a row's actions show on touch screens.
+- **Settings** — choose the theme, and see what Downloads and prepared copies
+  use against the storage limit. An admin changes the limit, with a preview of
+  what a lower one would remove before saving.
 - **Views and search** — Songs, Artists, Albums, Downloaded, and Playlists, with
   a built-in *Favorites*, worked out in the browser from the Library, so moving
   between them asks the server nothing; Back, Forward, and bookmarks work. One

@@ -98,6 +98,7 @@
     "seekto",
     "SESSDATA",
     "sessionmaker",
+    "spinbutton",
     "sqlalchemy",
     "starlette",
     "startable",

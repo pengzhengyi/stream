@@ -19,6 +19,7 @@ import {
   tracksOfArtist,
 } from "../library/views";
 import { type Route, hrefOf } from "../routes";
+import { SettingsView } from "./SettingsView";
 import { type TrackActions, TrackTable } from "./TrackTable";
 
 /** The id of the Playlist the client makes from the favorites. */
@@ -34,6 +35,8 @@ export interface ViewProps {
   readonly playlists: readonly Playlist[];
   readonly playingId: number | undefined;
   readonly actions: TrackActions;
+  /** Whether the Account may change what the household shares, such as the storage limit. */
+  readonly admin: boolean;
 }
 
 /** The view `route` names. */
@@ -96,6 +99,8 @@ export function CurrentView(props: ViewProps) {
       return <PlaylistView {...props} id={route.id} />;
     case "search":
       return <SearchResults {...props} query={route.query} />;
+    case "settings":
+      return <SettingsView admin={props.admin} />;
   }
 }
 
@@ -109,7 +114,7 @@ function Songs({
   empty,
   playingId,
   actions,
-}: Omit<ViewProps, "tracks" | "route" | "playlists"> & {
+}: Omit<ViewProps, "tracks" | "route" | "playlists" | "admin"> & {
   readonly title: string;
   readonly subtitle?: string | undefined;
   readonly back?: Route;
