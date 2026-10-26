@@ -4,6 +4,7 @@ macOS can ask for access to the Keychain, or keep it locked, and `keyring` waits
 meanwhile, so every call has a time limit and fails as `KeychainUnavailableError`.
 """
 
+import sys
 import threading
 from collections.abc import Callable
 from datetime import timedelta
@@ -44,7 +45,13 @@ class KeychainSecrets:
         backend: KeyringBackend | None = None,
         timeout: timedelta = KEYCHAIN_TIMEOUT,
     ) -> None:
-        """Keep secrets under `service`, in `backend` or the system's Keychain."""
+        """Keep secrets under `service`, in `backend` or the system's Keychain.
+
+        On macOS the system's Keychain is the Keychain itself, never `keyring`'s
+        chain of every backend it finds: a chain asks each backend in turn for a
+        secret the Keychain lacks, so any other backend installed, even a stalled
+        one, would answer in its place.
+        """
         self._service = service
         self._backend = backend
         self._timeout = timeout
@@ -75,7 +82,7 @@ class KeychainSecrets:
 
         def run() -> None:
             try:
-                outcome.append(call(self._backend or keyring.get_keyring()))
+                outcome.append(call(self._backend or _system_keychain()))
             except Exception as error:  # noqa: BLE001 -- reported to the caller below
                 failure.append(error)
 
@@ -89,3 +96,11 @@ class KeychainSecrets:
             message = f"The Keychain refused: {type(failure[0]).__name__}."
             raise KeychainUnavailableError(message) from failure[0]
         return outcome[0]
+
+
+def _system_keychain(platform: str = sys.platform) -> KeyringBackend:
+    if platform == "darwin":  # pragma: no cover -- CI runs on Linux
+        from keyring.backends import macOS  # noqa: PLC0415 -- it exists only on macOS
+
+        return macOS.Keyring()  # type: ignore[no-untyped-call] # keyring's own __init__ is untyped
+    return keyring.get_keyring()  # pragma: no cover -- the suites always pass a backend
