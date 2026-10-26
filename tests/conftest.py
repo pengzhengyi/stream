@@ -22,6 +22,7 @@ from medleyplay.application.links import LinkService
 from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.policy import PolicyService
+from medleyplay.application.preferences import PreferencesService
 from medleyplay.application.settings import SettingsService
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
@@ -81,6 +82,11 @@ def catalog(units: sessionmaker[Session], clock: FakeClock, changes: list[str]) 
 @pytest.fixture
 def settings(units: sessionmaker[Session], clock: FakeClock, changes: list[str]) -> SettingsService:
     return SettingsService(units, clock, changes.append)
+
+
+@pytest.fixture
+def preferences(units: sessionmaker[Session], clock: FakeClock) -> PreferencesService:
+    return PreferencesService(units, clock)
 
 
 @pytest.fixture
@@ -188,6 +194,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     links: LinkService,
     settings: SettingsService,
     policy: PolicyService,
+    preferences: PreferencesService,
 ) -> Services:
     """The services of a server with no plugins on; a suite replaces what it runs for real."""
     return Services(
@@ -202,6 +209,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         events=JobEvents(),
         settings=settings,
         policy=policy,
+        preferences=preferences,
     )
 
 
