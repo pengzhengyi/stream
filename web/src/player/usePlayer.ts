@@ -34,7 +34,8 @@ export interface Player {
   readonly next: () => void;
   readonly previous: () => void;
   readonly seek: (seconds: number) => void;
-  readonly move: (key: string, by: -1 | 1) => void;
+  /** Move an upcoming entry to place `to` among what plays next, 0 being next. */
+  readonly move: (key: string, to: number) => void;
   readonly remove: (key: string) => void;
   readonly clear: () => void;
 }
@@ -402,8 +403,8 @@ export function usePlayer(
     next,
     previous,
     seek,
-    move: (moving, by) => {
-      dispatch({ type: "move", key: moving, by });
+    move: (moving, to) => {
+      dispatch({ type: "move", key: moving, to });
     },
     remove: (removing) => {
       dispatch({ type: "remove", key: removing });

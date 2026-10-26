@@ -48,14 +48,21 @@ describe("the queue", () => {
     ).toBeInTheDocument();
   });
 
-  it("moves and removes what plays next", async () => {
+  it("removes what plays next", async () => {
     await playingIntro();
 
-    await userEvent.click(screen.getByRole("button", { name: "Move Outro up" }));
-    expect(upNext()).toEqual(["Outro", "Long Road"]);
     await userEvent.click(screen.getByRole("button", { name: "Remove Long Road" }));
 
     expect(upNext()).toEqual(["Outro"]);
+  });
+
+  it("gives each Track a handle to drag it into another place by", async () => {
+    await playingIntro();
+
+    const handle = screen.getByRole("button", { name: "Reorder Outro" });
+
+    expect(handle).toHaveAttribute("aria-roledescription", "sortable");
+    expect(handle).toHaveAccessibleDescription(/press Space to pick the Track up/);
   });
 
   it("puts a Track asked for next before the rest", async () => {
@@ -71,7 +78,9 @@ describe("the queue", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Clear" }));
 
-    expect(screen.getByText("Nothing queued.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Nothing queued. Add a Track from the list to play it later."),
+    ).toBeInTheDocument();
   });
 
   it("moves on to the next Track", async () => {
