@@ -1,18 +1,22 @@
 /**
- * @file The signed-in page: the song table, the queue, and the player.
+ * @file The signed-in page: the views, the search, the queue, and the player.
  */
 
 import { SignOutIcon, WaveformIcon } from "@phosphor-icons/react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { type Account, api } from "../api";
 import { useLibrary } from "../library/useLibrary";
 import { current } from "../player/queue";
 import { usePlayer } from "../player/usePlayer";
+import { hrefOf, useRoute } from "../routes";
+import { Nav } from "./Nav";
 import { PlayerBar } from "./PlayerBar";
 import { QueuePanel } from "./QueuePanel";
+import { SearchBox } from "./SearchBox";
 import { ThemeSwitch } from "./ThemeSwitch";
-import { type TrackActions, TrackTable } from "./TrackTable";
+import type { TrackActions } from "./TrackTable";
+import { CurrentView } from "./Views";
 
 /** Everything a signed-in Account sees. */
 export function Library({
@@ -22,10 +26,13 @@ export function Library({
   readonly account: Account;
   readonly onSignedOut: () => void;
 }) {
+  const route = useRoute();
   const library = useLibrary(onSignedOut);
   const byId = library.tracks;
   const tracks = useMemo(() => [...byId.values()], [byId]);
   const [player, audio] = usePlayer(byId, onSignedOut);
+  // On a narrow screen the queue opens over the page, from the player.
+  const [queueOpen, setQueueOpen] = useState(false);
   const playingId = current(player.queue)?.trackId;
   const actions: TrackActions = {
     onPlay: player.playList,
@@ -44,12 +51,15 @@ export function Library({
   };
 
   return (
-    <div className="library">
+    <div className={queueOpen ? "library queue-open" : "library"}>
       <header className="top">
         <h1>
-          <WaveformIcon weight="bold" aria-hidden />
-          medleyplay
+          <a className="wordmark" href={hrefOf({ view: "songs" })}>
+            <WaveformIcon weight="bold" aria-hidden />
+            medleyplay
+          </a>
         </h1>
+        <SearchBox route={route} providers={library.providers} />
         <ThemeSwitch />
         <span className="account">{account.display_name}</span>
         <button
@@ -62,20 +72,16 @@ export function Library({
           <SignOutIcon weight="regular" aria-hidden />
         </button>
       </header>
+      <Nav route={route} />
       <main>
-        <h2 className="section">Library</h2>
         {library.error !== "" && <p role="alert">{library.error}</p>}
         {library.loaded ? (
-          <TrackTable
+          <CurrentView
+            route={route}
             tracks={tracks}
+            playlists={library.playlists}
             playingId={playingId}
             actions={actions}
-            empty={
-              <p className="empty">
-                No music yet. An admin adds a Library of your own music in{" "}
-                <a href="/docs">the API</a>, and its songs appear here.
-              </p>
-            }
           />
         ) : (
           <p className="empty" aria-busy="true">
@@ -88,6 +94,10 @@ export function Library({
         player={player}
         track={playingId === undefined ? undefined : byId.get(playingId)}
         onFavorite={actions.onFavorite}
+        queueOpen={queueOpen}
+        onToggleQueue={() => {
+          setQueueOpen((open) => !open);
+        }}
       />
       <audio ref={audio} preload="auto" />
     </div>

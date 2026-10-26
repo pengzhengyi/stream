@@ -75,7 +75,7 @@ export function QueuePanel({
   };
 
   return (
-    <section className="queue" aria-label="Up next">
+    <section id="queue" className="queue" aria-label="Up next">
       <header>
         <h2>Up next</h2>
         <button

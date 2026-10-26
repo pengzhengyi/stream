@@ -1,8 +1,8 @@
 # Web client
 
 > [!NOTE]
-> **Status: in progress; the song table, favorites, and ratings are built, and
-> the views, search, and Settings are next.** This note describes the client's views: the song
+> **Status: in progress; the song table, favorites, ratings, views, and search
+> are built, and Settings is next.** This note describes the client's views: the song
 > table, Artists, Albums, Downloaded, Playlists, search, and Settings, and how
 > they get their data. What the client must do is in [MVP](MVP.md#client-notes);
 > the player, the queue, and play modes are in
@@ -110,7 +110,9 @@ no router package.
   artist, or album, ignoring case, width, and hiragana or katakana: NFKC, lower
   case, and katakana shifted to hiragana, so `ｍｅｌｔ` finds *Melt* and
   `くじら` finds *クジラ*. Each Track's folded text is worked out once, when the
-  list loads, and the search runs a moment after typing stops. The results show
+  list loads, and the search runs a moment after typing stops. The first search
+  opens the results and later ones change them in place, so Back leaves the
+  search in one step. The results show
   the matching Tracks in the song table, and the artists and albums whose names
   match.
 
@@ -141,7 +143,7 @@ One view, in sections, each saved on its own:
 | --- | --- | --- |
 | Wider than 64rem | A rail on the left | A panel on the right |
 | 48rem to 64rem | Tabs under the header | A panel opened from the player |
-| Up to 48rem | A tab bar along the bottom, above the player | A sheet opened from the player |
+| Up to 48rem | A tab bar along the bottom, below the player | A sheet opened from the player |
 
 A touch screen, which can't point, shows a row's actions all the time. The
 page sizes itself to the dynamic viewport (`dvh`) and keeps the player and the

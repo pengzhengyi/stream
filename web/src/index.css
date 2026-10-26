@@ -204,13 +204,13 @@ button.text:hover:not(:disabled) {
   border-radius: 999px;
 }
 
-/* The signed-in page: the Library beside the queue, the player floating below. */
+/* The signed-in page: the views, the Library, and the queue; the player floats below. */
 
 .library {
   display: grid;
   grid-template:
-    "top top" auto
-    "main queue" 1fr / minmax(0, 1fr) 20rem;
+    "top top top" auto
+    "nav main queue" 1fr / 12.5rem minmax(0, 1fr) 20rem;
   min-height: 100dvh;
 }
 
@@ -228,7 +228,91 @@ button.text:hover:not(:disabled) {
 }
 
 .top h1 {
+  margin: 0 1rem 0 0;
+}
+
+.top .wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+/* The search: a rounded field, and where to look when there is a choice. */
+.search {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.6rem;
+  max-width: 34rem;
   margin-right: auto;
+}
+
+.search-field {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.4rem 0.95rem;
+  border-radius: 999px;
+  background: var(--raised);
+  color: var(--muted);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.search-field:focus-within {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.search-field input[type="search"] {
+  width: 100%;
+  height: auto;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: none;
+  color: var(--ink);
+  box-shadow: none;
+  font-size: 0.95rem;
+}
+
+.scope {
+  display: inline-flex;
+  flex: none;
+  gap: 0.125rem;
+  padding: 0.2rem;
+  border-radius: 999px;
+  background: var(--raised);
+  font-size: 0.8rem;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.scope label {
+  margin: 0;
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.scope label:has(input:checked) {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--lift);
+}
+
+.scope label:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.scope input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
 }
 
 .top .account {
@@ -278,6 +362,179 @@ button.text:hover:not(:disabled) {
   font-size: 1.6rem;
   font-weight: 700;
   letter-spacing: -0.025em;
+}
+
+/* A view's heading: the way back, its name, and how much it holds. */
+.view-heading {
+  margin: 0.25rem 0 0.75rem 0.75rem;
+}
+
+.view-heading .section {
+  margin: 0;
+}
+
+.view-heading .back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-bottom: 0.25rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.view-heading .back:hover {
+  color: var(--ink);
+}
+
+.view-heading .subtitle,
+.view-heading .meta {
+  margin: 0.15rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.view-heading .subtitle {
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.found {
+  margin: 1.25rem 0 0.5rem 0.75rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+/* Artists, albums, and Playlists: tiles, each lifting when pointed at. */
+.groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 0.75rem;
+  padding: 0;
+  margin: 0 0 1.5rem;
+}
+
+.groups li {
+  min-width: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.groups a {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.75rem;
+  border-radius: 1rem;
+  color: inherit;
+  text-decoration: none;
+  transition:
+    background-color 120ms,
+    box-shadow 120ms;
+}
+
+.groups a:hover {
+  background: var(--surface);
+  box-shadow: var(--lift);
+}
+
+.avatar,
+.cover-tile {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  margin-bottom: 0.35rem;
+  border-radius: 0.9rem;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 2.25rem;
+  font-weight: 650;
+}
+
+.avatar {
+  border-radius: 50%;
+}
+
+.cover-tile.favorites {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.group-name,
+.group-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-name {
+  font-weight: 600;
+}
+
+.group-meta {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+/* The views: a rail of links, the one shown lit. */
+.views {
+  grid-area: nav;
+  align-self: start;
+  position: sticky;
+  top: 4.25rem;
+  display: block;
+  padding: 0.5rem 0 0 1rem;
+}
+
+.views ul {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.15rem;
+  padding: 0;
+  margin: 0;
+}
+
+.views li {
+  display: block;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.views .view-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.9rem;
+  margin: 0;
+  border-radius: 0.8rem;
+  color: var(--muted);
+  font-weight: 500;
+  text-decoration: none;
+  transition:
+    background-color 120ms,
+    color 120ms;
+}
+
+.views .view-link:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.views .view-link[aria-current="page"] {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.views .view-link svg {
+  flex: none;
+  font-size: 1.2rem;
+}
+
+.views .view-link[aria-current="page"] svg {
+  color: var(--accent);
 }
 
 /* The Library: borderless rows, each lit when pointed at. */
@@ -798,6 +1055,14 @@ button.icon.heart.on:hover,
   transform: scale(1.05);
 }
 
+.player .queue-toggle {
+  display: none;
+}
+
+.player .queue-toggle.on {
+  color: var(--accent);
+}
+
 .player .status {
   display: flex;
   align-items: center;
@@ -936,14 +1201,48 @@ button.icon.heart.on:hover,
   .library {
     grid-template:
       "top" auto
-      "main" auto
-      "queue" auto / 1fr;
+      "nav" auto
+      "main" 1fr / minmax(0, 1fr);
   }
 
+  .views {
+    top: 3.9rem;
+    z-index: 1;
+    padding: 0.25rem 1rem 0.5rem;
+    overflow-x: auto;
+    background: color-mix(in srgb, var(--page) 82%, transparent);
+    backdrop-filter: blur(12px);
+  }
+
+  .views ul {
+    flex-direction: row;
+  }
+
+  .views .view-link {
+    padding: 0.4rem 0.85rem;
+    white-space: nowrap;
+  }
+
+  /* The queue opens from the player, over the page. */
   .queue {
-    position: static;
-    max-height: none;
-    margin: 0 0.75rem 11rem;
+    display: none;
+  }
+
+  .library.queue-open .queue {
+    position: fixed;
+    top: auto;
+    right: 1.5rem;
+    bottom: 6.75rem;
+    z-index: 4;
+    display: block;
+    width: min(24rem, calc(100% - 3rem));
+    max-height: 60dvh;
+    margin: 0;
+    box-shadow: var(--float);
+  }
+
+  .player .queue-toggle {
+    display: inline-grid;
   }
 
   .tracks .album {
@@ -952,7 +1251,60 @@ button.icon.heart.on:hover,
 }
 
 @media (width <= 48rem) {
+  .search {
+    flex-basis: 100%;
+    order: 5;
+    max-width: none;
+    margin-right: 0;
+  }
+
+  .scope {
+    display: none;
+  }
+
+  /* The views as a tab bar along the bottom, clear of the home indicator. */
+  .views {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 3;
+    padding: 0.3rem 0.25rem calc(0.3rem + env(safe-area-inset-bottom));
+    overflow: visible;
+    background: color-mix(in srgb, var(--surface) 96%, transparent);
+    box-shadow: 0 -1px 0 var(--line);
+  }
+
+  .views ul {
+    justify-content: space-around;
+    gap: 0;
+  }
+
+  .views .view-link {
+    flex-direction: column;
+    gap: 0.1rem;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.68rem;
+  }
+
+  .views .view-link[aria-current="page"] {
+    background: none;
+  }
+
+  .views .view-link svg {
+    font-size: 1.4rem;
+  }
+
+  .library.queue-open .queue {
+    right: 0.5rem;
+    bottom: calc(12.5rem + env(safe-area-inset-bottom));
+    width: calc(100% - 1rem);
+  }
+
+  .groups {
+    grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+  }
+
   .top {
+    flex-wrap: wrap;
     padding: 0.6rem 1rem;
   }
 
@@ -961,7 +1313,7 @@ button.icon.heart.on:hover,
   }
 
   .library main {
-    padding: 0.5rem 0.5rem 1rem;
+    padding: 0.5rem 0.5rem 15rem;
   }
 
   .tracks .album,
@@ -1003,7 +1355,7 @@ button.icon.heart.on:hover,
   }
 
   .player {
-    inset: auto 0.5rem 0.5rem;
+    inset: auto 0.5rem calc(4.1rem + env(safe-area-inset-bottom));
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 0.5rem 0.75rem;
     padding: 0.85rem 1rem 0.75rem;

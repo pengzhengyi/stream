@@ -4,7 +4,7 @@
 
 import { vi } from "vitest";
 
-import type { Account, Track } from "../api";
+import type { Account, Features, Playlist, Track } from "../api";
 
 /** An answer: a status and a JSON body. */
 export interface Answer {
@@ -57,7 +57,32 @@ export function trackOf(id: number, title: string, change: Partial<Track> = {}):
   };
 }
 
-/** The routes of a signed-in server holding `tracks`. */
-export function signedIn(tracks: readonly Track[]): Routes {
-  return { "GET /api/me": { body: ALICE }, "GET /api/tracks": { body: tracks } };
+/** A server with no plugins answering any extension point, and one Account. */
+export const NO_FEATURES: Features = { multiple_accounts: false, providers: {} };
+
+/** A Playlist named `name` holding the Tracks `trackIds`, in that order. */
+export function playlistOf(id: string, name: string, trackIds: readonly number[]): Playlist {
+  return {
+    id,
+    name,
+    track_ids: trackIds,
+    rules: null,
+    keep_downloaded: false,
+    unreadable: "",
+    updated_at: "2026-10-01T12:00:00Z",
+  };
+}
+
+/** The routes of a signed-in server holding `tracks` and `playlists`. */
+export function signedIn(
+  tracks: readonly Track[],
+  playlists: readonly Playlist[] = [],
+  features: Features = NO_FEATURES,
+): Routes {
+  return {
+    "GET /api/me": { body: ALICE },
+    "GET /api/tracks": { body: tracks },
+    "GET /api/playlists": { body: playlists },
+    "GET /api/features": { body: features },
+  };
 }
