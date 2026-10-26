@@ -192,8 +192,11 @@ class Plan:
 
 
 def reservation(duration_ms: int | None, kbps: int) -> int:
-    """Return the bytes a download of this length and bitrate reserves: its size, plus a tenth."""
-    if duration_ms is None:
+    """Return the bytes a download of this length and bitrate reserves: its size, plus a tenth.
+
+    A length that isn't known, or isn't positive, counts as `UNKNOWN_SIZE`.
+    """
+    if duration_ms is None or duration_ms <= 0:
         return UNKNOWN_SIZE
     return int(duration_ms / 1000 * kbps * 1000 / 8 * 1.1)
 

@@ -3,7 +3,7 @@
 import os
 import time
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import timedelta
 from pathlib import Path
 
@@ -259,7 +259,20 @@ def test_rules_this_server_cant_read_on_a_kept_playlist_stop_every_removal(
     assert policy.storage(alice).error == evaluation.error
 
 
-def test_a_change_heard_while_planning_drops_the_removals_but_still_starts(
+def _hearing_a_change_while_planning(
+    site: Site, policy: PolicyService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Make every snapshot hear a change as it is read, as a concurrent edit would."""
+    available_keys = site.plugins.available_keys
+
+    def heard_a_change() -> dict[str, list[str]]:
+        policy.request("catalog")
+        return available_keys()
+
+    monkeypatch.setattr(site.plugins, "available_keys", heard_a_change)
+
+
+def test_a_change_heard_while_planning_drops_the_plan_and_asks_again(
     site: Site,
     policy: PolicyService,
     units: sessionmaker[Session],
@@ -274,17 +287,31 @@ def test_a_change_heard_while_planning_drops_the_removals_but_still_starts(
     clock.advance(REST + timedelta(hours=1))
     _keep(site, alice, [new])
     _limit(settings, alice, SONG_ESTIMATE)
-    available_keys = site.plugins.available_keys
+    _hearing_a_change_while_planning(site, policy, monkeypatch)
 
-    def heard_a_change() -> dict[str, list[str]]:
-        policy.request("catalog")
-        return available_keys()
+    dropped = policy.evaluate()
+    monkeypatch.undo()
+    again = policy.evaluate()
 
-    monkeypatch.setattr(site.plugins, "available_keys", heard_a_change)
+    assert (dropped.plan_dropped, dropped.removed, dropped.started) == (True, 0, 0)
+    assert (again.removed, again.started) == (1, 1)
+
+
+def test_a_change_heard_while_planning_keeps_cache_copies_too(
+    site: Site,
+    policy: PolicyService,
+    clock: FakeClock,
+    settings: SettingsService,
+    alice: Account,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    copy = _old_cache_copy(site, clock)
+    _limit(settings, alice, 0)
+    _hearing_a_change_while_planning(site, policy, monkeypatch)
+
     evaluation = policy.evaluate()
 
-    assert (evaluation.removals_dropped, evaluation.started) == (True, 1)
-    assert _source(units, old) in _stored(units)
+    assert (evaluation.plan_dropped, copy.exists()) == (True, True)
 
 
 def test_a_download_served_after_the_snapshot_is_judged_again_and_stays(
@@ -352,23 +379,78 @@ def test_a_login_saved_after_it_failed_on_one_tries_again_at_once(
     _downloaded(site, policy, units, [track])
 
 
-def test_a_cache_copy_untouched_for_a_day_goes_first(
-    site: Site,
-    policy: PolicyService,
-    clock: FakeClock,
-    settings: SettingsService,
-    alice: Account,
-) -> None:
+def _old_cache_copy(site: Site, clock: FakeClock) -> Path:
+    """Write a 5-byte cache copy last served more than a day ago."""
     copy = site.data_dir / CACHE_FOLDER / "7-v1.flac"
     copy.parent.mkdir(parents=True, exist_ok=True)
     copy.write_bytes(b"audio")
     old = (clock.now - REST - timedelta(hours=1)).timestamp()
     os.utime(copy, (old, old))
+    return copy
+
+
+def test_a_cache_copy_untouched_for_a_day_goes_before_any_download(
+    site: Site,
+    policy: PolicyService,
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    settings: SettingsService,
+    alice: Account,
+) -> None:
+    [track] = _tracks(site, 1)
+    _keep(site, alice, [track])
+    _downloaded(site, policy, units, [track])
+    _keep(site, alice, [track], keep=False)
+    clock.advance(REST + timedelta(hours=1))
+    copy = _old_cache_copy(site, clock)
+    one_file = _file(site, _source(units, track)).stat().st_size
+
+    _limit(settings, alice, one_file)
+    evaluation = policy.evaluate()
+
+    assert (evaluation.removed, copy.exists(), _stored(units)) == (
+        1,
+        False,
+        {_source(units, track)},
+    )
+
+
+def test_a_download_kept_until_yesterday_stays_a_day_after_it_was_last_wanted(
+    site: Site,
+    policy: PolicyService,
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    settings: SettingsService,
+    alice: Account,
+) -> None:
+    [track] = _tracks(site, 1)
+    _keep(site, alice, [track])
+    _downloaded(site, policy, units, [track])
+    clock.advance(timedelta(hours=30))
+    policy.evaluate()
+    _keep(site, alice, [track], keep=False)
+    clock.advance(timedelta(hours=23))
 
     _limit(settings, alice, 0)
     evaluation = policy.evaluate()
 
-    assert (evaluation.removed, copy.exists()) == (1, False)
+    assert (evaluation.removed, _stored(units)) == (0, {_source(units, track)})
+
+
+def test_a_kept_smart_playlist_downloads_what_its_rules_match_for_its_owner(
+    site: Site, policy: PolicyService, units: sessionmaker[Session], alice: Account, bob: Account
+) -> None:
+    alices, bobs = _tracks(site, 2)
+    site.catalog.set_favorite(alice.id, alices, favorite=True)
+    site.catalog.set_favorite(bob.id, bobs, favorite=True)
+    favorites = Rules(Match.ALL, (Favorite(value=True),))
+
+    site.catalog.put_playlist(alice.id, NEWER, "Favorites", rules=favorites, keep_downloaded=True)
+    evaluation = policy.evaluate()
+
+    assert evaluation.started == 1
+    _downloaded(site, policy, units, [alices])
+    assert _stored(units) == {_source(units, alices)}
 
 
 def test_the_storage_report_counts_what_each_account_keeps(
@@ -419,12 +501,22 @@ def test_a_request_is_evaluated_on_a_thread_of_the_policy_service(
     [track] = _tracks(site, 1)
     policy.start()
     try:
+        _until(lambda: policy.storage(alice).last is not None, "never evaluated at start")
         _keep(site, alice, [track])
+
         policy.request("catalog")
 
-        ends = time.monotonic() + WAIT
-        while site.jobs.latest(DOWNLOAD_KIND, download_target(_source(units, track))) is None:
-            assert time.monotonic() < ends, "The request was never evaluated."
-            time.sleep(0.05)
+        source_id = _source(units, track)
+        _until(
+            lambda: site.jobs.latest(DOWNLOAD_KIND, download_target(source_id)) is not None,
+            "never evaluated the request",
+        )
     finally:
         policy.stop()
+
+
+def _until(holds: Callable[[], bool], what: str) -> None:
+    ends = time.monotonic() + WAIT
+    while not holds():
+        assert time.monotonic() < ends, f"The policy {what}."
+        time.sleep(0.05)

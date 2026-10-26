@@ -5,7 +5,7 @@ each checked again where it happens, then the Downloads to start.
 
 ```text
 request ... request ......5 s...... evaluate: snapshot -> plan -> remove -> start
-                                    (a request heard since the snapshot drops the removals)
+                                    (a change since the snapshot drops the plan)
 ```
 
 It fails closed: when the snapshot can't be read, nothing is planned, and the
@@ -16,7 +16,7 @@ import contextlib
 import threading
 import time
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -31,11 +31,10 @@ from medleyplay.application.plugins import PluginService
 from medleyplay.application.policy_snapshot import Snapshot, read_snapshot
 from medleyplay.application.settings import read_settings
 from medleyplay.domain.accounts import Account, AccountId
-from medleyplay.domain.catalog import SourceId, TrackId
+from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.errors import ForbiddenError
 from medleyplay.domain.playback import CACHE_FOLDER
 from medleyplay.domain.policy import (
-    REST,
     Plan,
     PolicyState,
     Remove,
@@ -62,8 +61,8 @@ class Evaluation:
     removed: int = 0
     started: int = 0
     shortfalls: Mapping[TrackId, Shortfall] = field(default_factory=dict)
-    removals_dropped: bool = False
-    """A request was heard after the snapshot, so the removals wait for the next evaluation."""
+    plan_dropped: bool = False
+    """What it planned to remove changed since the snapshot, so it did nothing and asked again."""
     error: str | None = None
     """Why the evaluation planned nothing."""
     failed_actions: tuple[str, ...] = ()
@@ -154,7 +153,7 @@ class PolicyService:
                 heard = self._requests
             now = self._clock()
             try:
-                with self._units() as db:
+                with self._reading() as db:
                     snapshot = self._snapshot(db, now, read_settings(db).storage_limit)
                 evaluation = self._apply(plan(snapshot.state), now, heard)
             except Exception as error:  # noqa: BLE001 -- any failure fails closed, and is shown
@@ -172,12 +171,13 @@ class PolicyService:
             message = "Only an admin can preview another storage limit."
             raise ForbiddenError(message)
         now = self._clock()
-        with self._units() as db:
-            limit = read_settings(db).storage_limit
-            try:
+        limit = None
+        try:
+            with self._reading() as db:
+                limit = read_settings(db).storage_limit
                 snapshot = self._snapshot(db, now, limit)
-            except Exception as error:  # noqa: BLE001 -- the report says why, as evaluating does
-                return Storage(limit, last=self._last, error=_said(error))
+        except Exception as error:  # noqa: BLE001 -- the report says why, as evaluating does
+            return Storage(limit, last=self._last, error=_said(error))
         state = snapshot.state
         preview = None
         if preview_limit is not None:
@@ -197,19 +197,28 @@ class PolicyService:
             preview=preview,
         )
 
+    @contextlib.contextmanager
+    def _reading(self) -> Iterator[Session]:
+        """Open a session whose reads all see one moment of the database.
+
+        The driver begins a transaction only before a write, so a session that
+        only reads would see each commit as it lands; beginning one by hand keeps
+        the snapshot whole.
+        """
+        with self._units() as db:
+            db.connection().exec_driver_sql("BEGIN")
+            yield db
+
     def _snapshot(self, db: Session, now: datetime, limit: int | None) -> Snapshot:
         sites = self._plugins.available_keys().get(SOURCE_DOWNLOADER.name, [])
         return read_snapshot(db, now, limit, sites, self._data_dir)
 
     def _apply(self, planned: Plan, now: datetime, heard: int) -> Evaluation:
-        failed: list[str] = []
-        removed, dropped = 0, False
-        downloads = [each for each in planned.removals if isinstance(each, Remove)]
-        if downloads:
-            removed, dropped = self._remove_downloads(downloads, now, heard)
-        if not dropped:
-            for copy in (each for each in planned.removals if isinstance(each, RemoveCache)):
-                removed += self._remove_cache(copy, now)
+        removed = self._remove(planned.removals, now, heard) if planned.removals else 0
+        if removed is None:
+            # The next evaluation plans from what changed.
+            self.request()
+            return Evaluation(now, shortfalls=planned.shortfalls, plan_dropped=True)
         if planned.wanted_downloads:
             with self._units.begin() as db:
                 db.execute(
@@ -217,6 +226,7 @@ class PolicyService:
                     .where(DownloadRow.source_id.in_(planned.wanted_downloads))
                     .values(last_wanted_at=now)
                 )
+        failed: list[str] = []
         started = 0
         for start in planned.starts:
             try:
@@ -230,53 +240,54 @@ class PolicyService:
             removed=removed,
             started=started,
             shortfalls=planned.shortfalls,
-            removals_dropped=dropped,
             failed_actions=tuple(failed),
         )
 
-    def _remove_downloads(
-        self, removals: Sequence[Remove], now: datetime, heard: int
-    ) -> tuple[int, bool]:
-        """Remove the Downloads that still may go; return how many, and whether all were dropped.
+    def _remove(
+        self, removals: Sequence[Remove | RemoveCache], now: datetime, heard: int
+    ) -> int | None:
+        """Remove every planned file, or none of them; return how many, or `None` if none.
 
-        The rows are judged again inside the transaction that deletes them. Its
-        first statement writes, so it holds the write lock before it reads, and
-        nothing it checks can change until it commits.
+        The plan's Downloads were sized to fit once its removals happen, so its
+        removals happen together or not at all. They are judged again inside the
+        transaction that deletes the rows: its first statement writes, so it holds
+        the write lock before it reads, and nothing it checks can change until it
+        commits. A request heard since the snapshot also drops them.
         """
-        folder = self._downloads.folder
-        ids = [each.source_id for each in removals]
-        doomed: list[Path] = []
+        folder, cache = self._downloads.folder, self._data_dir / CACHE_FOLDER
+        downloads = [each.source_id for each in removals if isinstance(each, Remove)]
+        copies = [each.name for each in removals if isinstance(each, RemoveCache)]
+        renamed: list[tuple[Path, Path]] = []
         with self._units.begin() as db:
             db.execute(
                 update(DownloadRow)
-                .where(DownloadRow.source_id.in_(ids))
+                .where(DownloadRow.source_id.in_(downloads))
                 .values(size=DownloadRow.size)
             )
             with self._wake:
                 if self._requests != heard:
-                    return 0, True
+                    return None
             fresh = self._snapshot(db, now, read_settings(db).storage_limit)
-            allowed = _removable_downloads(fresh.state)
-            for source_id in (each for each in ids if each in allowed):
-                db.execute(delete(DownloadRow).where(DownloadRow.source_id == source_id))
-                renamed = folder / f"{REMOVED_PREFIX}{source_id}-{uuid.uuid4().hex}"
-                with contextlib.suppress(FileNotFoundError):
-                    (folder / fresh.file_names[source_id]).rename(renamed)
-                    doomed.append(renamed)
-        for path in doomed:
-            path.unlink(missing_ok=True)
-        return sum(each in allowed for each in ids), False
-
-    def _remove_cache(self, copy: RemoveCache, now: datetime) -> int:
-        path = self._data_dir / CACHE_FOLDER / copy.name
-        try:
-            info = path.lstat()
-        except FileNotFoundError:
-            return 0
-        if now.timestamp() - max(info.st_atime, info.st_mtime) < REST.total_seconds():
-            return 0
-        path.unlink(missing_ok=True)
-        return 1
+            if not set(removals) <= set(removable(fresh.state)):
+                return None
+            db.execute(delete(DownloadRow).where(DownloadRow.source_id.in_(downloads)))
+            try:
+                for source_id in downloads:
+                    original = folder / fresh.file_names[source_id]
+                    target = folder / f"{REMOVED_PREFIX}{source_id}-{uuid.uuid4().hex}"
+                    with contextlib.suppress(FileNotFoundError):
+                        original.rename(target)
+                        renamed.append((original, target))
+            except OSError:
+                # The rows stay; so must their files.
+                for original, target in renamed:
+                    target.rename(original)
+                raise
+        for _, target in renamed:
+            target.unlink(missing_ok=True)
+        for name in copies:
+            (cache / name).unlink(missing_ok=True)
+        return len(removals)
 
     def _run(self) -> None:
         next_tick = time.monotonic() + self._tick
@@ -292,10 +303,6 @@ class PolicyService:
                 self._due_at = None
                 next_tick = time.monotonic() + self._tick
             self.evaluate()
-
-
-def _removable_downloads(state: PolicyState) -> set[SourceId]:
-    return {each.source_id for each in removable(state) if isinstance(each, Remove)}
 
 
 def _said(error: Exception) -> str:

@@ -114,23 +114,27 @@ class DownloadService:
         """Start downloading the Source for the policy, as `account_id`, even after a failure.
 
         As `start`, but a failed last download is tried again: the policy decides
-        when that is due.
+        when that is due. A Source already downloaded, as one may be since the
+        policy's snapshot, isn't downloaded again.
         """
-        return self._start(account_id, source_id, retry_failed=True)
+        return self._start(account_id, source_id, retry_failed=True, skip_downloaded=True)
 
     def served(self, source_id: SourceId) -> None:
-        """Record that the Source's Download was served now, at most once a minute."""
+        """Record that the Source's Download was served now, at most once a minute.
+
+        It reads before it writes, so the many range requests of one play don't
+        each take the write lock.
+        """
         now = self._clock()
+        due = (DownloadRow.last_served_at.is_(None)) | (
+            DownloadRow.last_served_at <= now - SERVED_EVERY
+        )
+        mine = DownloadRow.source_id == source_id
+        with self._units() as db:
+            if db.scalar(select(DownloadRow.source_id).where(mine, due)) is None:
+                return
         with self._units.begin() as db:
-            db.execute(
-                update(DownloadRow)
-                .where(
-                    DownloadRow.source_id == source_id,
-                    (DownloadRow.last_served_at.is_(None))
-                    | (DownloadRow.last_served_at <= now - SERVED_EVERY),
-                )
-                .values(last_served_at=now)
-            )
+            db.execute(update(DownloadRow).where(mine, due).values(last_served_at=now))
 
     def start(self, caller: Account, source_id: SourceId) -> Job | None:
         """Start downloading the Source, or return the Job already doing it.
@@ -141,10 +145,15 @@ class DownloadService:
         answer is that Job: the household retries it, so playing a Track again
         and again doesn't ask the site again and again.
         """
-        return self._start(caller.id, source_id, retry_failed=False)
+        return self._start(caller.id, source_id, retry_failed=False, skip_downloaded=False)
 
     def _start(
-        self, account_id: AccountId, source_id: SourceId, *, retry_failed: bool
+        self,
+        account_id: AccountId,
+        source_id: SourceId,
+        *,
+        retry_failed: bool,
+        skip_downloaded: bool,
     ) -> Job | None:
         with self._units() as db:
             row = db.get(SourceRow, source_id)
@@ -152,6 +161,8 @@ class DownloadService:
                 message = f"The Source {source_id} isn't one medleyplay downloads."
                 raise NotFoundError(message)
             if row.state == SourceState.UNAVAILABLE:
+                return None
+            if skip_downloaded and db.get(DownloadRow, source_id) is not None:
                 return None
             video, part = parse_part_locator(row.locator)
             quality = str((row.details or {}).get(QUALITY_DETAIL, BEST_QUALITY))

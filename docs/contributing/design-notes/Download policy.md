@@ -256,20 +256,29 @@ first:
 
 - **Removals first, then Downloads,** so the room is there before a Job
   reserves it.
-- **A removal is checked again where it happens.** In one transaction, the
-  Download's row is deleted only if it still may be removed, judged from the
-  rows as they are now, and its file is renamed to `downloads/.removed-<id>-<uuid>`;
-  after the commit the renamed file is unlinked. A Job that completes later
+- **The removals are checked again where they happen, and go together or not at
+  all,** since the plan's Downloads were sized to fit once all of them are gone.
+  The transaction takes the write lock with its first statement, then plans the
+  removable files again from the rows as they are now. Only if every planned
+  removal is still among them are the rows deleted and the files renamed to
+  `downloads/.removed-<id>-<uuid>`; after the commit the renamed files and the
+  cache copies are unlinked. A rename that fails puts back the ones before it. A Job that completes later
   renames its own file over `<source id>.<ext>`, which no removal touches. A crash
   leaves either the row with no file, which plays by downloading again, or a
   renamed file no row names, which the sweep at startup removes.
 - **A plan is acted on fresh or not at all.** When anything requested an
-  evaluation after the snapshot was read, the plan's removals are dropped and
-  the next evaluation plans again; its Downloads still start, since starting one
-  is always safe.
+  evaluation after the snapshot was read, or a planned removal no longer may
+  go, the whole plan is dropped, its Downloads too, and the policy asks for the
+  next evaluation, which plans from what changed.
+- **The snapshot is one transaction,** begun by hand: the SQLite driver begins
+  one only before a write, so its reads would otherwise each see the latest
+  commit.
 - **A Download action** submits a download Job as adding does, through
   `DownloadService`, whose entry point for the policy takes the requesting
-  Account and doesn't return a failed Job in place of a new one.
+  Account, doesn't return a failed Job in place of a new one, and skips a
+  Source downloaded since the snapshot. A Download that won't start after its
+  room was made, as when its plugin faulted in between, leaves that room for the
+  next evaluation: the files removed were ones nothing kept.
 - **A cache removal** unlinks the copy if it is still at rest; the next play
   prepares it again.
 - **Last served** is a new `last_served_at` column on `download`, set when the
@@ -328,9 +337,9 @@ first:
 - **Rules:** each field, operator, and `negate` by example, with the table of
   untouched Tracks; rules round-trip through JSON; a newer version, an unknown
   field, and too many conditions are refused.
-- **Applying:** a removal whose Download was served since the snapshot is
-  skipped, judged again in the transaction that deletes it; a plan whose
-  snapshot is stale removes nothing and still starts its Downloads.
+- **Applying:** a plan whose removal was served since the snapshot, or that
+  heard a change while planning, removes and starts nothing, cache copies
+  included, and the next evaluation acts.
 - **Through the services:** a *Keep downloaded* Playlist downloads its Tracks
   two at a time through the `tube` test plugin; lowering the limit removes
   removable Downloads, files and rows, and nothing else; a removed video's

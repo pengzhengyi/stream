@@ -348,3 +348,10 @@ def test_the_policy_starts_a_download_again_after_one_failed(site: Site, alice: 
 
     assert again is not None
     assert again.id != failed.job.id
+
+
+def test_the_policy_never_downloads_a_source_already_downloaded(site: Site, alice: Account) -> None:
+    added = _added(site, alice, "BV1Xx41117Tz")
+    _finished(site, added)
+
+    assert site.downloads.start_for(alice.id, added.source_id) is None

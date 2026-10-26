@@ -249,7 +249,11 @@ def test_a_track_no_plugin_downloads_or_whose_source_is_gone_is_reported_not_sta
 
 def test_a_reservation_is_the_size_at_the_bitrate_plus_a_tenth() -> None:
     assert reservation(60_000, 192) == 1_584_000
-    assert reservation(None, 192) == 16 * 1024**2
+
+
+@pytest.mark.parametrize("duration_ms", [None, 0, -1])
+def test_a_length_not_known_or_not_positive_reserves_16_mib(duration_ms: int | None) -> None:
+    assert reservation(duration_ms, 192) == 16 * 1024**2
 
 
 # Properties over generated snapshots.

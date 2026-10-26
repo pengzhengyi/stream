@@ -6,6 +6,7 @@ wanted removes nothing.
 """
 
 import shutil
+import stat
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -125,6 +126,8 @@ def read_snapshot(
         if source_id in source_of
     )
     logins = _valid_logins(db, now)
+    history = _download_history(db)
+    saved = _logins_saved(db)
     wanted: list[Wanted] = []
     held: defaultdict[AccountId, int] = defaultdict(int)
     for track_id, accounts in wanted_by.items():
@@ -154,7 +157,13 @@ def read_snapshot(
                 wanted_by=tuple(sorted(accounts)),
                 source_ok=chosen.state == SourceState.OK,
                 active_job=download_target(chosen.id) in active,
-                failure=_failure(db, chosen, accounts, logins),
+                failure=_failure(
+                    history.get(download_target(chosen.id), []),
+                    chosen.kind,
+                    accounts,
+                    logins,
+                    saved,
+                ),
             )
         )
     disk = shutil.disk_usage(data_dir)
@@ -199,7 +208,9 @@ def _wanted_by(db: Session, now: datetime) -> dict[TrackId, set[AccountId]]:
         except InvalidInputError as error:
             message = f"The Playlist {playlist.name!r} keeps rules this server can't read: {error}"
             raise UnreadableRulesError(message) from None
-        seen = facts.setdefault(owner, track_facts(db, owner))
+        if owner not in facts:
+            facts[owner] = track_facts(db, owner)
+        seen = facts[owner]
         for track_id, each in seen.items():
             if matches(rules, each, now):
                 wanted[track_id].add(owner)
@@ -237,37 +248,51 @@ def _valid_logins(db: Session, now: datetime) -> set[tuple[AccountId, str]]:
     }
 
 
+type _Attempt = tuple[str, str | None, datetime | None]
+"""A download Job's state, failure kind, and finish time."""
+
+
+def _download_history(db: Session) -> dict[str, list[_Attempt]]:
+    """Return each Source's download Jobs, newest first, by their target."""
+    history: defaultdict[str, list[_Attempt]] = defaultdict(list)
+    rows = db.execute(
+        select(JobRow.target, JobRow.state, JobRow.failure_kind, JobRow.finished_at)
+        .where(JobRow.kind == DOWNLOAD_KIND)
+        .order_by(JobRow.id.desc())
+    )
+    for target, state, kind, finished_at in rows:
+        history[target].append((state, kind, finished_at))
+    return dict(history)
+
+
+def _logins_saved(db: Session) -> dict[tuple[AccountId, str], datetime]:
+    rows = db.execute(
+        select(LinkedAccountRow.account_id, LinkedAccountRow.site, LinkedAccountRow.saved_at)
+    )
+    return {(AccountId(account_id), site): when for account_id, site, when in rows}
+
+
 def _failure(
-    db: Session,
-    source: _Source,
+    attempts: list[_Attempt],
+    site: str,
     accounts: set[AccountId],
     logins: set[tuple[AccountId, str]],
+    saved: dict[tuple[AccountId, str], datetime],
 ) -> Failure | None:
     """Return the Source's last download failures in a row, if its last Job failed."""
-    jobs = db.execute(
-        select(JobRow.state, JobRow.failure_kind, JobRow.finished_at)
-        .where(JobRow.kind == DOWNLOAD_KIND, JobRow.target == download_target(source.id))
-        .order_by(JobRow.id.desc())
-        .limit(10)
-    ).all()
     in_a_row = 0
-    for state, _kind, _finished in jobs:
+    for state, _kind, _finished in attempts:
         if state != JobState.FAILED:
             break
         in_a_row += 1
     if not in_a_row:
         return None
-    _state, kind, finished_at = jobs[0]
+    _state, kind, finished_at = attempts[0]
     failed_at = finished_at or datetime.fromtimestamp(0, UTC)
     # A login failure is cleared once an Account that wants the Track saves a valid login again.
-    saved = db.execute(
-        select(LinkedAccountRow.account_id, LinkedAccountRow.saved_at).where(
-            LinkedAccountRow.site == source.kind, LinkedAccountRow.account_id.in_(accounts)
-        )
-    )
     cleared = kind == "auth" and any(
-        when > failed_at and (AccountId(account_id), source.kind) in logins
-        for account_id, when in saved
+        (account_id, site) in logins and saved.get((account_id, site), failed_at) > failed_at
+        for account_id in accounts
     )
     return Failure(failed_at, in_a_row, cleared=cleared)
 
@@ -278,8 +303,11 @@ def _cache_copies(data_dir: Path) -> tuple[CacheCopy, ...]:
         return ()
     copies = []
     for path in folder.iterdir():
-        info = path.lstat()
-        if path.is_file() and not path.is_symlink():
+        try:
+            info = path.lstat()
+        except FileNotFoundError:  # a newer copy replaced it
+            continue
+        if stat.S_ISREG(info.st_mode):
             copies.append(
                 CacheCopy(path.name, info.st_size, _touched_at(info.st_atime, info.st_mtime))
             )
