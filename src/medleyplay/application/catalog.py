@@ -109,7 +109,11 @@ class CatalogService:
         with self._units() as db:
             rows = db.execute(_tracks_for(account_id).order_by(TrackRow.id)).all()
             available = _availability(db, select(SourceRow))
-            return [_to_track(track, state, available[track.id]) for track, state in rows]
+            downloaded = _downloaded(db, select(SourceRow.track_id))
+            return [
+                _to_track(track, state, available[track.id], downloaded=track.id in downloaded)
+                for track, state in rows
+            ]
 
     def get_track(self, account_id: AccountId, track_id: TrackId) -> Track:
         """Return one Track with `account_id`'s own state."""
@@ -118,7 +122,10 @@ class CatalogService:
             if found is None:
                 raise _no_track(track_id)
             available = _availability(db, select(SourceRow).where(SourceRow.track_id == track_id))
-        return _to_track(*found, available[track_id])
+            downloaded = _downloaded(
+                db, select(SourceRow.track_id).where(SourceRow.track_id == track_id)
+            )
+        return _to_track(*found, available[track_id], downloaded=track_id in downloaded)
 
     def set_favorite(self, account_id: AccountId, track_id: TrackId, *, favorite: bool) -> Track:
         """Mark or unmark a Track as one of `account_id`'s favorites."""
@@ -330,7 +337,20 @@ def _availability(db: Session, sources: Select[SourceRow]) -> defaultdict[int, A
     return found
 
 
-def _to_track(track: TrackRow, state: TrackStateRow | None, availability: Availability) -> Track:
+def _downloaded(db: Session, track_ids: Select[int]) -> set[int]:
+    # A Track is downloaded while a Download row holds one of its Sources; a cache copy
+    # of a zip member doesn't count.
+    held = track_ids.join(DownloadRow, DownloadRow.source_id == SourceRow.id)
+    return set(db.scalars(held))
+
+
+def _to_track(
+    track: TrackRow,
+    state: TrackStateRow | None,
+    availability: Availability,
+    *,
+    downloaded: bool,
+) -> Track:
     return Track(
         id=TrackId(track.id),
         details=TrackDetails(
@@ -346,6 +366,7 @@ def _to_track(track: TrackRow, state: TrackStateRow | None, availability: Availa
         play_count=0 if state is None else state.play_count,
         last_played_at=None if state is None else state.last_played_at,
         availability=availability,
+        downloaded=downloaded,
     )
 
 

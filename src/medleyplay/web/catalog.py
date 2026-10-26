@@ -38,6 +38,9 @@ class TrackOut(BaseModel):
     play_count: int
     last_played_at: datetime | None
     availability: Availability
+    downloaded: bool = Field(
+        description="Whether a Source of the Track has a Download kept on the server."
+    )
 
     @classmethod
     def of(cls, track: Track) -> "TrackOut":
@@ -56,6 +59,7 @@ class TrackOut(BaseModel):
             play_count=track.play_count,
             last_played_at=track.last_played_at,
             availability=track.availability,
+            downloaded=track.downloaded,
         )
 
 

@@ -106,6 +106,8 @@ class Track:
     play_count: int
     last_played_at: datetime | None
     availability: Availability
+    downloaded: bool = False
+    """Whether a Source of the Track has a Download kept on the server."""
 
 
 @dataclass(frozen=True)
