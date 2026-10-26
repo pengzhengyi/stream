@@ -1277,13 +1277,25 @@ button.icon.heart.on:hover,
 
 /* The volume: down, a short bar, and up. */
 
+/* Pico styles a `role="group"` as a joined row of fields; the volume is three controls. */
 .player .volume {
   display: flex;
   align-items: center;
   gap: 0.3rem;
+  width: auto;
+  margin: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.player .volume button.icon {
+  flex: none;
+  margin: 0;
+  border-radius: 999px;
 }
 
 .player .volume input {
+  flex: none;
   width: 5.5rem;
   height: 1.2rem;
   margin: 0;
@@ -1295,7 +1307,7 @@ button.icon.heart.on:hover,
 .player .volume input::-webkit-slider-thumb {
   width: 0.8rem;
   height: 0.8rem;
-  margin-top: calc(2px - 0.4rem);
+  margin-top: calc(3px - 0.4rem);
   border: none;
   border-radius: 50%;
   background: var(--accent);
