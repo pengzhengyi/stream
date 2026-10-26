@@ -9,6 +9,7 @@ import {
   current,
   following,
   reduce,
+  repeatAfter,
   upNext,
 } from "./queue";
 
@@ -301,6 +302,14 @@ describe("playing a whole list", () => {
 });
 
 describe("repeat", () => {
+  it("cycles off, all, one, and off again", () => {
+    expect([repeatAfter("off"), repeatAfter("all"), repeatAfter("one")]).toEqual([
+      "all",
+      "one",
+      "off",
+    ]);
+  });
+
   const playingLastOf3: Queue = { ...EMPTY, entries: entries(1, 2, 3), position: 2 };
 
   it("all plays the first entry after the last", () => {

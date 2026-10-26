@@ -1,5 +1,5 @@
 /**
- * @file Settings: how the page looks, and how much room the Downloads may take.
+ * @file Settings: how the page looks, its keyboard shortcuts, and the room Downloads may take.
  *
  * Each section saves on its own. The storage limit is the household's, so only
  * an admin changes it; a member sees it and what it holds.
@@ -9,6 +9,7 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { ApiError, type Preview, type Settings, type Storage, api } from "../api";
 import { formatBytes } from "../format";
+import { ShortcutSettings } from "./ShortcutSettings";
 import { ThemeSwitch } from "./ThemeSwitch";
 
 const GB = 1_000_000_000;
@@ -27,6 +28,7 @@ export function SettingsView({ admin }: { readonly admin: boolean }) {
         <p className="hint">Follow this device's light or dark setting, or keep one.</p>
         <ThemeSwitch />
       </section>
+      <ShortcutSettings />
       <StorageSection admin={admin} />
     </>
   );

@@ -22,22 +22,14 @@ import { useState } from "react";
 
 import type { Track } from "../api";
 import { formatTime } from "../format";
-import type { Repeat } from "../player/queue";
+import { repeatAfter } from "../player/queue";
 import type { Player } from "../player/usePlayer";
 import { canSetVolume } from "../player/volume";
+import { hintOf, useBindings } from "../shortcuts";
+import { REPEATS, shuffleSaid } from "./playModes";
 import { SeekBar } from "./SeekBar";
 import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
 import { VolumeControl } from "./VolumeControl";
-
-/** Each repeat mode: the next one a click chooses, its label, and what is said on choosing it. */
-const REPEATS: Record<
-  Repeat,
-  { readonly then: Repeat; readonly label: string; readonly said: string }
-> = {
-  off: { then: "all", label: "Repeat: off", said: "Repeat off." },
-  all: { then: "one", label: "Repeat: all", said: "Repeating the queue." },
-  one: { then: "off", label: "Repeat: one", said: "Repeating this Track." },
-};
 
 /** The current Track and its controls. */
 export function PlayerBar({
@@ -60,6 +52,7 @@ export function PlayerBar({
   // A label that changes on a focused button isn't always read out, so the change is said.
   const [said, setSaid] = useState("");
   const playing = status.kind === "playing";
+  const keys = useBindings();
   return (
     <section className="player" aria-label="Player">
       <SeekBar position={position} duration={duration} onSeek={player.seek} />
@@ -77,7 +70,7 @@ export function PlayerBar({
             className={track.favorite ? "icon heart on" : "icon heart"}
             aria-label={`Favorite ${track.title}`}
             aria-pressed={track.favorite}
-            title={track.favorite ? "Favorite" : "Not a favorite"}
+            {...hintOf(track.favorite ? "Favorite" : "Not a favorite", keys.favorite)}
             onClick={() => {
               onFavorite(track, !track.favorite);
             }}
@@ -93,10 +86,10 @@ export function PlayerBar({
           className={shuffled ? "icon mode on" : "icon mode"}
           aria-label="Shuffle"
           aria-pressed={shuffled}
-          title={shuffled ? "Shuffle: on" : "Shuffle: off"}
+          {...hintOf(shuffled ? "Shuffle: on" : "Shuffle: off", keys.shuffle)}
           onClick={() => {
             player.shuffle(!shuffled);
-            setSaid(shuffled ? "Shuffle off." : "Shuffle on.");
+            setSaid(shuffleSaid(!shuffled));
           }}
         >
           <ShuffleIcon weight={shuffled ? "bold" : "regular"} aria-hidden />
@@ -105,7 +98,7 @@ export function PlayerBar({
           type="button"
           className="icon"
           aria-label="Previous"
-          title="Previous"
+          {...hintOf("Previous", keys.previous)}
           onClick={player.previous}
           disabled={track === undefined}
         >
@@ -115,7 +108,7 @@ export function PlayerBar({
           type="button"
           className="icon play"
           aria-label={playing ? "Pause" : "Play"}
-          title={playing ? "Pause" : "Play"}
+          {...hintOf(playing ? "Pause" : "Play", keys.toggle)}
           onClick={player.toggle}
           disabled={status.kind !== "playing" && status.kind !== "paused"}
         >
@@ -131,7 +124,7 @@ export function PlayerBar({
           type="button"
           className="icon"
           aria-label="Next"
-          title="Next"
+          {...hintOf("Next", keys.next)}
           onClick={player.next}
           disabled={track === undefined}
         >
@@ -141,9 +134,9 @@ export function PlayerBar({
           type="button"
           className={repeat === "off" ? "icon mode" : "icon mode on"}
           aria-label={REPEATS[repeat].label}
-          title={REPEATS[repeat].label}
+          {...hintOf(REPEATS[repeat].label, keys.repeat)}
           onClick={() => {
-            const then = REPEATS[repeat].then;
+            const then = repeatAfter(repeat);
             player.setRepeat(then);
             setSaid(REPEATS[then].said);
           }}
@@ -165,7 +158,7 @@ export function PlayerBar({
           aria-label="Up next"
           aria-expanded={queueOpen}
           aria-controls="queue"
-          title="Up next"
+          {...hintOf("Up next", keys.queue)}
           onClick={onToggleQueue}
         >
           <QueueIcon weight={queueOpen ? "bold" : "regular"} aria-hidden />

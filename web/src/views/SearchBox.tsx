@@ -9,6 +9,7 @@ import { MagnifyingGlassIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 
 import { type Route, navigate } from "../routes";
+import { hintOf, useBindings } from "../shortcuts";
 
 /** How long after typing stops the search runs. */
 const SETTLE_MS = 150;
@@ -27,6 +28,7 @@ export function SearchBox({
   const [query, setQuery] = useState(shown);
   const [seen, setSeen] = useState(shown);
   const settling = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const keys = useBindings();
 
   // Back, Forward, or a link changes the search shown; the box follows.
   if (shown !== seen) {
@@ -54,7 +56,9 @@ export function SearchBox({
         <MagnifyingGlassIcon className="search-glass" weight="regular" aria-hidden />
         <span className="visually-hidden">Search</span>
         <input
+          id="search"
           type="search"
+          {...hintOf("Search", keys.search)}
           value={query}
           placeholder="Search songs, artists, albums"
           onChange={(event) => {

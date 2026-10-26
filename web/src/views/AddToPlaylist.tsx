@@ -1,15 +1,15 @@
 /**
  * @file Adding a song to Playlists: choose one or several, or name a new one.
  *
- * A native modal `<dialog>`, so focus stays in it and the page behind is inert.
  * Escape, Cancel, or a click outside it close it without adding anything; a new
  * Playlist is made only when the song is added.
  */
 
 import { PlusIcon } from "@phosphor-icons/react";
-import { type SubmitEvent, useEffect, useRef, useState } from "react";
+import { type SubmitEvent, useRef, useState } from "react";
 
 import type { Playlist, Track } from "../api";
+import { Modal } from "./Modal";
 
 /** Choose Playlists for `track`; `onSave` adds it to the ids chosen and to new Playlists by name. */
 export function AddToPlaylist({
@@ -24,6 +24,9 @@ export function AddToPlaylist({
   readonly onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const close = () => {
+    dialog.current?.close();
+  };
   const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set());
   const [newNames, setNewNames] = useState<readonly string[]>([]);
   const [name, setName] = useState("");
@@ -32,14 +35,6 @@ export function AddToPlaylist({
   // Only plain Playlists take a song; Favorites follows the hearts, a smart one its rules.
   const own = playlists.filter((playlist) => playlist.builtin === null && playlist.rules === null);
   const count = chosen.size + newNames.length;
-
-  useEffect(() => {
-    const element = dialog.current;
-    element?.showModal();
-    return () => {
-      element?.close();
-    };
-  }, []);
 
   const choose = (id: string, on: boolean) => {
     setChosen((now) => {
@@ -65,7 +60,7 @@ export function AddToPlaylist({
     setError("");
     try {
       await onSave([...chosen], newNames);
-      dialog.current?.close();
+      close();
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure));
     } finally {
@@ -74,23 +69,11 @@ export function AddToPlaylist({
   };
 
   return (
-    <dialog
+    <Modal
       ref={dialog}
       className="add-to-playlist"
-      aria-labelledby="add-to-playlist-title"
+      labelledBy="add-to-playlist-title"
       onClose={onClose}
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          dialog.current?.close();
-        }
-      }}
-      onClick={(event) => {
-        // A click on the backdrop lands on the dialog itself, outside its card.
-        if (event.target === dialog.current) {
-          dialog.current.close();
-        }
-      }}
     >
       <form className="card" onSubmit={(event) => void save(event)}>
         <h2 id="add-to-playlist-title">Add “{track.title}” to playlists</h2>
@@ -171,13 +154,7 @@ export function AddToPlaylist({
           </p>
         )}
         <footer className="dialog-buttons">
-          <button
-            type="button"
-            className="secondary outline dialog-button"
-            onClick={() => {
-              dialog.current?.close();
-            }}
-          >
+          <button type="button" className="secondary outline dialog-button" onClick={close}>
             Cancel
           </button>
           <button
@@ -192,7 +169,7 @@ export function AddToPlaylist({
           </button>
         </footer>
       </form>
-    </dialog>
+    </Modal>
   );
 }
 
