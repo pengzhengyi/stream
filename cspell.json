@@ -116,6 +116,7 @@
     "unstub",
     "usefixtures",
     "uvicorn",
+    "valuetext",
     "vcodec",
     "venv",
     "vite",

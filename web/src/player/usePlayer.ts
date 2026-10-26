@@ -9,6 +9,7 @@ import { newId } from "../ids";
 import { PlayTime, countsAsPlayed } from "./playCount";
 import { EMPTY, type Entry, type Queue, type Repeat, current, following, reduce } from "./queue";
 import { type Play, forgetPlay, keepPlay, keptPlays, loadQueue, saveQueue } from "./storage";
+import { loadVolume, saveVolume } from "./volume";
 
 /** What the player is doing. */
 export type Status =
@@ -29,7 +30,11 @@ export interface Player {
   readonly position: number;
   /** The current Track's length in seconds, once known. */
   readonly duration: number | undefined;
+  /** How loud it plays, from 0 to 1. */
+  readonly volume: number;
   readonly playList: (tracks: readonly Track[], start: number) => void;
+  /** Play every Track of `tracks` from the first, in their order or shuffled. */
+  readonly playAll: (tracks: readonly Track[], shuffled: boolean) => void;
   readonly playNext: (track: Track) => void;
   readonly add: (track: Track) => void;
   readonly toggle: () => void;
@@ -42,6 +47,7 @@ export interface Player {
   readonly clear: () => void;
   readonly shuffle: (on: boolean) => void;
   readonly setRepeat: (repeat: Repeat) => void;
+  readonly setVolume: (volume: number) => void;
 }
 
 /** What the page shows about one entry of the queue. */
@@ -100,6 +106,7 @@ export function usePlayer(
   const resumeAt = useRef<number | undefined>(undefined);
   const listening = useRef<{ play: Play; time: PlayTime; counted: boolean } | undefined>(undefined);
   const lastSaved = useRef(0);
+  const [volume, setVolume] = useState(loadVolume);
 
   const playing = current(queue);
   const key = playing?.key;
@@ -364,6 +371,12 @@ export function usePlayer(
     };
   }, []);
 
+  useEffect(() => {
+    if (audio.current !== null) {
+      audio.current.volume = volume;
+    }
+  }, [volume]);
+
   // Save the queue whenever it changes.
   useEffect(() => {
     lastSaved.current = 0;
@@ -440,8 +453,12 @@ export function usePlayer(
     repeat: queue.repeat,
     position: shown?.position ?? 0,
     duration: shown?.duration,
+    volume,
     playList: (list, start) => {
       dispatch({ type: "play", entries: list.map(entryOf), start, random: Math.random });
+    },
+    playAll: (list, shuffled) => {
+      dispatch({ type: "playAll", entries: list.map(entryOf), shuffled, random: Math.random });
     },
     playNext: (chosen) => {
       dispatch({ type: "playNext", entry: entryOf(chosen) });
@@ -467,6 +484,11 @@ export function usePlayer(
     },
     setRepeat: (repeat) => {
       dispatch({ type: "repeat", repeat });
+    },
+    setVolume: (chosen) => {
+      const within = Math.min(Math.max(chosen, 0), 1);
+      setVolume(within);
+      saveVolume(within);
     },
   };
   return [player, audio];

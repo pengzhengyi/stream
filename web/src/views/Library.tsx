@@ -36,6 +36,7 @@ export function Library({
   const playingId = current(player.queue)?.trackId;
   const actions: TrackActions = {
     onPlay: player.playList,
+    onPlayAll: player.playAll,
     onPlayNext: player.playNext,
     onAdd: player.add,
     onFavorite: (track, favorite) => {
