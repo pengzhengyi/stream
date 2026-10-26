@@ -1,7 +1,7 @@
 # Mode
 
 > [!NOTE]
-> **Status: proposed.** This note describes the Mode: whether medleyplay may
+> **Status: designed (step 6b); not built yet.** This note describes the Mode: whether medleyplay may
 > contact music sites now, how *Auto* decides, and what waits while Offline. Why
 > there is a Mode is in [Architecture](Architecture.md#online-and-offline); the
 > Downloads it holds are in [Download policy](Download%20policy.md).
