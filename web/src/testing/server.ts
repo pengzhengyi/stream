@@ -69,14 +69,27 @@ export function playlistOf(id: string, name: string, trackIds: readonly number[]
     rules: null,
     keep_downloaded: false,
     unreadable: "",
+    builtin: null,
     updated_at: "2026-10-01T12:00:00Z",
   };
 }
 
-/** The routes of a signed-in server holding `tracks` and `playlists`. */
+/**
+ * The Favorites the server keeps for every Account: the smart playlist of its
+ * favorite Tracks, here holding `trackIds`.
+ */
+export function favoritesPlaylistOf(trackIds: readonly number[] = []): Playlist {
+  return {
+    ...playlistOf("f0000000-0000-4000-8000-000000000001", "Favorites", trackIds),
+    rules: { version: 1, match: "all", conditions: [{ field: "favorite", op: "is", value: true }] },
+    builtin: "favorites",
+  };
+}
+
+/** The routes of a signed-in server holding `tracks` and `playlists`, Favorites by default. */
 export function signedIn(
   tracks: readonly Track[],
-  playlists: readonly Playlist[] = [],
+  playlists: readonly Playlist[] = [favoritesPlaylistOf()],
   features: Features = NO_FEATURES,
 ): Routes {
   return {

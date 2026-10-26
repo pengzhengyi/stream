@@ -94,14 +94,15 @@ describe("albums", () => {
 });
 
 describe("lists made from the Tracks", () => {
-  it("lists the favorites, in the order given", () => {
+  it("lists the favorites newest added first, as the server's Favorites does", () => {
     const tracks = [
-      trackOf(1, "A", { favorite: true }),
-      trackOf(2, "B"),
-      trackOf(3, "C", { favorite: true }),
+      trackOf(1, "A", { favorite: true, added_at: "2026-10-03T00:00:00Z" }),
+      trackOf(2, "B", { added_at: "2026-10-04T00:00:00Z" }),
+      trackOf(3, "C", { favorite: true, added_at: "2026-10-01T00:00:00Z" }),
+      trackOf(4, "D", { favorite: true, added_at: "2026-10-03T00:00:00Z" }),
     ];
 
-    expect(titles(favoritesOf(tracks))).toEqual(["A", "C"]);
+    expect(titles(favoritesOf(tracks))).toEqual(["D", "A", "C"]);
   });
 
   it("lists the Tracks downloaded", () => {

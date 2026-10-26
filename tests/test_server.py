@@ -1,5 +1,6 @@
 """The composition root: settings from the environment, and a working app from them."""
 
+import sqlite3
 import time
 from pathlib import Path
 
@@ -15,7 +16,7 @@ from medleyplay.server import (
     default_data_dir,
     local_host_names,
 )
-from tests.support.api import set_up_as_alice
+from tests.support.api import set_up_as_alice, sign_in
 from tests.support.hosts import TEST_COMMAND, TEST_PLUGINS
 
 
@@ -74,6 +75,22 @@ def test_the_built_app_evaluates_the_download_policy_as_it_starts(tmp_path: Path
             time.sleep(0.05)
 
     assert (last["error"], last["started"], last["removed"]) == (None, 0, 0)
+
+
+def test_the_built_app_gives_an_account_without_favorites_its_favorites_as_it_starts(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(data_dir=tmp_path, allowed_hosts=("testserver",))
+    with TestClient(build_app(settings)) as client:
+        set_up_as_alice(client)
+    with sqlite3.connect(tmp_path / "medleyplay.sqlite3") as database:
+        database.execute("DELETE FROM playlist")
+
+    with TestClient(build_app(settings)) as client:
+        sign_in(client, "alice")
+        playlists = client.get("/api/playlists").json()
+
+    assert [(p["name"], p["builtin"]) for p in playlists] == [("Favorites", "favorites")]
 
 
 def _data_dir_with_config(tmp_path: Path, config: str) -> Path:

@@ -4,7 +4,14 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
-import { type Routes, playlistOf, serve, signedIn, trackOf } from "../testing/server";
+import {
+  type Routes,
+  favoritesPlaylistOf,
+  playlistOf,
+  serve,
+  signedIn,
+  trackOf,
+} from "../testing/server";
 
 /**
  * A Library of three Tracks and one Playlist:
@@ -15,7 +22,8 @@ import { type Routes, playlistOf, serve, signedIn, trackOf } from "../testing/se
  * | Shiver    | ryo      | Supercell |             |          | yes        |
  * | クジラ     | ルワン    | 空想      | Various     |          |            |
  *
- * The Playlist *Mornings* holds Shiver, then Melt, then Shiver again.
+ * The Playlist *Mornings* holds Shiver, then Melt, then Shiver again, after the
+ * Favorites the server keeps.
  */
 const LIBRARY = [
   trackOf(1, "Melt", { artist: "ryo", album: "Supercell", favorite: true }),
@@ -25,7 +33,10 @@ const LIBRARY = [
 
 function open(
   hash: string,
-  routes: Routes = signedIn(LIBRARY, [playlistOf("p1", "Mornings", [2, 1, 2])]),
+  routes: Routes = signedIn(LIBRARY, [
+    favoritesPlaylistOf([1]),
+    playlistOf("p1", "Mornings", [2, 1, 2]),
+  ]),
 ) {
   history.replaceState(null, "", `/${hash}`);
   serve(routes);
@@ -86,7 +97,7 @@ describe("the views", () => {
 });
 
 describe("playlists", () => {
-  it("lists Favorites first, then the Account's Playlists", async () => {
+  it("lists the server's Favorites once, first, then the Account's Playlists", async () => {
     open("#/playlists");
 
     const links = within(await screen.findByRole("list", { name: "Playlists" })).getAllByRole(

@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
+from medleyplay.application.builtin_playlists import ensure_builtin_playlists
 from medleyplay.application.changes import OnChange
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.domain.accounts import (
@@ -119,6 +120,7 @@ class AccountService:
                 message = "medleyplay is already set up; an admin creates new Accounts."
                 raise ConflictError(message)
             row = db.scalars(select(AccountRow).where(AccountRow.username == username)).one()
+            ensure_builtin_playlists(db, self._clock(), AccountId(row.id))
             return self._start_session(db, row)
 
     def create_account(self, caller: Account, new: NewAccount) -> Account:
@@ -139,6 +141,8 @@ class AccountService:
         try:
             with self._units.begin() as db:
                 db.add(row)
+                db.flush()
+                ensure_builtin_playlists(db, self._clock(), AccountId(row.id))
         except IntegrityError as error:
             message = f"The username {username!r} is taken."
             raise ConflictError(message) from error

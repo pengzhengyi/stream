@@ -173,6 +173,8 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
     )
     jobs = JobService(units, clock, job_kinds, runner, events)
     catalog = CatalogService(units, clock, changes.tell)
+    # A database from before built-in Playlists, or a restored one, gains them now.
+    catalog.ensure_builtin_playlists()
     downloads = DownloadService(units, plugins, jobs, download, linked, data_dir, clock)
     policy = PolicyService(units, clock, downloads, plugins, data_dir)
     changes.listen(policy.request)

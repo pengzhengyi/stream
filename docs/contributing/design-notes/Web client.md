@@ -69,10 +69,12 @@ no router package.
   of its own, since splitting names on a separator guesses wrong as often as
   right. Names that differ only in case or width are one artist. A blank artist
   or album is listed as *Unknown artist* or *Unknown album*.
-- **Favorites** is a Playlist the client makes from the favorite Tracks, in the
-  song table's order: it is always there, can't be renamed or deleted, and needs
-  nothing new from the server. The server doesn't record when a Track became a
-  favorite, so *recently liked* waits for that.
+- **Favorites** is the smart playlist of favorite Tracks that the server keeps
+  for every Account; see [Download policy](Download%20policy.md#smart-playlists).
+  The client shows it once, first, with a heart, at `#/playlist?id=favorites`,
+  and works out its Tracks from the hearts it already holds, newest added first
+  as the server orders them, so a heart counts at once. The server doesn't
+  record when a Track became a favorite, so *recently liked* waits for that.
 - **Playlists are read-only for now:** they list and play.
 - **Playing from a view** queues the Tracks the view shows, in their order at
   the click; a later sort or a fresh list doesn't change the queue. A Track that
