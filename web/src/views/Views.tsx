@@ -5,7 +5,7 @@
 import { CaretLeftIcon, HeartIcon, PlaylistIcon } from "@phosphor-icons/react";
 import { type ReactNode, useMemo } from "react";
 
-import type { Playlist, Track } from "../api";
+import type { Mode, Playlist, Track } from "../api";
 import { formatLength } from "../format";
 import {
   type Album,
@@ -37,6 +37,8 @@ export interface ViewProps {
   readonly actions: TrackActions;
   /** Whether the Account may change what the household shares, such as the storage limit. */
   readonly admin: boolean;
+  /** Whether medleyplay may contact music sites now, once the server has said. */
+  readonly mode: Mode | null;
 }
 
 /** The view `route` names. */
@@ -100,7 +102,7 @@ export function CurrentView(props: ViewProps) {
     case "search":
       return <SearchResults {...props} query={route.query} />;
     case "settings":
-      return <SettingsView admin={props.admin} />;
+      return <SettingsView admin={props.admin} mode={props.mode} />;
   }
 }
 

@@ -153,6 +153,12 @@ describe("playing them all", () => {
     expect(actions.onPlayAll).toHaveBeenCalledExactlyOnceWith([TRACKS[0], TRACKS[2]], true);
   });
 
+  it("says a Track still to download plays once medleyplay is Online", () => {
+    renderTable([trackOf(2, "Long Road", { availability: "waiting_online" })]);
+
+    expect(screen.getByText("When online")).toBeVisible();
+  });
+
   it("can't play them all when none can play", () => {
     renderTable([trackOf(2, "Long Road", { availability: "missing" })]);
 

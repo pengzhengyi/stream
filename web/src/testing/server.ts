@@ -4,7 +4,16 @@
 
 import { vi } from "vitest";
 
-import type { Account, Features, Playlist, Preferences, Track } from "../api";
+import type {
+  Account,
+  Features,
+  MeteredNetwork,
+  Mode,
+  ModeSettings,
+  Playlist,
+  Preferences,
+  Track,
+} from "../api";
 import { type SavedShortcuts, openAccount } from "../shortcuts";
 
 /** An answer: a status and a JSON body. */
@@ -98,7 +107,60 @@ export function signedIn(
     "GET /api/tracks": { body: tracks },
     "GET /api/playlists": { body: playlists },
     "GET /api/features": { body: features },
+    "GET /api/mode": { body: modeOf() },
     ...preferencesOf(),
+  };
+}
+
+/** The Mode: Online on the home Wi-Fi, set to Auto, unless `change` says otherwise. */
+export function modeOf(change: Partial<Mode> = {}): Mode {
+  return {
+    setting: "auto",
+    online: true,
+    reason: "online",
+    network: { kind: "wifi", metered_as: null, hotspot_like: false },
+    since: "2026-10-27T12:00:00Z",
+    checked_at: "2026-10-27T12:00:00Z",
+    online_at: null,
+    held_jobs: 0,
+    ...change,
+  };
+}
+
+/**
+ * The routes of a server whose Mode is `mode`, keeping the Mode's settings as the
+ * page changes them; a network marked is the one the server is on, named as sent.
+ */
+export function modeSettingsOf(mode: Mode, metered: readonly MeteredNetwork[] = []): Routes {
+  let kept: ModeSettings = { setting: mode.setting, metered, revision: metered.length };
+  const subnet = mode.network?.hotspot_like === true ? "172.20.10.0/28" : "192.168.31.0/24";
+  return {
+    "GET /api/mode": { body: mode },
+    "GET /api/mode/settings": () => ({ body: kept }),
+    "PUT /api/mode/settings": (body) => {
+      const sent = body as { setting: Mode["setting"]; revision: number };
+      if (sent.revision !== kept.revision) {
+        return { status: 409, body: { detail: "The Mode's settings were saved since." } };
+      }
+      kept = { ...kept, setting: sent.setting, revision: kept.revision + 1 };
+      return { body: kept };
+    },
+    "POST /api/mode/metered": (body) => {
+      const { name } = body as { name: string };
+      const id = kept.metered.length + 1;
+      const network = { id, name, subnet, hotspot_like: mode.network?.hotspot_like ?? false };
+      kept = { ...kept, metered: [...kept.metered, network], revision: kept.revision + 1 };
+      return { body: network };
+    },
+    ...Object.fromEntries(
+      [1, 2, 3].map((id) => [
+        `DELETE /api/mode/metered/${String(id)}`,
+        () => {
+          kept = { ...kept, metered: kept.metered.filter((each) => each.id !== id) };
+          return { status: 204 };
+        },
+      ]),
+    ),
   };
 }
 

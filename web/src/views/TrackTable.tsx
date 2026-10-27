@@ -56,7 +56,8 @@ const features = tableFeatures({
 type Column = ColumnDef<typeof features, Track>;
 
 const WHY: Record<string, string> = {
-  offline: "Offline",
+  offline: "Drive unplugged",
+  waiting_online: "When online",
   unavailable: "Unavailable",
   missing: "Missing",
   cant_play: "Can't play",

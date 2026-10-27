@@ -4,7 +4,7 @@
 
 import { useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
 
-import { ApiError, type JobEvent, type Playlist, type Track, api } from "../api";
+import { ApiError, type JobEvent, type Mode, type Playlist, type Track, api } from "../api";
 import { newId } from "../ids";
 import { EMPTY, type Field, reduce, tracksOf } from "./store";
 
@@ -18,6 +18,8 @@ export interface Library {
   readonly loaded: boolean;
   /** Why the last request failed, or `""`. */
   readonly error: string;
+  /** Whether medleyplay may contact music sites now, once the server has said. */
+  readonly mode: Mode | null;
   readonly setFavorite: (id: number, favorite: boolean) => void;
   readonly setRating: (id: number, rating: number | null) => void;
   /**
@@ -53,6 +55,7 @@ export function useLibrary(onSignedOut: () => void): Library {
   const [playlists, setPlaylists] = useState<readonly Playlist[]>([]);
   const [providers, setProviders] = useState<readonly string[]>([]);
   const [error, setError] = useState("");
+  const [mode, setMode] = useState<Mode | null>(null);
   const writes = useRef(0);
 
   const failed = (failure: unknown) => {
@@ -78,6 +81,9 @@ export function useLibrary(onSignedOut: () => void): Library {
       api.playlists().then(setPlaylists, (failure: unknown) => {
         onFailure(failure);
       });
+      api.mode().then(setMode, () => {
+        // Without the Mode, the page shows nothing about it until the stream says.
+      });
     };
     const onShown = () => {
       if (document.visibilityState === "visible") {
@@ -94,7 +100,7 @@ export function useLibrary(onSignedOut: () => void): Library {
       },
     );
     document.addEventListener("visibilitychange", onShown);
-    const stopListening = listen(load);
+    const stopListening = listen(load, setMode);
     return () => {
       document.removeEventListener("visibilitychange", onShown);
       stopListening();
@@ -121,6 +127,7 @@ export function useLibrary(onSignedOut: () => void): Library {
     providers,
     loaded: store.loaded,
     error,
+    mode,
     setFavorite: (id, favorite) => {
       setError("");
       write(id, "favorite", favorite, api.setFavorite(id, favorite));
@@ -172,21 +179,32 @@ function listed(playlists: readonly Playlist[]): Playlist[] {
 
 /**
  * Call `load` when the event stream (re)connects, which may have missed changes,
- * and a moment after a scan or a Download finishes. Return what stops listening.
+ * a moment after a scan or a Download finishes, and when the Mode goes Online or
+ * Offline, which changes what can play; tell `onMode` each Mode the stream sends.
+ * Return what stops listening.
  */
-function listen(load: () => void): () => void {
+function listen(load: () => void, onMode: (mode: Mode) => void): () => void {
   if (typeof EventSource === "undefined") {
     return () => undefined;
   }
   const events = new EventSource("/api/events");
   let settling: ReturnType<typeof setTimeout> | undefined;
   let connected = false;
+  let online: boolean | undefined;
   events.addEventListener("ready", () => {
     // The page loaded on opening; only a reconnect may have missed something.
     if (connected) {
       load();
     }
     connected = true;
+  });
+  events.addEventListener("mode", (event: MessageEvent<string>) => {
+    const mode = JSON.parse(event.data) as Mode;
+    if (online !== undefined && online !== mode.online) {
+      load();
+    }
+    online = mode.online;
+    onMode(mode);
   });
   events.addEventListener("job", (event: MessageEvent<string>) => {
     const job = JSON.parse(event.data) as JobEvent;

@@ -1,5 +1,6 @@
 /**
- * @file Settings: how the page looks, its keyboard shortcuts, and the room Downloads may take.
+ * @file Settings: how the page looks, its keyboard shortcuts, the network, and the room
+ * Downloads may take.
  *
  * Each section saves on its own, and folds away under its heading; a bar of the
  * sections' names goes to one, opening it. Which are folded is this browser's
@@ -10,8 +11,9 @@
 import { CaretDownIcon } from "@phosphor-icons/react";
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react";
 
-import { ApiError, type Preview, type Settings, type Storage, api } from "../api";
+import { ApiError, type Mode, type Preview, type Settings, type Storage, api } from "../api";
 import { formatBytes } from "../format";
+import { NetworkSettings } from "./NetworkSettings";
 import { ShortcutSettings } from "./ShortcutSettings";
 import { ThemeSwitch } from "./ThemeSwitch";
 
@@ -23,6 +25,7 @@ const SETTLE_MS = 300;
 const SECTIONS = [
   { id: "appearance", title: "Appearance" },
   { id: "keyboard-shortcuts", title: "Keyboard shortcuts" },
+  { id: "network", title: "Network" },
   { id: "storage", title: "Downloads and storage" },
 ] as const;
 
@@ -51,7 +54,13 @@ function keepFolded(folded: ReadonlySet<SectionId>): void {
 }
 
 /** The Settings view; `admin` may change what the household shares. */
-export function SettingsView({ admin }: { readonly admin: boolean }) {
+export function SettingsView({
+  admin,
+  mode,
+}: {
+  readonly admin: boolean;
+  readonly mode: Mode | null;
+}) {
   const [folded, setFolded] = useState(loadFolded);
   const fold = (next: ReadonlySet<SectionId>) => {
     setFolded(next);
@@ -81,6 +90,7 @@ export function SettingsView({ admin }: { readonly admin: boolean }) {
       </>
     ),
     "keyboard-shortcuts": <ShortcutSettings />,
+    network: <NetworkSettings admin={admin} mode={mode} />,
     storage: <StorageSettings admin={admin} />,
   };
   return (

@@ -1,11 +1,10 @@
 # Mode
 
 > [!NOTE]
-> **Status: built on the server (step 6b); the web client's part is not yet.**
-> This note describes the Mode: whether medleyplay may contact music sites now,
-> how *Auto* decides, and what waits while Offline. Why there is a Mode is in
-> [Architecture](Architecture.md#online-and-offline); the Downloads it holds are
-> in [Download policy](Download%20policy.md).
+> **Status: built (step 6b).** This note describes the Mode: whether medleyplay
+> may contact music sites now, how *Auto* decides, and what waits while Offline.
+> Why there is a Mode is in [Architecture](Architecture.md#online-and-offline);
+> the Downloads it holds are in [Download policy](Download%20policy.md).
 
 ## Contents
 
@@ -143,11 +142,19 @@ Auto is Online when all of these hold, and Offline when any doesn't:
 ## The web client
 
 - **Offline shows in the header,** with the reason, such as *Offline: on a
-  metered network*. Online shows nothing.
-- **Settings gains a Network section:** the setting as three choices, the
-  network the server is on, and, for an admin, *Mark this network metered*
-  with a name, suggested for a hotspot's subnet, and the metered networks, each
-  with a way to remove its mark. When the Mode is settling, it says when it goes Online.
+  metered network*, and leads to the Network settings; a phone shows only
+  *Offline*. Online shows nothing. The page follows the `mode` event, and asks
+  for the Tracks again when the Mode goes Online or Offline, since what can
+  play changes.
+- **Settings gains a Network section:** why the Mode is what it is, when a
+  settling Mode goes Online, the network the server is on, and how many
+  downloads wait. An admin chooses among three settings, saved at once; marks
+  the network the server is on metered with a name, told when it looks like a
+  phone's hotspot; and removes a mark. A member sees the setting and the marks.
+  It says that a phone that changes its hotspot's address is a new network
+  until marked again.
+- **A Track still to download says *When online*** while Offline. A Track on an
+  unplugged drive says *Drive unplugged*, so *Offline* means only the Mode.
 
 ## Testing
 
