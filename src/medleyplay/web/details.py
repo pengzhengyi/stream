@@ -1,5 +1,6 @@
 """The details API: a Track's values and where each came from, and the household's own."""
 
+from collections.abc import Mapping
 from typing import Annotated
 
 from fastapi import APIRouter
@@ -7,7 +8,8 @@ from pydantic import BaseModel, Field
 
 from medleyplay.application.details import DetailsView
 from medleyplay.domain.catalog import TrackId
-from medleyplay.domain.details import Origin
+from medleyplay.domain.details import Field as Detail
+from medleyplay.domain.details import Origin, Shown
 from medleyplay.web.deps import DetailsDep, SignedInAccount
 
 router = APIRouter(prefix="/api/tracks", tags=["details"])
@@ -23,13 +25,15 @@ class ShownOut(BaseModel):
 
 
 class DetailsOut(BaseModel):
-    """A Track's shown values, and what each origin says.
+    """A Track's shown values, what each origin says, and what would show without the household.
 
-    A field no origin gives is absent from `shown`.
+    A field no origin gives is absent from `shown`; `found` is what would show if the
+    household's values were dropped.
     """
 
     track_id: int
     shown: dict[str, ShownOut]
+    found: dict[str, ShownOut]
     origins: dict[Origin, dict[str, DetailValue]]
 
     @classmethod
@@ -37,15 +41,19 @@ class DetailsOut(BaseModel):
         """Return the API view of `view`."""
         return cls(
             track_id=view.track_id,
-            shown={
-                field: ShownOut(value=found.value, origin=found.origin)
-                for field, found in view.shown.items()
-            },
+            shown=_shown_out(view.shown),
+            found=_shown_out(view.found),
             origins={
                 origin: {str(field): value for field, value in values.items()}
                 for origin, values in view.values.items()
             },
         )
+
+
+def _shown_out(values: Mapping[Detail, Shown]) -> dict[str, ShownOut]:
+    return {
+        field: ShownOut(value=found.value, origin=found.origin) for field, found in values.items()
+    }
 
 
 class HouseholdIn(BaseModel):

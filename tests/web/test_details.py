@@ -38,6 +38,7 @@ def test_the_households_values_are_put_and_show_on_the_track(
 
     assert put.status_code == 200
     assert put.json()["shown"]["title"] == {"value": "Night Drive", "origin": "household"}
+    assert put.json()["found"]["title"] == {"value": "Intro", "origin": "video"}
     track = client.get(f"/api/tracks/{track_id}").json()
     assert (track["title"], track["year"], track["genre"]) == ("Night Drive", 2016, "")
 
@@ -67,9 +68,7 @@ def test_values_are_set_on_many_tracks_at_once(client: TestClient, catalog: Cata
     assert {t["album"] for t in client.get("/api/tracks").json()} == {"Re:Start"}
 
 
-def test_a_detail_unknown_to_tracks_is_refused(
-    client: TestClient, catalog: CatalogService
-) -> None:
+def test_a_detail_unknown_to_tracks_is_refused(client: TestClient, catalog: CatalogService) -> None:
     set_up_as_alice(client)
     track_id = _one_track(catalog)
 

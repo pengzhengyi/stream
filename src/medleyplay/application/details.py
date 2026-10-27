@@ -32,10 +32,11 @@ type OriginValues = dict[Origin, dict[Field, Value]]
 
 @dataclass(frozen=True)
 class DetailsView:
-    """A Track's shown values, and every origin's values."""
+    """A Track's shown values, what would show without the household's, and every origin's."""
 
     track_id: TrackId
     shown: dict[Field, Shown]
+    found: dict[Field, Shown]
     values: OriginValues
 
 
@@ -123,7 +124,10 @@ class DetailsService:
             values = values_of(db, track_id)
             if db.get(TrackRow, track_id) is None:
                 raise _no_track(track_id)
-        return DetailsView(track_id, shown(values), values)
+        found = shown(
+            {origin: kept for origin, kept in values.items() if origin is not Origin.HOUSEHOLD}
+        )
+        return DetailsView(track_id, shown(values), found, values)
 
     def put_household(self, track_id: TrackId, values: Mapping[str, object]) -> DetailsView:
         """Make `values` the household's values for the Track, replacing its earlier ones."""
