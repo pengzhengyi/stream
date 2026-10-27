@@ -5,8 +5,8 @@
 > This note describes how medleyplay adds music from
 > Bilibili: linking an Account's login, turning a link into Tracks, downloading
 > their audio, playing the Downloads, and reporting progress to every browser.
-> What adding must do is in [MVP](MVP.md#add-from-bilibili); why the plugin has
-> two backends is in [Architecture](Architecture.md#the-bilibili-plugin).
+> What adding must do is in [MVP](MVP.md#add-from-bilibili); how the plugin is
+> built is in [Architecture](Architecture.md#the-bilibili-plugin).
 
 ## Contents
 
@@ -19,6 +19,7 @@
 - [Playing a Download](#playing-a-download)
 - [Progress over SSE](#progress-over-sse)
 - [The bilibili plugin](#the-bilibili-plugin)
+- [The yutto fallback](#the-yutto-fallback)
 - [What the API shows](#what-the-api-shows)
 - [Testing](#testing)
 - [Left for later steps](#left-for-later-steps)
@@ -37,6 +38,13 @@ can't read the sample video either. So step 5 is built in two parts:
 - **Step 5b**, once yt-dlp is fixed, raises the pinned version, records a real
   video's info as the fixture in place of the made one, checks a real download
   by hand, and adds the yutto fallback.
+
+A check on 2026-10-27, through each tool's normal download command, found the
+site now refusing both before either reads anything: yt-dlp 2026.10.26 and its
+nightly get *HTTP 412 Precondition Failed* for the video page, and yutto 2.3.1
+signs in but gets an HTTP error for the video's details. A 412 is Bilibili's
+answer to a client it suspects, so the live check waits for it to stop; nothing
+here tries to get past it.
 
 This overrides the MVP's step 0, which had the Bilibili steps wait for the fix:
 everything but the tools can be built and tested without Bilibili. Until 5b,
@@ -317,6 +325,29 @@ A *Download* is the one copy of a Bilibili Source on the server's disk.
   leaked copy can't change the account. `SESSDATA` alone is still a full
   session: it can read anything the account can.
 
+## The yutto fallback
+
+yutto was to be the fallback for a broken yt-dlp. It is deferred, since its
+command can't stand in for yt-dlp without risking what medleyplay never does:
+asking the site again after it has said no.
+
+- **A broken tool and a refusal look alike.** The fallback would run only when
+  yt-dlp's extractor fails, never on a refusal, but a refusal can arrive as a
+  page the extractor can't parse, as *Unable to extract initial state* did
+  before the same request got a 412. Falling back then means switching tools
+  after the site said no.
+- **yutto retries a refusal itself:** any HTTP error, a 412 included, is tried
+  four more times, and that can't be turned off.
+- **Its command reports little:** most failures, a removed video and a refusal
+  among them, end with exit code 0 and no file, so a removed video couldn't be
+  told apart to mark it *gone*.
+- **It needs guarding:** it can return FLAC or Dolby audio in an `.m4a`, and it
+  reads the machine owner's own `~/.config/yutto` login when it is given none.
+
+It is reconsidered when yt-dlp breaks in a way yutto would fix and the site is
+not refusing either. It would then be a separate command, never imported, since
+yutto is GPL-3.0 and medleyplay is MIT.
+
 ## What the API shows
 
 | Route | Who | Does |
@@ -359,8 +390,9 @@ A *Download* is the one copy of a Bilibili Source on the server's disk.
 
 ## Left for later steps
 
-- **Step 5b:** the fixed yt-dlp, a recorded fixture, a live check, and the yutto
-  fallback with ffmpeg.
+- **Step 5b:** once the site answers yt-dlp again, a newer yt-dlp, a recorded
+  fixture, and a live check. The yutto fallback is deferred; see
+  [The yutto fallback](#the-yutto-fallback).
 - **Step 6:** the Mode, Offline links, the storage limit, and removing Downloads.
 - **Step 7:** the add dialog, linked accounts in Settings, and changing a
   Source's quality.
