@@ -54,7 +54,9 @@ def migrate(engine: Engine) -> None:
 
     Foreign keys are off while it runs: SQLite alters a table by building a new one
     and dropping the old, and the drop would otherwise delete every row that refers
-    to it. Before committing, it checks that every reference still holds.
+    to it. The whole upgrade is one transaction, its table changes included, and it
+    commits only once every reference still holds; otherwise the database is left
+    as it was.
     """
     config = Config()
     config.set_main_option("script_location", MIGRATIONS)
@@ -62,8 +64,17 @@ def migrate(engine: Engine) -> None:
         # The pragma does nothing inside a transaction, so it is set before one begins.
         connection.exec_driver_sql("PRAGMA foreign_keys = OFF")
         connection.commit()
+        driver = connection.connection.driver_connection
+        if not isinstance(driver, SQLiteConnection):
+            message = "medleyplay migrates only SQLite databases."
+            raise TypeError(message)
+        # By default the driver commits before each table change; without its own
+        # transaction control, the BEGIN below holds the table changes too.
+        isolation = driver.isolation_level
+        driver.isolation_level = None
         try:
             with connection.begin():
+                connection.exec_driver_sql("BEGIN")
                 config.attributes["connection"] = connection
                 command.upgrade(config, "head")
                 broken = connection.exec_driver_sql("PRAGMA foreign_key_check").all()
@@ -71,5 +82,6 @@ def migrate(engine: Engine) -> None:
                     message = f"The migration left {len(broken)} broken references."
                     raise MigrationError(message)
         finally:
+            driver.isolation_level = isolation
             connection.exec_driver_sql("PRAGMA foreign_keys = ON")
             connection.commit()

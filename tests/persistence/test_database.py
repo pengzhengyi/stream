@@ -14,7 +14,13 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from medleyplay.persistence.database import MIGRATIONS, database_url, make_engine, migrate
+from medleyplay.persistence.database import (
+    MIGRATIONS,
+    MigrationError,
+    database_url,
+    make_engine,
+    migrate,
+)
 from medleyplay.persistence.schema import Base, UtcDateTime
 
 
@@ -158,6 +164,32 @@ def test_migrating_records_each_tracks_values_with_the_origin_they_most_likely_h
         (3, "artist", "video", "Blue Room"),
         (3, "title", "video", "Mixtape"),
     ]
+
+
+def test_a_migration_refused_for_broken_references_leaves_the_database_as_it_was(
+    tmp_path: Path,
+) -> None:
+    engine = make_engine(database_url(tmp_path))
+    _migrate_to(engine, "0011")
+    with engine.connect() as connection:
+        # A Source of a Track that is gone: only a database edited by hand could hold one.
+        connection.exec_driver_sql("PRAGMA foreign_keys = OFF")
+        connection.execute(
+            text(
+                "INSERT INTO source (track_id, kind, locator, state, details)"
+                " VALUES (99, 'library', '1/Gone.flac', 'ok', '{}')"
+            )
+        )
+        connection.commit()
+
+    with pytest.raises(MigrationError, match="1 broken reference"):
+        migrate(engine)
+
+    with engine.connect() as connection:
+        version = connection.scalar(text("SELECT version_num FROM alembic_version"))
+        columns = {row.name for row in connection.execute(text("PRAGMA table_info(track)"))}
+    engine.dispose()
+    assert (version, "track_number" in columns) == ("0011", False)
 
 
 _FAVORITE = {"field": "favorite", "op": "is", "value": True}
