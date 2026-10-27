@@ -139,3 +139,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The 2019 prototype** — the Express server, the Create React App client, and
   the library-file builder are retired ahead of a rewrite. They remain in the git
   history.
+
+### Fixed
+
+- Songs saved as fragmented `.m4a` or `.mp4` files, as Bilibili downloads are,
+  now show their length instead of none.
