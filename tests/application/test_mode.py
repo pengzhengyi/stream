@@ -6,11 +6,13 @@ from datetime import timedelta
 import pytest
 from sqlalchemy.orm import Session, sessionmaker
 
+from medleyplay.application import mode as mode_module
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.mode import (
     CHECK_AFTER_FAILURE,
     CHECK_WHILE_ONLINE,
     NETWORK_POLL,
+    ModeDocument,
     ModeService,
 )
 from medleyplay.domain.accounts import Account
@@ -83,9 +85,32 @@ class TestDeciding:
         self, mode: ModeService, clock: FakeClock, told: list[str]
     ) -> None:
         _settled(mode, clock)
+        told_settling = len(told)
+
         mode.tick()
 
-        assert told == ["mode", "mode"]
+        assert (told_settling, len(told)) == (2, 2)
+
+    def test_goes_offline_on_a_metered_network_before_checking_the_internet(
+        self,
+        mode: ModeService,
+        clock: FakeClock,
+        accounts: AccountService,
+        network: FakeNetwork,
+        internet: FakeInternet,
+    ) -> None:
+        alice, _ = _alice_and_bob(accounts)
+        network.network = NetworkFactory.iphone_hotspot()
+        mode.mark_metered(alice, "Hotspot")
+        network.network = NetworkFactory.home_wifi()
+        _settled(mode, clock)
+        seen: list[bool] = []
+        internet.while_checking = lambda: seen.append(mode.now().mode.online)
+        network.network = NetworkFactory.iphone_hotspot()
+
+        mode.tick()
+
+        assert seen == [False]
 
 
 class TestCheckingTheInternet:
@@ -128,6 +153,51 @@ class TestCheckingTheInternet:
         mode.tick()
 
         assert internet.checks == 2
+
+    def test_checks_nothing_without_a_network(
+        self, mode: ModeService, internet: FakeInternet, network: FakeNetwork
+    ) -> None:
+        network.network = None
+
+        mode.tick()
+
+        assert internet.checks == 0
+        assert mode.now().mode.reason is Reason.NO_NETWORK
+
+    def test_a_routers_address_coming_and_going_is_the_same_network(
+        self, mode: ModeService, internet: FakeInternet, network: FakeNetwork
+    ) -> None:
+        mode.tick()
+        network.network = NetworkFactory.home_wifi(router=None)
+
+        mode.tick()
+
+        assert internet.checks == 1
+
+    def test_a_check_that_raises_is_unreachable_and_tried_again_soon(
+        self, mode: ModeService, clock: FakeClock, internet: FakeInternet
+    ) -> None:
+        internet.fails = True
+        mode.tick()
+        internet.fails = False
+        clock.advance(CHECK_AFTER_FAILURE)
+
+        mode.tick()
+
+        assert internet.checks == 2
+
+    def test_a_check_asked_for_waits_out_a_check_that_raises(
+        self, mode: ModeService, internet: FakeInternet
+    ) -> None:
+        mode.tick()
+        mode.check_soon()
+        internet.fails = True
+        mode.tick()
+        internet.fails = False
+
+        mode.tick()
+
+        assert internet.checks == 3
 
     def test_checks_at_once_when_asked(self, mode: ModeService, internet: FakeInternet) -> None:
         mode.tick()
@@ -179,6 +249,27 @@ class TestTheSetting:
 
         with pytest.raises(ConflictError, match="saved since revision 0"):
             mode.put_setting(alice, ModeSetting.ONLINE, revision=0)
+
+    def test_an_admin_who_saved_second_at_the_same_revision_is_refused(
+        self,
+        mode: ModeService,
+        accounts: AccountService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        alice, _ = _alice_and_bob(accounts)
+        read = mode_module._read  # noqa: SLF001 -- the read the other admin's save slips past
+
+        def read_then_lose_the_race(db: Session) -> tuple[ModeDocument, int]:
+            found = read(db)
+            monkeypatch.setattr(mode_module, "_read", read)
+            mode.put_setting(alice, ModeSetting.ONLINE, revision=0)
+            return found
+
+        monkeypatch.setattr(mode_module, "_read", read_then_lose_the_race)
+
+        with pytest.raises(ConflictError, match="saved since revision 0"):
+            mode.put_setting(alice, ModeSetting.OFFLINE, revision=0)
+        assert mode.settings().setting is ModeSetting.ONLINE
 
     def test_a_member_cant_change_it(self, mode: ModeService, accounts: AccountService) -> None:
         _, bob = _alice_and_bob(accounts)

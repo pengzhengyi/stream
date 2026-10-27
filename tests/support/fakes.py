@@ -1,10 +1,14 @@
 """Fakes for the core's boundaries: the clock, the Keychain, and the network."""
 
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 from medleyplay.domain.errors import KeychainUnavailableError
 from medleyplay.domain.mode import Network, Unread
 from tests.support.factories import NetworkFactory
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class FakeClock:
@@ -60,12 +64,23 @@ class FakeNetwork:
 
 
 class FakeInternet:
-    """Whether the connectivity check reaches the internet, as a test sets it; it counts checks."""
+    """Whether the connectivity check reaches the internet, as a test sets it; it counts checks.
+
+    `while_checking` runs during each check, as a slow check lets other things happen;
+    `fails` makes the check raise, as a check meeting a broken answer might.
+    """
 
     def __init__(self) -> None:
         self.reachable = True
         self.checks = 0
+        self.fails = False
+        self.while_checking: Callable[[], None] | None = None
 
     def __call__(self) -> bool:
         self.checks += 1
+        if self.while_checking is not None:
+            self.while_checking()
+        if self.fails:
+            message = "The check met an answer it couldn't read."
+            raise OSError(message)
         return self.reachable

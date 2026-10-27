@@ -236,17 +236,19 @@ def build_app(settings: Settings, source: PluginSource = PluginSource()) -> Fast
         try:
             with hold_instance_lock(settings.data_dir):
                 services.mode.start()
-                services.plugins.start()
-                services.playback.sweep_cache()
-                services.playback.sweep_downloads()
-                services.jobs.start()
-                services.policy.start()
                 try:
-                    yield
+                    services.plugins.start()
+                    services.playback.sweep_cache()
+                    services.playback.sweep_downloads()
+                    services.jobs.start()
+                    services.policy.start()
+                    try:
+                        yield
+                    finally:
+                        services.policy.stop()
+                        services.jobs.stop()
+                        services.plugins.close()
                 finally:
-                    services.policy.stop()
-                    services.jobs.stop()
-                    services.plugins.close()
                     services.mode.stop()
         finally:
             engine.dispose()

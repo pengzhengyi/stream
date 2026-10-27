@@ -13,7 +13,7 @@ internet, 30 seconds after one that didn't, on another network, when asked, and
 on leaving the setting Offline. While the setting is Offline, nothing is checked.
 """
 
-import contextlib
+import logging
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -51,6 +51,7 @@ MAX_NAME: Final = 64
 MODE_ROW: Final = 1
 _SAVE_ATTEMPTS: Final = 3
 _HARDWARE_ADDRESS: Final = r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$"
+_log = logging.getLogger(__name__)
 
 
 class MeteredDocument(BaseModel):
@@ -134,16 +135,18 @@ class ModeService:
         since it was read.
         """
         _require_admin(caller)
-        with self._units.begin() as db:
-            document, current = _read(db)
+
+        def change(document: ModeDocument, current: int) -> ModeDocument:
             if revision != current:
                 message = (
                     f"The Mode's settings were saved since revision {revision}; read them again."
                 )
                 raise ConflictError(message)
-            _save(db, document.model_copy(update={"setting": setting}), current, self._clock())
+            return document.model_copy(update={"setting": setting})
+
+        saved = self._change(change)
         self.tick()
-        return self.settings()
+        return saved
 
     def mark_metered(self, caller: Account, name: str) -> MeteredNetwork:
         """Mark the network the server is on now metered, as `name`; a marked one is renamed."""
@@ -157,7 +160,7 @@ class ModeService:
         if key is None:
             message = "The server can't tell which network it is on now, so it can't mark it."
             raise ConflictError(message)
-        marked = self._change(lambda document: _marked(document, key, name))
+        marked = self._change(lambda document, _: _marked(document, key, name))
         self.tick()
         return next(network for network in marked.metered if network.key == key)
 
@@ -165,7 +168,7 @@ class ModeService:
         """Remove a metered network's mark; one already gone changes nothing."""
         _require_admin(caller)
         self._change(
-            lambda document: document.model_copy(
+            lambda document, _: document.model_copy(
                 update={"metered": tuple(m for m in document.metered if m.id != network_id)}
             )
         )
@@ -178,38 +181,73 @@ class ModeService:
         self._wake.set()
 
     def tick(self) -> datetime:
-        """Read the network, check the internet if due, and decide; return when to tick next."""
+        """Read the network, decide, then check the internet if due and decide again.
+
+        Going Offline is decided before the check, so it is at once however long
+        the check takes. Return when to tick next.
+        """
         with self._ticking:
-            now = self._clock()
             setting = self.settings()
             network = self._probe()
             with self._state:
-                previous = self._mode
+                changed_network = _identity(network) != _identity(self._network)
+                self._network = network
                 due = setting.setting is not ModeSetting.OFFLINE and (
                     self._check_asked
                     or self._next_check is None
-                    or now >= self._next_check
-                    or network != self._network
-                    or previous.setting is ModeSetting.OFFLINE
+                    or self._clock() >= self._next_check
+                    or changed_network
+                    or self._mode.setting is ModeSetting.OFFLINE
                 )
-                self._check_asked = False
-            if due:
-                reachable = self._check()
-                interval = CHECK_WHILE_ONLINE if reachable else CHECK_AFTER_FAILURE
+            # Before a check, only going Offline is decided, so it is at once however
+            # long the check takes; a change of setting waits for the facts.
+            self._decide(setting, network, only_offline=due)
+            if due and network is None:
+                # Without a network there is nothing to reach; check once one comes.
                 with self._state:
-                    self._reachable, self._checked_at = reachable, now
-                    self._next_check = now + interval
+                    self._reachable, self._next_check = False, None
+                self._decide(setting, network)
+            elif due:
+                self._run_check()
+                self._decide(setting, network)
             with self._state:
-                self._network = network
-                facts = Facts(network, self._reachable)
-                self._mode = decide(previous, setting.setting, facts, setting.names(), now)
                 mode, next_check = self._mode, self._next_check
-            if _shown(mode) != _shown(previous) and self._on_change is not None:
-                self._on_change()
-            wakes = [now + NETWORK_POLL, mode.online_at]
+            wakes = [self._clock() + NETWORK_POLL, mode.online_at]
             if setting.setting is not ModeSetting.OFFLINE:
                 wakes.append(next_check)
             return min(wake for wake in wakes if wake is not None)
+
+    def _run_check(self) -> None:
+        try:
+            reachable = self._check()
+        except Exception:  # noqa: BLE001 -- a check that breaks has not reached the internet
+            _log.warning("The connectivity check failed", exc_info=True)
+            reachable = False
+            asked = self._check_asked
+        else:
+            asked = False
+        now = self._clock()
+        with self._state:
+            self._reachable, self._checked_at = reachable, now
+            self._next_check = now + (CHECK_WHILE_ONLINE if reachable else CHECK_AFTER_FAILURE)
+            self._check_asked = asked
+
+    def _decide(
+        self,
+        setting: ModeSettings,
+        network: Network | Unread | None,
+        *,
+        only_offline: bool = False,
+    ) -> None:
+        with self._state:
+            previous = self._mode
+            facts = Facts(network, self._reachable)
+            mode = decide(previous, setting.setting, facts, setting.names(), self._clock())
+            if only_offline and not (previous.online and not mode.online):
+                return
+            self._mode = mode
+        if _shown(mode) != _shown(previous) and self._on_change is not None:
+            self._on_change()
 
     def start(self) -> None:
         """Tick on a thread of its own, at once and then as each tick asks."""
@@ -228,17 +266,20 @@ class ModeService:
     def _run(self) -> None:
         while not self._stopping.is_set():
             wait = NETWORK_POLL
-            # A tick that fails, as when the database is busy, leaves the Mode as it was.
-            with contextlib.suppress(Exception):
+            try:
                 wait = min(max(self.tick() - self._clock(), timedelta(0)), NETWORK_POLL)
+            except Exception:  # noqa: BLE001 -- the thread outlives any one failed tick
+                # A tick that fails, as when the database is busy, leaves the Mode as it was.
+                _log.exception("Deciding the Mode failed; trying again at the next tick")
             self._wake.wait(wait.total_seconds())
             self._wake.clear()
 
-    def _change(self, change: Callable[[ModeDocument], ModeDocument]) -> ModeSettings:
+    def _change(self, change: Callable[[ModeDocument, int], ModeDocument]) -> ModeSettings:
+        """Save `change` of the document and its revision, read again if someone saved first."""
         for _ in range(_SAVE_ATTEMPTS):
             with self._units.begin() as db:
                 document, revision = _read(db)
-                changed = change(document)
+                changed = change(document, revision)
                 if changed == document:
                     return _settings_of(document, revision)
                 if _save(db, changed, revision, self._clock()):
@@ -251,6 +292,11 @@ def _require_admin(caller: Account) -> None:
     if not caller.is_admin:
         message = "Only an admin can change the Mode's settings."
         raise ForbiddenError(message)
+
+
+def _identity(network: Network | Unread | None) -> object:
+    """Return what tells networks apart, so a router's address coming and going is no change."""
+    return (network.kind, network.subnet) if isinstance(network, Network) else network
 
 
 def _shown(mode: Mode) -> tuple[object, ...]:

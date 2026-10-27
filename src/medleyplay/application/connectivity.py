@@ -6,6 +6,7 @@ captive portal, which counts as unreachable.
 
 # cspell:ignore miui
 
+import http.client
 import urllib.request
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -55,7 +56,8 @@ def _answers(check: Check, timeout: float) -> bool:
         # A redirect is one, as any status of 400 or more is; each holds its response open.
         error.close()
         return False
-    except (URLError, OSError, ValueError):
+    except (URLError, OSError, ValueError, http.client.HTTPException):
+        # An answer that isn't HTTP, as a broken portal may send, raises HTTPException.
         return False
     if status != check.status:
         return False

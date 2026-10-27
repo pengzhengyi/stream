@@ -31,6 +31,9 @@ def server() -> Iterator[str]:
         def do_GET(self) -> None:
             if self.path == "/slow":
                 time.sleep(1)
+            if self.path == "/garbage":
+                self.wfile.write(b"NOT HTTP AT ALL\r\n\r\n")
+                return
             status, body, headers = answers.get(self.path, (404, "", {}))
             self.send_response(status)
             for name, value in headers.items():
@@ -59,7 +62,9 @@ def test_reaches_an_endpoint_that_promises_only_a_status(server: str) -> None:
     assert reachable([Check(f"{server}/generate_204", 204)])
 
 
-@pytest.mark.parametrize("path", ["/portal-page", "/portal-redirect", "/broken", "/missing"])
+@pytest.mark.parametrize(
+    "path", ["/portal-page", "/portal-redirect", "/broken", "/missing", "/garbage"]
+)
 def test_a_captive_portal_or_another_answer_is_unreachable(server: str, path: str) -> None:
     assert not reachable([Check(f"{server}{path}", 200, APPLE_SUCCESS)])
 

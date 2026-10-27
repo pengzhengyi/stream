@@ -139,7 +139,8 @@ Auto is Online when all of these hold, and Offline when any doesn't:
   changed, and `online_at`, while settling, when it goes Online if nothing
   changes.
 - **The event stream sends a `mode` event,** the same body, when a stream opens
-  and whenever the Mode changes, so a page that reconnects misses nothing.
+  and whenever the Mode changes, so a page that reconnects misses nothing. A
+  check that changes only `checked_at` sends none.
 
 ## The web client
 
