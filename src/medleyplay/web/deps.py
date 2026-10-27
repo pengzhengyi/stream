@@ -7,6 +7,7 @@ from fastapi import Cookie, Depends, Request
 
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
+from medleyplay.application.details import DetailsService
 from medleyplay.application.events import Events
 from medleyplay.application.jobs import JobService
 from medleyplay.application.libraries import LibraryService
@@ -41,6 +42,7 @@ class Services:
     policy: PolicyService
     preferences: PreferencesService
     mode: ModeService
+    details: DetailsService
 
 
 def _services(request: Request) -> Services:
@@ -103,6 +105,10 @@ def _mode(services: Annotated[Services, Depends(_services)]) -> ModeService:
     return services.mode
 
 
+def _details(services: Annotated[Services, Depends(_services)]) -> DetailsService:
+    return services.details
+
+
 AccountsDep = Annotated[AccountService, Depends(_accounts)]
 CatalogDep = Annotated[CatalogService, Depends(_catalog)]
 PluginsDep = Annotated[PluginService, Depends(_plugins)]
@@ -116,6 +122,7 @@ SettingsDep = Annotated[SettingsService, Depends(_settings)]
 PolicyDep = Annotated[PolicyService, Depends(_policy)]
 PreferencesDep = Annotated[PreferencesService, Depends(_preferences)]
 ModeDep = Annotated[ModeService, Depends(_mode)]
+DetailsDep = Annotated[DetailsService, Depends(_details)]
 SessionToken = Annotated[str | None, Cookie(alias=SESSION_COOKIE, include_in_schema=False)]
 
 

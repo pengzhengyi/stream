@@ -105,6 +105,10 @@ class TrackDetails:
     album: str = ""
     album_artist: str = ""
     duration_ms: int | None = None
+    track_number: int | None = None
+    disc_number: int | None = None
+    year: int | None = None
+    genre: str = ""
 
 
 @dataclass(frozen=True)

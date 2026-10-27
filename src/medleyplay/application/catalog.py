@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application import Clock
 from medleyplay.application.builtin_playlists import ensure_builtin_playlists
 from medleyplay.application.changes import OnChange
+from medleyplay.application.details import record as record_details
 from medleyplay.application.rule_schema import read_rules, rules_document
 from medleyplay.application.track_facts import track_facts
 from medleyplay.domain.accounts import AccountId
@@ -35,6 +36,7 @@ from medleyplay.domain.catalog import (
     source_availability,
     track_availability,
 )
+from medleyplay.domain.details import Field, Origin, Value
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
 from medleyplay.domain.libraries import LIBRARY_SOURCE, LibraryState, library_of_locator
 from medleyplay.domain.playback import PlayId
@@ -75,27 +77,36 @@ class CatalogService:
         key: SourceKey,
         details: TrackDetails,
         source_details: Mapping[str, object] | None = None,
+        origin: Origin = Origin.VIDEO,
     ) -> TrackId:
         """Return the Track for a Source, creating both when the Source is new.
 
         A Source that already exists returns its Track unchanged, `source_details`
         included, so adding the same link or file twice never makes a second Track.
+        The new Track's details are recorded as `origin`'s: a site Track's are its
+        video's.
         """
         existing = self._track_of(key)
         if existing is not None:
             return existing
         try:
             with self._units.begin() as db:
-                track = TrackRow(
-                    title=details.title,
-                    artist=details.artist,
-                    album=details.album,
-                    album_artist=details.album_artist,
-                    duration_ms=details.duration_ms,
-                    added_at=self._clock(),
-                )
+                now = self._clock()
+                track = TrackRow(title=details.title, duration_ms=details.duration_ms, added_at=now)
                 db.add(track)
                 db.flush()
+                given: dict[Field, Value | None] = {
+                    Field.TITLE: details.title,
+                    Field.ARTIST: details.artist,
+                    Field.ALBUM: details.album,
+                    Field.ALBUM_ARTIST: details.album_artist,
+                    Field.TRACK_NUMBER: details.track_number,
+                    Field.DISC_NUMBER: details.disc_number,
+                    Field.YEAR: details.year,
+                    Field.GENRE: details.genre,
+                }
+                values = {field: value for field, value in given.items() if value is not None}
+                record_details(db, TrackId(track.id), origin, values, now)
                 db.add(
                     SourceRow(
                         track_id=track.id,
@@ -412,6 +423,10 @@ def _to_track(
             album=track.album,
             album_artist=track.album_artist,
             duration_ms=track.duration_ms,
+            track_number=track.track_number,
+            disc_number=track.disc_number,
+            year=track.year,
+            genre=track.genre,
         ),
         added_at=track.added_at,
         favorite=state is not None and state.favorite,

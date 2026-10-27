@@ -32,6 +32,10 @@ class TrackOut(BaseModel):
     artist: str
     album: str
     album_artist: str
+    track_number: int | None
+    disc_number: int | None
+    year: int | None
+    genre: str
     duration_ms: int | None
     added_at: datetime
     favorite: bool
@@ -53,6 +57,10 @@ class TrackOut(BaseModel):
             artist=details.artist,
             album=details.album,
             album_artist=details.album_artist,
+            track_number=details.track_number,
+            disc_number=details.disc_number,
+            year=details.year,
+            genre=details.genre,
             duration_ms=details.duration_ms,
             added_at=track.added_at,
             favorite=track.favorite,

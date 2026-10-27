@@ -23,6 +23,7 @@ from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.changes import Changes
 from medleyplay.application.connectivity import reachable
+from medleyplay.application.details import DetailsService
 from medleyplay.application.downloads import DownloadService, download_source_kind
 from medleyplay.application.events import Events
 from medleyplay.application.job_runner import JobProcesses, JobRunner
@@ -215,6 +216,7 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         policy=policy,
         preferences=PreferencesService(units, clock),
         mode=mode,
+        details=DetailsService(units, clock, changes.tell),
     )
 
 
