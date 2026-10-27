@@ -1,9 +1,11 @@
 # Mode
 
 > [!NOTE]
-> **Status: designed (step 6b); not built yet.** This note describes the Mode: whether medleyplay may
-> contact music sites now, how *Auto* decides, and what waits while Offline. Why
-> there is a Mode is in [Architecture](Architecture.md#online-and-offline); the
+> **Status: being built (step 6b).** Deciding the Mode and reading the network
+> are built; the settings, the API, and what waits while Offline are not yet.
+> This note describes the Mode: whether medleyplay may contact music sites now,
+> how *Auto* decides, and what waits while Offline. Why there is a Mode is in
+> [Architecture](Architecture.md#online-and-offline); the
 > Downloads it holds are in [Download policy](Download%20policy.md).
 
 ## Contents
@@ -76,7 +78,8 @@ Auto is Online when all of these hold, and Offline when any doesn't:
   checked.
 - **Going Offline takes effect at once;** coming back Online waits until the
   facts have said Online for 30 seconds in a row, doubling after each flap up to
-  two minutes and back to 30 seconds after five calm minutes. The server starts
+  two minutes and back to 30 seconds after five calm minutes. A flap is the
+  facts turning Offline while settling, or within five minutes of going Online. The server starts
   Offline and waits the same way. A change of the setting takes effect at once.
 - **Elsewhere than macOS,** the network facts are unknown, and Auto goes by the
   connectivity check alone.
