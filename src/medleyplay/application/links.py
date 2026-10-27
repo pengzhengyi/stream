@@ -7,7 +7,7 @@ the quality against it.
 """
 
 import threading
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Final
@@ -21,7 +21,7 @@ from medleyplay.application.downloads import QUALITY_DETAIL, DownloadService
 from medleyplay.application.plugins import PluginService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import SourceId, SourceKey, SourceState, TrackDetails, TrackId
-from medleyplay.domain.errors import InvalidInputError
+from medleyplay.domain.errors import InvalidInputError, OfflineError
 from medleyplay.domain.jobs import Job
 from medleyplay.domain.links import part_locator, recognize_link
 from medleyplay.persistence.schema import DownloadRow, SourceRow
@@ -98,13 +98,18 @@ class LinkService:
         plugins: PluginService,
         catalog: CatalogService,
         downloads: DownloadService,
+        online: Callable[[], bool] = lambda: True,
     ) -> None:
-        """Create a service that adds Tracks to `catalog` and downloads them with `downloads`."""
+        """Create a service that adds Tracks to `catalog` and downloads them with `downloads`.
+
+        While `online` says the Mode is Offline, looking up and adding links are refused.
+        """
         self._units = units
         self._clock = clock
         self._plugins = plugins
         self._catalog = catalog
         self._downloads = downloads
+        self._online = online
         # One lookup at a time: the plugin host answers one call at a time anyway,
         # and a burst of lookups shouldn't reach the site at once.
         self._reading = threading.Lock()
@@ -114,9 +119,10 @@ class LinkService:
         """Return the video `link` names, with each part's Track if it is already added.
 
         A link that isn't a video, or a video that is gone or needs a login,
-        raises `InvalidInputError` saying why.
+        raises `InvalidInputError` saying why; Offline, it raises `OfflineError`.
         """
         del caller  # Any signed-in Account may look a link up.
+        self._require_online()
         kind, video, details = self._resolve(link)
         tracks = self._tracks(kind, [part_locator(video, part.part) for part in details.parts])
         return Lookup(
@@ -142,8 +148,9 @@ class LinkService:
         """Add the chosen parts as Tracks, and start downloading each one without a Download.
 
         A part already in the catalog keeps its Track and quality, and adding again
-        returns the same Tracks and Jobs.
+        returns the same Tracks and Jobs. Offline, it raises `OfflineError`.
         """
+        self._require_online()
         kind, video, details = self._resolve(link)
         _check_choice(details, quality, parts)
         durations = {part.part: part.duration_ms for part in details.parts}
@@ -163,6 +170,11 @@ class LinkService:
             job = self._downloads.start(caller, source_id) if needs_download else None
             added.append(Added(choice.part, track_id, source_id, job))
         return added
+
+    def _require_online(self) -> None:
+        if not self._online():
+            message = "medleyplay is Offline, so links wait until it is Online."
+            raise OfflineError(message)
 
     def _resolve(self, link: str) -> tuple[str, str, VideoDetails]:
         kind = recognize_link(link)

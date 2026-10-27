@@ -63,7 +63,11 @@ class Progress:
 
 @dataclass(frozen=True)
 class JobView:
-    """A Job with its progress, which only a running Job has."""
+    """A Job with its progress, which only a running Job has.
+
+    `waits_for_online` says a Job that needs the network is held while the Mode is Offline.
+    """
 
     job: Job
     progress: Progress | None = field(default=None)
+    waits_for_online: bool = False

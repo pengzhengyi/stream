@@ -118,6 +118,8 @@ class _Running:
     process: ChildProcess[FromJob]
     login: _Login | None = None
     thread: threading.Thread | None = None
+    held: bool = False
+    """Stopped because the Mode went Offline, so it goes back to the queue uncounted."""
 
     def redact(self, message: str) -> str:
         return redact(message, self.login.lent.text if self.login else None)
@@ -141,6 +143,7 @@ class JobRunner:
         memory_limit: int = JOB_MEMORY_LIMIT,
         logins: Logins | None = None,
         events: Events | None = None,
+        network_failed: Callable[[], None] | None = None,
     ) -> None:
         """Create a runner keeping Jobs' working folders in `jobs_dir`."""
         self._units = units
@@ -155,6 +158,8 @@ class JobRunner:
         self._memory_limit = memory_limit
         self._logins = logins
         self._events = events
+        self._network_failed = network_failed
+        self._network_kinds = tuple(name for name, kind in kinds.items() if kind.needs_network)
         self._lock = threading.Lock()
         self._running: dict[JobId, _Running] = {}
         self._progress: dict[JobId, Progress] = {}
@@ -185,6 +190,22 @@ class JobRunner:
 
     def wake(self) -> None:
         """Look for a Job to start now, rather than at the next poll."""
+        self._wake.set()
+
+    def follow_mode(self) -> None:
+        """Follow a change of the Mode: Offline, stop the Jobs that need the network.
+
+        A stopped Job goes back to the queue without counting an attempt or an
+        interruption, since its process would otherwise keep contacting the site.
+        Online, the queued ones start, oldest first.
+        """
+        if not self._online():
+            with self._lock:
+                held = [job for job in self._running.values() if job.kind.needs_network]
+                for job in held:
+                    job.held = True
+            for job in held:
+                job.process.kill()
         self._wake.set()
 
     def kill(self, job_id: JobId) -> None:
@@ -247,12 +268,10 @@ class JobRunner:
     def _start_next(self) -> bool:
         with self._units.begin() as db:
             now = self._clock()
-            row = db.scalar(
-                select(JobRow)
-                .where(JobRow.state == JobState.QUEUED, _due(now))
-                .order_by(JobRow.id)
-                .limit(1)
-            )
+            ready = (JobRow.state == JobState.QUEUED) & _due(now)
+            if not self._online():
+                ready &= JobRow.kind.not_in(self._network_kinds)
+            row = db.scalar(select(JobRow).where(ready).order_by(JobRow.id).limit(1))
             if row is None:
                 return False
             claimed = db.connection().execute(
@@ -385,6 +404,9 @@ class JobRunner:
 
     def _settle(self, running: _Running, outcome: _Outcome) -> None:
         outcome = _redacted(running, outcome)
+        if running.held and not isinstance(outcome, JobFinished):
+            self._set(running.job_id, JobState.QUEUED)
+            return
         login, refused = running.login, isinstance(outcome, JobFailed) and outcome.kind == "auth"
         if refused and login is not None and self._logins is not None:
             self._logins.refused(login.account_id, login.site, login.lent.revision)
@@ -401,6 +423,8 @@ class JobRunner:
                     failure=("network", message),
                     not_before=not_before,
                 )
+                if self._network_failed is not None:
+                    self._network_failed()
             case JobFailed(kind="plugin", message=message, outcomes=outcomes):
                 self._plugins.record_outcomes(outcomes)
                 self._retry_or_fail(running, message)

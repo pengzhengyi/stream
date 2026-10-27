@@ -10,7 +10,7 @@ import os
 import stat
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
@@ -190,13 +190,19 @@ class PlaybackService:
         kind: CacheKind,
         data_dir: Path,
         downloads: DownloadService,
+        online: Callable[[], bool] = lambda: True,
     ) -> None:
-        """Create a service keeping cache copies in `data_dir`, and starting `downloads`."""
+        """Create a service keeping cache copies in `data_dir`, and starting `downloads`.
+
+        While `online` says the Mode is Offline, a Track to download starts its
+        Download, which waits, and answers that it waits for Online.
+        """
         self._units = units
         self._plugins = plugins
         self._jobs = jobs
         self._kind = kind
         self._downloads = downloads
+        self._online = online
         self._cache = data_dir / CACHE_FOLDER
         self._locations = _Locations()
 
@@ -291,9 +297,12 @@ class PlaybackService:
             return Preparing(to_prepare.source.id, self._prepare(caller, to_prepare))
         if to_download is not None:
             job = self._downloads.start(caller, to_download.source_id)
-            if job is not None:
+            if job is None:
+                found.append(Availability.UNAVAILABLE)
+            elif not self._online():
+                found.append(Availability.WAITING_ONLINE)
+            else:
                 return Preparing(to_download.source_id, job)
-            found.append(Availability.UNAVAILABLE)
         return Unplayable(track_availability(found))
 
     def _downloaded_audio(self, source_id: SourceId, state: SourceState) -> AudioFile:

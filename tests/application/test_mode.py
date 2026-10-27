@@ -368,7 +368,8 @@ def test_its_thread_ticks_until_stopped(
     units: sessionmaker[Session], clock: FakeClock, network: FakeNetwork, internet: FakeInternet
 ) -> None:
     ticked = threading.Event()
-    mode = ModeService(units, clock, probe=network, check=internet, on_change=ticked.set)
+    mode = ModeService(units, clock, probe=network, check=internet)
+    mode.listen(ticked.set)
 
     mode.start()
     try:

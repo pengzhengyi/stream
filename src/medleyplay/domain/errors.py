@@ -1,10 +1,12 @@
 """The errors the core raises, rooted in one type so callers can catch them together."""
 
-from typing import Literal
+from typing import ClassVar, Literal
 
 
 class MedleyplayError(Exception):
-    """A failure the core reports to its caller."""
+    """A failure the core reports to its caller; `code` names it for a client, if it has one."""
+
+    code: ClassVar[str | None] = None
 
 
 class InvalidInputError(MedleyplayError):
@@ -17,6 +19,12 @@ class NotFoundError(MedleyplayError):
 
 class ConflictError(MedleyplayError):
     """The request clashes with what already exists, such as a taken username."""
+
+
+class OfflineError(ConflictError):
+    """The request would contact a music site, and the Mode is Offline."""
+
+    code: ClassVar[str | None] = "offline"
 
 
 class ForbiddenError(MedleyplayError):

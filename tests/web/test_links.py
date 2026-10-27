@@ -13,7 +13,7 @@ from medleyplay.web.app import create_app
 from medleyplay.web.deps import Services
 from tests.conftest import TEST_HOST
 from tests.support.api import set_up_as_alice
-from tests.support.fakes import FakeClock, MemorySecrets
+from tests.support.fakes import FakeClock, MemorySecrets, OnlineSwitch
 from tests.support.sites import running_site
 
 NIGHT_DRIVE = "https://www.bilibili.com/video/BV1Xx41117Tz"
@@ -116,3 +116,16 @@ def _played_once_ready(client: TestClient, track_id: int) -> dict[str, object]:
             return answer
         time.sleep(0.05)
     raise AssertionError(answer)
+
+
+def test_offline_looking_a_link_up_or_adding_it_is_a_conflict_coded_offline(
+    client: TestClient, online_switch: OnlineSwitch
+) -> None:
+    set_up_as_alice(client)
+    online_switch.online = False
+
+    looked_up = client.post("/api/links/lookup", json={"link": NIGHT_DRIVE})
+    added = client.post("/api/links", json=ADD)
+
+    assert (looked_up.status_code, looked_up.json()["code"]) == (409, "offline")
+    assert (added.status_code, added.json()["code"]) == (409, "offline")

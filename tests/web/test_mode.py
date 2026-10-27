@@ -58,6 +58,7 @@ def test_the_mode_online_on_the_home_wifi(
         "since": clock(),
         "checked_at": clock() - FIRST_WAIT,
         "online_at": None,
+        "held_jobs": 0,
     }
 
 

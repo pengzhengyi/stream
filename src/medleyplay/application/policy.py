@@ -16,7 +16,7 @@ import contextlib
 import threading
 import time
 import uuid
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -94,7 +94,7 @@ class Storage:
 class PolicyService:
     """Evaluate the download policy when asked, and report the storage it governs."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 -- the collaborators, then settings with defaults
         self,
         units: sessionmaker[Session],
         clock: Clock,
@@ -104,13 +104,18 @@ class PolicyService:
         *,
         delay: timedelta = DELAY,
         tick: timedelta = TICK,
+        online: Callable[[], bool] = lambda: True,
     ) -> None:
-        """Create a service over the Downloads and cache copies in `data_dir`."""
+        """Create a service over the Downloads and cache copies in `data_dir`.
+
+        `online` says whether the Mode is Online; while it isn't, no Download is removed.
+        """
         self._units = units
         self._clock = clock
         self._downloads = downloads
         self._plugins = plugins
         self._data_dir = data_dir
+        self._online = online
         self._delay = delay.total_seconds()
         self._tick = tick.total_seconds()
         self._wake = threading.Condition()
@@ -211,7 +216,8 @@ class PolicyService:
 
     def _snapshot(self, db: Session, now: datetime, limit: int | None) -> Snapshot:
         sites = self._plugins.available_keys().get(SOURCE_DOWNLOADER.name, [])
-        return read_snapshot(db, now, limit, sites, self._data_dir)
+        snapshot = read_snapshot(db, now, limit, sites, self._data_dir)
+        return replace(snapshot, state=replace(snapshot.state, online=self._online()))
 
     def _apply(self, planned: Plan, now: datetime, heard: int) -> Evaluation:
         removed = self._remove(planned.removals, now, heard) if planned.removals else 0

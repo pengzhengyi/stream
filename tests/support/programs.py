@@ -71,8 +71,12 @@ def echo_kind(
     *,
     idle_timeout: timedelta = timedelta(seconds=20),
     complete: Callable[[Session, Job, Echoed], None] | None = None,
+    needs_network: bool = False,
 ) -> JobKind[EchoJob, Echoed]:
-    """Return the kind `echo`, whose completion appends each Job's echo to `completed`."""
+    """Return the kind `echo`, whose completion appends each Job's echo to `completed`.
+
+    With `needs_network`, it stands for a kind that contacts a site, as a download does.
+    """
 
     def record(db: Session, job: Job, result: Echoed) -> None:
         completed.append(result.text)
@@ -85,4 +89,5 @@ def echo_kind(
         complete=complete or record,
         points=("echo",),
         idle_timeout=idle_timeout,
+        needs_network=needs_network,
     )

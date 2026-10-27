@@ -1,11 +1,9 @@
 # Mode
 
 > [!NOTE]
-> **Status: being built (step 6b).** Deciding the Mode, reading the network,
-> the settings, the API, and the `mode` event are built; what waits while
-> Offline, and `held_jobs`, are not yet. This note describes the Mode: whether
-> medleyplay may contact music sites now, how *Auto* decides, and what waits
-> while Offline. Why there is a Mode is in
+> **Status: built on the server (step 6b); the web client's part is not yet.**
+> This note describes the Mode: whether medleyplay may contact music sites now,
+> how *Auto* decides, and what waits while Offline. Why there is a Mode is in
 > [Architecture](Architecture.md#online-and-offline); the Downloads it holds are
 > in [Download policy](Download%20policy.md).
 

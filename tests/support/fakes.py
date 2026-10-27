@@ -84,3 +84,13 @@ class FakeInternet:
             message = "The check met an answer it couldn't read."
             raise OSError(message)
         return self.reachable
+
+
+class OnlineSwitch:
+    """The Mode as the services see it: Online until a test turns it Offline."""
+
+    def __init__(self, *, online: bool = True) -> None:
+        self.online = online
+
+    def __call__(self) -> bool:
+        return self.online

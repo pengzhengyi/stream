@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.links import PartChoice
 from medleyplay.domain.accounts import Account
-from medleyplay.domain.errors import InvalidInputError, PluginCallError
+from medleyplay.domain.errors import InvalidInputError, OfflineError, PluginCallError
 from medleyplay.persistence.schema import SourceRow, TrackRow
 from tests.support.factories import NewAccountFactory
 from tests.support.fakes import FakeClock, MemorySecrets
@@ -157,3 +157,12 @@ def test_a_choice_the_video_does_not_offer_is_refused_and_adds_nothing(
 
     with units() as db:
         assert db.scalars(select(TrackRow)).all() == []
+
+
+def test_offline_a_link_is_neither_looked_up_nor_added(site: Site, alice: Account) -> None:
+    site.online.online = False
+
+    with pytest.raises(OfflineError):
+        site.links.lookup(alice, NIGHT_DRIVE)
+    with pytest.raises(OfflineError):
+        site.links.add(alice, NIGHT_DRIVE, "best", _night_drive())

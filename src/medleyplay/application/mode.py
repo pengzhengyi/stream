@@ -94,17 +94,13 @@ class ModeService:
         *,
         probe: Callable[[], Network | Unread | None],
         check: Callable[[], bool],
-        on_change: Callable[[], None] | None = None,
     ) -> None:
-        """Create a service reading the network with `probe` and the internet with `check`.
-
-        `on_change` is told, on the ticking thread, each time the Mode changes.
-        """
+        """Create a service reading the network with `probe` and the internet with `check`."""
         self._units = units
         self._clock = clock
         self._probe = probe
         self._check = check
-        self._on_change = on_change
+        self._listeners: list[Callable[[], None]] = []
         self._ticking = threading.Lock()
         self._state = threading.Lock()
         self._mode = starting(ModeSetting.AUTO, clock())
@@ -116,6 +112,16 @@ class ModeService:
         self._wake = threading.Event()
         self._stopping = threading.Event()
         self._thread: threading.Thread | None = None
+
+    def listen(self, listener: Callable[[], None]) -> None:
+        """Tell `listener`, on the ticking thread, each time the Mode changes from now on."""
+        with self._state:
+            self._listeners.append(listener)
+
+    def online(self) -> bool:
+        """Return whether the Mode is Online now."""
+        with self._state:
+            return self._mode.online
 
     def now(self) -> ModeView:
         """Return the Mode now."""
@@ -246,8 +252,11 @@ class ModeService:
             if only_offline and not (previous.online and not mode.online):
                 return
             self._mode = mode
-        if _shown(mode) != _shown(previous) and self._on_change is not None:
-            self._on_change()
+        if _shown(mode) != _shown(previous):
+            with self._state:
+                listeners = tuple(self._listeners)
+            for listener in listeners:
+                listener()
 
     def start(self) -> None:
         """Tick on a thread of its own, at once and then as each tick asks."""

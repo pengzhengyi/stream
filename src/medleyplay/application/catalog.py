@@ -4,7 +4,7 @@ Every command here is idempotent: repeating it leaves the same state as doing it
 """
 
 from collections import defaultdict
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from datetime import datetime
 
@@ -55,12 +55,20 @@ class CatalogService:
     """Read and change the catalog as one Account sees it."""
 
     def __init__(
-        self, units: sessionmaker[Session], clock: Clock, on_change: OnChange | None = None
+        self,
+        units: sessionmaker[Session],
+        clock: Clock,
+        on_change: OnChange | None = None,
+        online: Callable[[], bool] = lambda: True,
     ) -> None:
-        """Create a service over the database `units` open, telling `on_change` what it changed."""
+        """Create a service over the database `units` open, telling `on_change` what it changed.
+
+        `online` says whether the Mode is Online, which a Track to download waits for.
+        """
         self._units = units
         self._clock = clock
         self._on_change = on_change
+        self._online = online
 
     def add_track(
         self,
@@ -110,7 +118,7 @@ class CatalogService:
         """Return every Track, oldest first, with `account_id`'s own state."""
         with self._units() as db:
             rows = db.execute(_tracks_for(account_id).order_by(TrackRow.id)).all()
-            available = _availability(db, select(SourceRow))
+            available = _availability(db, select(SourceRow), online=self._online())
             downloaded = _downloaded(db, select(SourceRow.track_id))
             return [
                 _to_track(track, state, available[track.id], downloaded=track.id in downloaded)
@@ -123,7 +131,9 @@ class CatalogService:
             found = db.execute(_tracks_for(account_id).where(TrackRow.id == track_id)).one_or_none()
             if found is None:
                 raise _no_track(track_id)
-            available = _availability(db, select(SourceRow).where(SourceRow.track_id == track_id))
+            available = _availability(
+                db, select(SourceRow).where(SourceRow.track_id == track_id), online=self._online()
+            )
             downloaded = _downloaded(
                 db, select(SourceRow.track_id).where(SourceRow.track_id == track_id)
             )
@@ -353,19 +363,25 @@ def _count_play(db: Session, account_id: AccountId, track_id: TrackId, when: dat
     )
 
 
-def _availability(db: Session, sources: Select[SourceRow]) -> defaultdict[int, Availability]:
-    # A Library's Source can play only while its Library is online; other kinds don't
-    # depend on a drive. A Source with a Download plays it, whatever its state.
-    online = {row.id: row.state == LibraryState.ONLINE for row in db.scalars(select(LibraryRow))}
+def _availability(
+    db: Session, sources: Select[SourceRow], *, online: bool
+) -> defaultdict[int, Availability]:
+    # A Library's Source can play only while its Library is online; another kind must
+    # be downloaded, which waits while the Mode is Offline. A Source with a Download
+    # plays it, whatever its state.
+    mounted = {row.id: row.state == LibraryState.ONLINE for row in db.scalars(select(LibraryRow))}
     downloaded = set(db.scalars(select(DownloadRow.source_id)))
     per_track: defaultdict[int, list[Availability]] = defaultdict(list)
     for source in db.scalars(sources):
         if source.id in downloaded:
             per_track[source.track_id].append(Availability.OK)
             continue
-        reachable = source.kind != LIBRARY_SOURCE or online.get(
-            library_of_locator(source.locator), False
-        )
+        if source.kind != LIBRARY_SOURCE:
+            state = source_availability(SourceState(source.state), online=True)
+            waits = state is Availability.OK and not online
+            per_track[source.track_id].append(Availability.WAITING_ONLINE if waits else state)
+            continue
+        reachable = mounted.get(library_of_locator(source.locator), False)
         per_track[source.track_id].append(
             source_availability(SourceState(source.state), online=reachable)
         )

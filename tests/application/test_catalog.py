@@ -13,7 +13,7 @@ from medleyplay.domain.catalog import Availability, PlaylistId, TrackId
 from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
 from medleyplay.domain.playback import PlayId
 from tests.support.factories import NewAccountFactory, SourceKeyFactory, TrackDetailsFactory
-from tests.support.fakes import FakeClock
+from tests.support.fakes import FakeClock, OnlineSwitch
 
 MORNING = PlaylistId(uuid.UUID("00000000-0000-4000-8000-000000000001"))
 
@@ -333,3 +333,22 @@ def test_each_change_tells_the_catalog_changed_and_repeating_it_tells_nothing(
     catalog.delete_playlist(alice.id, MORNING)
 
     assert changes == ["catalog"] * 4
+
+
+@pytest.mark.parametrize(
+    ("online", "availability"), [(True, Availability.OK), (False, Availability.WAITING_ONLINE)]
+)
+def test_a_track_to_download_is_available_when_online(
+    catalog: CatalogService,
+    accounts: AccountService,
+    online_switch: OnlineSwitch,
+    online: bool,  # noqa: FBT001 -- a parameter of the test
+    availability: Availability,
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+    track_id = catalog.add_track(SourceKeyFactory.bilibili(), TrackDetailsFactory.song())
+    online_switch.online = online
+
+    track = catalog.get_track(alice.id, track_id)
+
+    assert track.availability is availability

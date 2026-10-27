@@ -64,3 +64,11 @@ def test_a_track_is_as_available_as_its_best_source() -> None:
 
 def test_a_track_without_sources_is_missing() -> None:
     assert track_availability([]) is Availability.MISSING
+
+
+def test_a_track_waiting_for_online_is_less_available_than_one_on_disk() -> None:
+    assert track_availability([Availability.WAITING_ONLINE, Availability.OK]) is Availability.OK
+    assert (
+        track_availability([Availability.WAITING_ONLINE, Availability.MISSING])
+        is Availability.WAITING_ONLINE
+    )
