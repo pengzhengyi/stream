@@ -1,14 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  detailsOf,
-  favoritesPlaylistOf,
-  playlistOf,
-  serve,
-  signedIn,
-  trackOf,
-} from "../testing/server";
+import { favoritesPlaylistOf, playlistOf, serve, signedIn, trackOf } from "../testing/server";
 import { useLibrary } from "./useLibrary";
 
 /** A stand-in for the event stream: the test sends the events the server would. */
@@ -246,25 +239,38 @@ describe("saving a song's details", () => {
     return result;
   }
 
-  it("sends the household's values, then shows the Track as the server now has it", async () => {
+  it("sends only the changes, then shows the Track as the server now has it", async () => {
     const sent: unknown[] = [];
     const result = await libraryOf({
-      "PUT /api/tracks/7/details": (body: unknown) => {
+      "POST /api/tracks/details": (body: unknown) => {
         sent.push(body);
-        return { body: detailsOf(7, { title: "ケビョウニンゲン", year: 2014 }) };
+        return { body: { changed: 1 } };
       },
       "GET /api/tracks/7": { body: trackOf(7, "ケビョウニンゲン", { year: 2014 }) },
     });
 
-    await act(() => result.current.saveDetails(7, { title: "ケビョウニンゲン", year: 2014 }));
+    await act(() => result.current.saveDetails(7, { title: "ケビョウニンゲン", genre: null }));
 
-    expect(sent).toEqual([{ values: { title: "ケビョウニンゲン", year: 2014 } }]);
-    expect(result.current.tracks.get(7)).toMatchObject({ title: "ケビョウニンゲン", year: 2014 });
+    expect(sent).toEqual([{ track_ids: [7], values: { title: "ケビョウニンゲン", genre: null } }]);
+    await waitFor(() => {
+      expect(result.current.tracks.get(7)).toMatchObject({ title: "ケビョウニンゲン", year: 2014 });
+    });
+  });
+
+  it("counts the changes saved when the Track can't be read back at once", async () => {
+    const result = await libraryOf({
+      "POST /api/tracks/details": { body: { changed: 1 } },
+      "GET /api/tracks/7": { status: 503, body: { detail: "Busy." } },
+    });
+
+    await act(() => result.current.saveDetails(7, { year: 2014 }));
+
+    expect(result.current.error).toBe("");
   });
 
   it("passes on why the server refused, leaving the Track as it was", async () => {
     const result = await libraryOf({
-      "PUT /api/tracks/7/details": { status: 422, body: { detail: "year is from 1000 to 2999." } },
+      "POST /api/tracks/details": { status: 422, body: { detail: "year is from 1000 to 2999." } },
     });
 
     let refused: unknown;

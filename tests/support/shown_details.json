@@ -1,0 +1,85 @@
+{
+  "about": "What a Track shows from each origin's values. The server's domain.details.shown and the web client's shownOf are both checked against these cases, so the edit dialog previews exactly what the server will show.",
+  "cases": [
+    {
+      "name": "a field shows the first origin's value",
+      "origins": {
+        "video": { "title": "ケビョウニンゲン" },
+        "file_name": { "title": "BV1dm4y1s7ak" }
+      },
+      "shown": { "title": { "value": "ケビョウニンゲン", "origin": "video" } }
+    },
+    {
+      "name": "the household's value wins over every other",
+      "origins": {
+        "household": { "artist": "GUMI" },
+        "files": { "artist": "MAYU" },
+        "video": { "artist": "GUMI/MAYU" }
+      },
+      "shown": { "artist": { "value": "GUMI", "origin": "household" } }
+    },
+    {
+      "name": "empty text from the household shows nothing",
+      "origins": {
+        "household": { "genre": "" },
+        "files": { "genre": "Vocaloid" }
+      },
+      "shown": { "genre": { "value": "", "origin": "household" } }
+    },
+    {
+      "name": "the album fields come from the first origin naming an album",
+      "origins": {
+        "files": { "track_number": 3 },
+        "video": { "album": "Re:Start", "album_artist": "wowaka", "year": 2014 }
+      },
+      "shown": {
+        "album": { "value": "Re:Start", "origin": "video" },
+        "album_artist": { "value": "wowaka", "origin": "video" },
+        "year": { "value": 2014, "origin": "video" }
+      }
+    },
+    {
+      "name": "the household's album hides another origin's album fields",
+      "origins": {
+        "household": { "album": "Other" },
+        "files": { "album": "Re:Start", "album_artist": "MAYU", "track_number": 3, "year": 2014 }
+      },
+      "shown": { "album": { "value": "Other", "origin": "household" } }
+    },
+    {
+      "name": "the household's album field still wins on its own",
+      "origins": {
+        "household": { "year": 2016 },
+        "files": { "album": "Re:Start", "track_number": 3, "year": 2014 }
+      },
+      "shown": {
+        "album": { "value": "Re:Start", "origin": "files" },
+        "track_number": { "value": 3, "origin": "files" },
+        "year": { "value": 2016, "origin": "household" }
+      }
+    },
+    {
+      "name": "an empty album from the household names none, so the rest come from the next origin naming one",
+      "origins": {
+        "household": { "album": "" },
+        "files": { "album_artist": "MAYU" },
+        "video": { "album": "Re:Start", "year": 2014 }
+      },
+      "shown": {
+        "album": { "value": "", "origin": "household" },
+        "year": { "value": 2014, "origin": "video" }
+      }
+    },
+    {
+      "name": "without a named album each album field falls back on its own",
+      "origins": {
+        "files": { "track_number": 3 },
+        "video": { "year": 2014 }
+      },
+      "shown": {
+        "track_number": { "value": 3, "origin": "files" },
+        "year": { "value": 2014, "origin": "video" }
+      }
+    }
+  ]
+}

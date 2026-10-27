@@ -31,12 +31,12 @@ export interface Library {
   readonly setFavorite: (id: number, favorite: boolean) => void;
   readonly setRating: (id: number, rating: number | null) => void;
   /**
-   * Make `values` the household's values for the Track; the Track shows the server's
-   * answer. The promise rejects with why when the server refuses.
+   * Change the household's values for the Track, `null` dropping one; the Track then
+   * shows the server's answer. The promise rejects with why when the server refuses.
    */
   readonly saveDetails: (
     id: number,
-    values: Partial<Record<Detail, string | number>>,
+    changes: Partial<Record<Detail, string | number | null>>,
   ) => Promise<void>;
   /**
    * Add `track` to the end of the Playlists `ids`, and to a new Playlist for each
@@ -152,16 +152,22 @@ export function useLibrary(onSignedOut: () => void): Library {
       setError("");
       write(id, "rating", rating, api.setRating(id, rating));
     },
-    saveDetails: async (id, values) => {
+    saveDetails: async (id, changes) => {
       try {
-        await api.putDetails(id, values);
-        dispatch({ type: "track", track: await api.track(id) });
+        await api.setDetails([id], changes);
       } catch (failure) {
         if (failure instanceof ApiError && failure.status === 401) {
           onSignedOut();
         }
         throw failure;
       }
+      // Saved; a Track that can't be read back now shows its new details on the next load.
+      api.track(id).then(
+        (track) => {
+          dispatch({ type: "details", track });
+        },
+        () => undefined,
+      );
     },
     addToPlaylists: async (track, ids, newNames) => {
       const puts = [

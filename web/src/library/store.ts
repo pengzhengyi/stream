@@ -31,7 +31,7 @@ export interface Store {
 /** A change to the store. */
 export type StoreAction =
   | { readonly type: "loaded"; readonly tracks: readonly Track[] }
-  | { readonly type: "track"; readonly track: Track }
+  | { readonly type: "details"; readonly track: Track }
   | {
       readonly type: "write";
       readonly id: number;
@@ -48,6 +48,18 @@ export type StoreAction =
     }
   | { readonly type: "refused"; readonly id: number; readonly field: Field; readonly seq: number };
 
+/** The fields of a Track the household edits. */
+const DETAILS = [
+  "title",
+  "artist",
+  "album",
+  "album_artist",
+  "track_number",
+  "disc_number",
+  "year",
+  "genre",
+] as const satisfies readonly (keyof Track)[];
+
 /** A store before the server has listed any Tracks. */
 export const EMPTY: Store = { confirmed: new Map(), pending: new Map(), loaded: false };
 
@@ -63,13 +75,16 @@ export function reduce(store: Store, action: StoreAction): Store {
       );
       return { confirmed, pending, loaded: true };
     }
-    case "track": {
-      // One Track the server answered with in full, such as after its details were edited.
-      if (!store.confirmed.has(action.track.id)) {
+    case "details": {
+      // A Track read after its details were edited: only its details are taken, as
+      // the Account's own state may have changed since it was read.
+      const track = store.confirmed.get(action.track.id);
+      if (track === undefined) {
         return store;
       }
+      const details = Object.fromEntries(DETAILS.map((field) => [field, action.track[field]]));
       const confirmed = new Map(store.confirmed);
-      confirmed.set(action.track.id, action.track);
+      confirmed.set(track.id, { ...track, ...details });
       return { ...store, confirmed };
     }
     case "write": {

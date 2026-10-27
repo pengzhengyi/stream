@@ -15,6 +15,7 @@ import type {
   Preferences,
   Track,
 } from "../api";
+import { type Origins, type Values, shownOf } from "../library/details";
 import { type SavedShortcuts, openAccount } from "../shortcuts";
 
 /** An answer: a status and a JSON body. */
@@ -73,40 +74,41 @@ export function trackOf(id: number, title: string, change: Partial<Track> = {}):
 }
 
 /**
- * The details of a Bilibili album file saved under its video id, with no tags:
+ * The origins of a Bilibili album file saved under its video id, with no tags:
  *
  * ```text
  * title    file_name: "BV1dm4y1s7ak"   video: "ケビョウニンゲン"
  * artist   video: "GUMI/MAYU"
  * ```
+ */
+export const ALBUM_FILE_ORIGINS: Origins = {
+  file_name: { title: "BV1dm4y1s7ak" },
+  video: { title: "ケビョウニンゲン", artist: "GUMI/MAYU" },
+};
+
+/**
+ * The origins of a tagged song on a release:
  *
- * `household` adds the household's own values, which then show.
+ * ```text
+ * files    title "Melt", album "Re:Start", album_artist "MAYU", track_number 3, year 2014
+ * ```
+ */
+export const TAGGED_ORIGINS: Origins = {
+  files: { title: "Melt", album: "Re:Start", album_artist: "MAYU", track_number: 3, year: 2014 },
+  file_name: { title: "03 Melt" },
+};
+
+/**
+ * A Track's details from the origins `found`, the album file's by default, with the
+ * household's own values `household`, which then show as the server would show them.
  */
 export function detailsOf(
   trackId: number,
-  household: Partial<Record<keyof Details["shown"], string | number>> = {},
+  household: Values = {},
+  found: Origins = ALBUM_FILE_ORIGINS,
 ): Details {
-  const video = { title: "ケビョウニンゲン", artist: "GUMI/MAYU" };
-  const found = {
-    title: { value: video.title, origin: "video" as const },
-    artist: { value: video.artist, origin: "video" as const },
-  };
-  const yours = Object.fromEntries(
-    Object.entries(household).map(([field, value]) => [
-      field,
-      { value, origin: "household" as const },
-    ]),
-  );
-  return {
-    track_id: trackId,
-    shown: { ...found, ...yours },
-    found,
-    origins: {
-      file_name: { title: "BV1dm4y1s7ak" },
-      video,
-      ...(Object.keys(household).length > 0 ? { household } : {}),
-    },
-  };
+  const origins = Object.keys(household).length > 0 ? { household, ...found } : found;
+  return { track_id: trackId, shown: shownOf(origins), found: shownOf(found), origins };
 }
 
 /** A server with no plugins answering any extension point, and one Account. */

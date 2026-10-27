@@ -1,9 +1,11 @@
 /**
  * @file Editing a song's details: what each says now and where it came from, and the household's own.
  *
- * Each box starts with what shows. A box changed from what was found is the
- * household's value, which wins; choosing what another origin says is one click.
- * Escape, Cancel, or a click outside it close it without saving.
+ * A box typed in, or a value chosen from another origin, becomes the household's
+ * value, which wins; every other box shows what would show with them. Choosing
+ * what would show anyway drops the household's value. Saving sends only what
+ * changed. Escape, Cancel, or a click outside it close it without saving, except
+ * while a save is under way.
  */
 
 import { type SubmitEvent, useEffect, useRef, useState } from "react";
@@ -12,12 +14,16 @@ import type { Detail, Details, Track } from "../api";
 import {
   DETAIL_FIELDS,
   type DetailField,
-  type Inputs,
   ORIGIN_LABELS,
+  type Own,
   alternativesOf,
-  foundText,
-  householdOf,
-  inputsOf,
+  boxText,
+  changesOf,
+  choose,
+  foundOf,
+  ownOf,
+  previewOf,
+  shownOf,
 } from "../library/details";
 import { Modal } from "./Modal";
 
@@ -31,7 +37,10 @@ const RANGES: Partial<Record<Detail, readonly [number, number]>> = {
   year: [1000, 2999],
 };
 
-/** Edit `track`'s details, read with `load`; `onSave` makes the edits the household's values. */
+/**
+ * Edit `track`'s details, read with `load`; `onSave` sends the household's values
+ * changed, `null` dropping one.
+ */
 export function EditDetails({
   track,
   load,
@@ -40,7 +49,7 @@ export function EditDetails({
 }: {
   readonly track: Track;
   readonly load: (trackId: number) => Promise<Details>;
-  readonly onSave: (values: Partial<Record<Detail, string | number>>) => Promise<void>;
+  readonly onSave: (changes: Partial<Record<Detail, string | number | null>>) => Promise<void>;
   readonly onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -48,7 +57,7 @@ export function EditDetails({
     dialog.current?.close();
   };
   const [details, setDetails] = useState<Details | undefined>(undefined);
-  const [inputs, setInputs] = useState<Inputs | undefined>(undefined);
+  const [own, setOwn] = useState<Own>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -58,7 +67,7 @@ export function EditDetails({
       (loaded) => {
         if (open) {
           setDetails(loaded);
-          setInputs(inputsOf(loaded));
+          setOwn(ownOf(loaded));
         }
       },
       (failure: unknown) => {
@@ -74,50 +83,59 @@ export function EditDetails({
 
   const save = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (details === undefined || inputs === undefined) {
+    if (details === undefined) {
+      return;
+    }
+    const changes = changesOf(details, own);
+    if (Object.keys(changes).length === 0) {
+      close();
       return;
     }
     setSaving(true);
     setError("");
     try {
-      await onSave(householdOf(details, inputs));
+      await onSave(changes);
+      setSaving(false);
       close();
     } catch (failure) {
-      setError(messageOf(failure));
-    } finally {
       setSaving(false);
+      setError(messageOf(failure));
     }
   };
-  const fieldsOf = (group: DetailField["group"]) =>
+  const boxes = (group: DetailField["group"]) =>
     details !== undefined &&
-    inputs !== undefined &&
     DETAIL_FIELDS.filter((field) => field.group === group).map((field) => (
-      <DetailBox
-        key={field.name}
-        field={field}
-        details={details}
-        typed={inputs[field.name]}
-        onChange={(value) => {
-          setInputs((now) => now && { ...now, [field.name]: value });
-        }}
-      />
+      <DetailBox key={field.name} field={field} details={details} own={own} onChange={setOwn} />
     ));
 
   return (
-    <Modal ref={dialog} className="edit-details" labelledBy="edit-details-title" onClose={onClose}>
+    <Modal
+      ref={dialog}
+      className="edit-details"
+      labelledBy="edit-details-title"
+      describedBy="edit-details-song"
+      locked={saving}
+      onClose={onClose}
+    >
       <form className="card" onSubmit={(event) => void save(event)}>
         <h2 id="edit-details-title">Edit details</h2>
-        <p className="edit-details-song">{track.title}</p>
-        {details === undefined && error === "" && <p className="empty">Reading the details…</p>}
+        <p id="edit-details-song" className="edit-details-song">
+          {track.title}
+        </p>
+        {details === undefined && error === "" && (
+          <p className="empty" role="status">
+            Reading the details…
+          </p>
+        )}
         {details !== undefined && (
           <>
             <fieldset className="detail-group">
               <legend>Song</legend>
-              {fieldsOf("song")}
+              {boxes("song")}
             </fieldset>
             <fieldset className="detail-group">
               <legend>Album</legend>
-              {fieldsOf("album")}
+              {boxes("album")}
             </fieldset>
           </>
         )}
@@ -127,7 +145,12 @@ export function EditDetails({
           </p>
         )}
         <footer className="dialog-buttons">
-          <button type="button" className="secondary outline dialog-button" onClick={close}>
+          <button
+            type="button"
+            className="secondary outline dialog-button"
+            disabled={saving}
+            onClick={close}
+          >
             Cancel
           </button>
           <button
@@ -144,23 +167,22 @@ export function EditDetails({
   );
 }
 
-/** One detail's box, where its value came from, and what other origins say. */
+/** One detail's box, where its value comes from, and what other origins say. */
 function DetailBox({
   field,
   details,
-  typed,
+  own,
   onChange,
 }: {
   readonly field: DetailField;
   readonly details: Details;
-  readonly typed: string;
-  readonly onChange: (value: string) => void;
+  readonly own: Own;
+  readonly onChange: (own: Own) => void;
 }) {
   const { name, label, kind } = field;
   const id = `detail-${name}`;
-  const found = details.found[name];
-  const yours = typed.trim() !== foundText(details, name);
-  const origin = yours ? "Yours" : found === undefined ? "" : `From ${ORIGIN_LABELS[found.origin]}`;
+  const typed = boxText(details, own, name);
+  const origin = originOf(details, own, field);
   const range = RANGES[name];
   return (
     <div className={`detail detail-${kind}`}>
@@ -178,24 +200,26 @@ function DetailBox({
         value={typed}
         aria-describedby={origin === "" ? undefined : `${id}-origin`}
         onChange={(event) => {
-          onChange(event.currentTarget.value);
+          onChange({ ...own, [name]: event.currentTarget.value });
         }}
       />
       {origin !== "" && (
-        <small id={`${id}-origin`} className={yours ? "detail-origin yours" : "detail-origin"}>
+        <small
+          id={`${id}-origin`}
+          className={name in own ? "detail-origin yours" : "detail-origin"}
+        >
           {origin}
         </small>
       )}
-      <div className="detail-alternatives">
+      <div className="detail-alternatives" role="group" aria-label={`Other values for ${label}`}>
         {alternativesOf(details, name, typed).map(({ value, origin: from }) => (
           <button
             key={from}
             type="button"
             className="detail-alternative"
             aria-label={`Use “${value}”, from ${ORIGIN_LABELS[from]}`}
-            title={`From ${ORIGIN_LABELS[from]}`}
             onClick={() => {
-              onChange(value);
+              onChange(choose(details, own, name, value));
             }}
           >
             {value}
@@ -204,6 +228,25 @@ function DetailBox({
       </div>
     </div>
   );
+}
+
+/** Return where `field`'s box gets its value, as the dialog says it. */
+function originOf(details: Details, own: Own, field: DetailField): string {
+  const { name, kind } = field;
+  const shows = previewOf(details, own)[name];
+  if (name in own) {
+    if (kind === "number" && own[name]?.trim() === "") {
+      return shows === undefined
+        ? "Left empty"
+        : `Left empty, so ${String(shows.value)} from ${ORIGIN_LABELS[shows.origin]} shows`;
+    }
+    return "Yours";
+  }
+  if (shows !== undefined) {
+    return `From ${ORIGIN_LABELS[shows.origin]}`;
+  }
+  // An album field another origin gives, hidden because the household's album differs.
+  return shownOf(foundOf(details))[name] === undefined ? "" : "Hidden, as your album differs";
 }
 
 function messageOf(failure: unknown): string {

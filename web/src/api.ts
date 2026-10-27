@@ -248,9 +248,11 @@ export const api = {
   tracks: () => call<Track[]>("GET", "/api/tracks"),
   track: (trackId: number) => call<Track>("GET", `/api/tracks/${String(trackId)}`),
   details: (trackId: number) => call<Details>("GET", `/api/tracks/${String(trackId)}/details`),
-  /** Make `values` the household's values for the Track, replacing its earlier ones. */
-  putDetails: (trackId: number, values: Partial<Record<Detail, string | number>>) =>
-    call<Details>("PUT", `/api/tracks/${String(trackId)}/details`, { values }),
+  /** Set the household's values on the Tracks; `null` drops one. All change, or none. */
+  setDetails: (
+    trackIds: readonly number[],
+    values: Partial<Record<Detail, string | number | null>>,
+  ) => call<{ changed: number }>("POST", "/api/tracks/details", { track_ids: trackIds, values }),
   playlists: () => call<Playlist[]>("GET", "/api/playlists"),
   /** Create or replace a plain Playlist under an id the client chose. */
   putPlaylist: (id: string, playlist: PlainPlaylist) =>
