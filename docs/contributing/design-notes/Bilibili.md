@@ -19,6 +19,7 @@
 - [Playing a Download](#playing-a-download)
 - [Progress over SSE](#progress-over-sse)
 - [The bilibili plugin](#the-bilibili-plugin)
+- [The yutto fallback](#the-yutto-fallback)
 - [What the API shows](#what-the-api-shows)
 - [Testing](#testing)
 - [Left for later steps](#left-for-later-steps)
@@ -37,6 +38,13 @@ can't read the sample video either. So step 5 is built in two parts:
 - **Step 5b**, once yt-dlp is fixed, raises the pinned version, records a real
   video's info as the fixture in place of the made one, checks a real download
   by hand, and adds the yutto fallback.
+
+A check on 2026-10-27, through each tool's normal download command, found the
+site now refusing both before either reads anything: yt-dlp 2026.10.26 and its
+nightly get *HTTP 412 Precondition Failed* for the video page, and yutto 2.3.1
+signs in but gets an HTTP error for the video's details. A 412 is Bilibili's
+answer to a client it suspects, so the live check waits for it to stop; nothing
+here tries to get past it.
 
 This overrides the MVP's step 0, which had the Bilibili steps wait for the fix:
 everything but the tools can be built and tested without Bilibili. Until 5b,
@@ -317,6 +325,61 @@ A *Download* is the one copy of a Bilibili Source on the server's disk.
   leaked copy can't change the account. `SESSDATA` alone is still a full
   session: it can read anything the account can.
 
+## The yutto fallback
+
+yutto is a Bilibili-only downloader that reads the site's APIs rather than its
+pages, so a page change that breaks yt-dlp's extractor rarely breaks yutto too.
+It stands in for a broken tool, never for a refusal.
+
+- **When it runs:** the downloader tries yt-dlp first. Only a fault yt-dlp
+  raises itself, such as an extractor that can't parse the page, makes the same
+  call try yutto, once. An answer (*gone*, *needs a login*), a `NetworkError`,
+  and a refusal (a 403 or a 412) never fall back: the site has said no, and
+  asking again with another tool would be trying to get past it.
+- **A separate command, never imported:** yutto is GPL-3.0 and medleyplay is
+  MIT. It is found at `[plugins.bilibili] yutto = "<path>"` or on `PATH`, with
+  ffmpeg, which it needs to write an `m4a`, found the same way. Neither is in
+  the manifest; `uv tool install yutto` and `brew install ffmpeg` install them.
+  Without both, yt-dlp's fault stands, and its message says the fallback isn't
+  installed.
+- **It runs as the Job's child,** in the Job's process group, so killing the
+  Job kills it, and with the arguments as a list and no shell. The plugin builds
+  the URL from the `BV` id and the part, as for yt-dlp, and the command is
+  `yutto download <url> --audio-only -aq <quality> --output-format-audio-only m4a
+  --no-danmaku --no-subtitle --no-cover --no-chapter-info --no-color
+  --no-progress -x no -d <folder> --tmp-dir <folder>/yutto -tp audio`, with
+  `--auth-file` when there is a login. `-x no` keeps it from reading a proxy
+  from the environment, as yt-dlp doesn't.
+- **The login** is the Job's cookies file: its `SESSDATA` is written to an
+  owner-only `yutto-auth.toml` in the Job's folder, since `--auth` on the
+  command line would show in the process list. The folder goes with the Job.
+- **Quality:** `-aq` takes Bilibili's audio ids, the ones medleyplay stores, and
+  yutto tries the asked quality, then lower ones. The command doesn't say which
+  it got, so the Download records no quality, and the backend `yutto`.
+- **Progress:** the command reports none, so while it runs the downloader
+  reports *Downloading with yutto* every 30 seconds without a fraction, keeping
+  the Job inside its 10-minute idle timeout.
+- **Its exit codes,** from yutto's own error table, are sorted like yt-dlp's
+  errors:
+
+  | Exit code | yutto's name | Becomes |
+  | --- | --- | --- |
+  | 0, with one `m4a` in the folder | success | the Download |
+  | 15, 17 | episode not found, not found | *gone* |
+  | 18 | not logged in | *needs a login* without one, an `AuthError` with one |
+  | 11 | no access permission | *needs a login* without one, a fault with one, as for members |
+  | 10, 16 | HTTP status, retries used up | a fault: usually a refusal, so never retried every minute |
+  | anything else, or 0 without one `m4a` | | a fault |
+
+  A fault's message is yutto's last line of output, with the login removed, at
+  most 512 characters.
+- **Reading stays with yt-dlp,** so the fallback helps a Download whose video
+  was read before: a retry, or a part downloaded again after the policy removed
+  it. A new link still needs yt-dlp to read it. The command has no structured
+  way to read a video's details; `yutto serve`, a local JSON-RPC server over a
+  WebSocket, does, but it would add a WebSocket client to the manifest, and it
+  doesn't list a part's qualities either.
+
 ## What the API shows
 
 | Route | Who | Does |
@@ -359,8 +422,9 @@ A *Download* is the one copy of a Bilibili Source on the server's disk.
 
 ## Left for later steps
 
-- **Step 5b:** the fixed yt-dlp, a recorded fixture, a live check, and the yutto
-  fallback with ffmpeg.
+- **Step 5b:** the yutto fallback, built against a fixture made from yutto's
+  source; then, once the site answers the tools again, a newer yt-dlp, a
+  recorded fixture, and a live check of both.
 - **Step 6:** the Mode, Offline links, the storage limit, and removing Downloads.
 - **Step 7:** the add dialog, linked accounts in Settings, and changing a
   Source's quality.
