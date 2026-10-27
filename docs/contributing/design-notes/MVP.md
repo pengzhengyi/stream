@@ -288,4 +288,5 @@ the next. From step 4 on, each step is usable in a browser.
 6. **Download policy and Mode:** smart-playlist rules, the storage limit,
    removal, and Online and Offline.
 7. **Client views:** the song table, queue, stage, add dialog, *Downloads* tab,
-   and settings.
+   and settings; adding a site Track's file by hand when its Download fails, in
+   [Manual downloads](Manual%20downloads.md).

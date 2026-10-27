@@ -394,5 +394,6 @@ yutto is GPL-3.0 and medleyplay is MIT.
   fixture, and a live check. The yutto fallback is deferred; see
   [The yutto fallback](#the-yutto-fallback).
 - **Step 6:** the Mode, Offline links, the storage limit, and removing Downloads.
-- **Step 7:** the add dialog, linked accounts in Settings, and changing a
-  Source's quality.
+- **Step 7:** the add dialog, a Track whose video can't be read, and adding its
+  file by hand, in [Manual downloads](Manual%20downloads.md); then linked
+  accounts in Settings, and changing a Source's quality.
