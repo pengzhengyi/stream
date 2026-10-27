@@ -45,10 +45,31 @@ def make_sessionmaker(engine: Engine) -> sessionmaker[Session]:
     return sessionmaker(engine, expire_on_commit=False)
 
 
+class MigrationError(Exception):
+    """A migration left rows that refer to rows no longer there."""
+
+
 def migrate(engine: Engine) -> None:
-    """Bring the database's schema up to the newest migration; a no-op when it is current."""
+    """Bring the database's schema up to the newest migration; a no-op when it is current.
+
+    Foreign keys are off while it runs: SQLite alters a table by building a new one
+    and dropping the old, and the drop would otherwise delete every row that refers
+    to it. Before committing, it checks that every reference still holds.
+    """
     config = Config()
     config.set_main_option("script_location", MIGRATIONS)
-    with engine.begin() as connection:
-        config.attributes["connection"] = connection
-        command.upgrade(config, "head")
+    with engine.connect() as connection:
+        # The pragma does nothing inside a transaction, so it is set before one begins.
+        connection.exec_driver_sql("PRAGMA foreign_keys = OFF")
+        connection.commit()
+        try:
+            with connection.begin():
+                config.attributes["connection"] = connection
+                command.upgrade(config, "head")
+                broken = connection.exec_driver_sql("PRAGMA foreign_key_check").all()
+                if broken:
+                    message = f"The migration left {len(broken)} broken references."
+                    raise MigrationError(message)
+        finally:
+            connection.exec_driver_sql("PRAGMA foreign_keys = ON")
+            connection.commit()
