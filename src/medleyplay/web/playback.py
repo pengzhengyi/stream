@@ -9,6 +9,7 @@ from medleyplay.application.playback import Preparing, Ready
 from medleyplay.domain.catalog import Availability, SourceId, TrackId
 from medleyplay.web.audio import audio_response
 from medleyplay.web.deps import PlaybackDep, SignedInAccount
+from medleyplay.web.ids import RowId
 
 router = APIRouter(prefix="/api", tags=["playback"])
 
@@ -39,7 +40,7 @@ class UnplayableOut(BaseModel):
 
 @router.post("/tracks/{track_id}/playback")
 def play(
-    track_id: int, me: SignedInAccount, playback: PlaybackDep
+    track_id: RowId, me: SignedInAccount, playback: PlaybackDep
 ) -> ReadyOut | PreparingOut | UnplayableOut:
     """Pick the Source a Track plays from, preparing it first when it must be."""
     found = playback.play(me, TrackId(track_id))
@@ -63,6 +64,8 @@ _AUDIO_RESPONSES: Final[dict[int | str, dict[str, Any]]] = {
 
 @router.get(_AUDIO, response_class=Response, responses=_AUDIO_RESPONSES)
 @router.head(_AUDIO, response_class=Response, operation_id="audio_headers")
-def audio(source_id: int, request: Request, _: SignedInAccount, playback: PlaybackDep) -> Response:
+def audio(
+    source_id: RowId, request: Request, _: SignedInAccount, playback: PlaybackDep
+) -> Response:
     """Serve a Source's audio, with Range; 409 when it must be prepared first."""
     return audio_response(request, playback.open_audio(SourceId(source_id)))

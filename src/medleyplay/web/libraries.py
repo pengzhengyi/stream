@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from medleyplay.domain.libraries import Library, LibraryId, LibraryKind, LibraryState
 from medleyplay.web.deps import JobsDep, LibrariesDep, SignedInAccount
+from medleyplay.web.ids import RowId
 from medleyplay.web.jobs import JobOut
 
 router = APIRouter(prefix="/api", tags=["libraries"])
@@ -70,7 +71,7 @@ def list_libraries(_: SignedInAccount, libraries: LibrariesDep) -> list[LibraryO
 
 @router.post("/libraries/{library_id}/scan")
 def scan_library(
-    library_id: int,
+    library_id: RowId,
     me: SignedInAccount,
     libraries: LibrariesDep,
     jobs: JobsDep,
@@ -86,6 +87,6 @@ def scan_library(
 
 
 @router.delete("/libraries/{library_id}", status_code=status.HTTP_204_NO_CONTENT)
-def remove_library(library_id: int, me: SignedInAccount, libraries: LibrariesDep) -> None:
+def remove_library(library_id: RowId, me: SignedInAccount, libraries: LibrariesDep) -> None:
     """Remove a Library, and its Tracks found nowhere else; admins only. Removing twice is fine."""
     libraries.remove(me, LibraryId(library_id))

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from medleyplay.application.mode import MAX_NAME, ModeView
 from medleyplay.domain.mode import MeteredNetwork, ModeSetting, ModeSettings, NetworkKind, Reason
 from medleyplay.web.deps import JobsDep, ModeDep, SignedInAccount
+from medleyplay.web.ids import RowId
 
 router = APIRouter(prefix="/api/mode", tags=["mode"])
 
@@ -140,7 +141,7 @@ def mark_metered(body: MeteredIn, me: SignedInAccount, mode: ModeDep) -> Metered
 
 
 @router.delete("/metered/{network_id}", status_code=status.HTTP_204_NO_CONTENT)
-def unmark(network_id: int, me: SignedInAccount, mode: ModeDep) -> Response:
+def unmark(network_id: RowId, me: SignedInAccount, mode: ModeDep) -> Response:
     """Remove a metered network's mark; one already gone answers 204 too. Admins only."""
     mode.unmark(me, network_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
