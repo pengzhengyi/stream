@@ -12,6 +12,7 @@ them, each in the C locale with a short timeout.
 import os
 import re
 import subprocess  # nosec B404 -- runs fixed system commands, never a shell
+import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from ipaddress import AddressValueError, IPv4Network, NetmaskValueError
@@ -150,3 +151,8 @@ def run_command(args: Sequence[str]) -> str | None:
     except (OSError, subprocess.TimeoutExpired):
         return None
     return done.stdout if done.returncode == 0 else None
+
+
+def probe_network() -> Network | Unread | None:
+    """Return the network this Mac is on; elsewhere than macOS, the network is `UNREAD`."""
+    return read_network(run_command) if sys.platform == "darwin" else UNREAD

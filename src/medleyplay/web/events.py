@@ -1,4 +1,4 @@
-"""The events API: a stream of Server-Sent Events telling a browser each time a Job changes."""
+"""The events API: Server-Sent Events telling a browser each time a Job or the Mode changes."""
 
 import asyncio
 from collections.abc import AsyncIterable
@@ -8,10 +8,18 @@ from fastapi import APIRouter
 from fastapi.concurrency import run_in_threadpool
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 
-from medleyplay.application.events import SubscriptionEndedError
+from medleyplay.application.events import MODE, Event, SubscriptionEndedError
 from medleyplay.domain.errors import NotSignedInError
-from medleyplay.web.deps import AccountsDep, EventsDep, JobsDep, SessionToken, SignedInAccount
+from medleyplay.web.deps import (
+    AccountsDep,
+    EventsDep,
+    JobsDep,
+    ModeDep,
+    SessionToken,
+    SignedInAccount,
+)
 from medleyplay.web.jobs import JobOut
+from medleyplay.web.mode import ModeOut
 
 router = APIRouter(prefix="/api", tags=["events"])
 
@@ -24,26 +32,31 @@ async def stream_events(
     me: SignedInAccount,
     events: EventsDep,
     jobs: JobsDep,
+    mode: ModeDep,
     accounts: AccountsDep,
     token: SessionToken = None,
 ) -> AsyncIterable[ServerSentEvent]:
     """Stream a `job` event, the Job as `GET /api/jobs` shows it, whenever a Job changes.
 
     The stream starts with a `ready` event once it hears every change, so a
-    browser asks `GET /api/jobs` after `ready` and misses nothing. Events carry no
-    ids and nothing is replayed: a browser that reconnects waits for `ready` and
-    asks again. The stream ends when its session does.
+    browser asks `GET /api/jobs` after `ready` and misses nothing, then a `mode`
+    event, the Mode as `GET /api/mode` shows it, sent again whenever the Mode
+    changes. Events carry no ids and nothing is replayed: a browser that
+    reconnects waits for `ready` and asks again. The stream ends when its session
+    does.
     """
     del me  # Signed in to open the stream; the session is checked again as it runs.
     loop = asyncio.get_running_loop()
     async with events.subscribe() as subscription:
         yield ServerSentEvent(event="ready", data={})
+        yield ServerSentEvent(data=ModeOut.of(mode.now()), event="mode")
         checked = loop.time()
         while True:
+            event: Event | None
             try:
-                job_id = await asyncio.wait_for(subscription.next(), SESSION_CHECK_SECONDS)
+                event = await asyncio.wait_for(subscription.next(), SESSION_CHECK_SECONDS)
             except TimeoutError:
-                job_id = None
+                event = None
             except SubscriptionEndedError:
                 return
             # Checked on a timer, so a busy stream ends with its session as a quiet one does.
@@ -51,8 +64,10 @@ async def stream_events(
                 if not await run_in_threadpool(_still_signed_in, accounts, token):
                     return
                 checked = loop.time()
-            if job_id is not None:
-                view = await run_in_threadpool(jobs.get_job, job_id)
+            if event == MODE:
+                yield ServerSentEvent(data=ModeOut.of(mode.now()), event="mode")
+            elif event is not None:
+                view = await run_in_threadpool(jobs.get_job, event)
                 yield ServerSentEvent(data=JobOut.of(view), event="job")
 
 

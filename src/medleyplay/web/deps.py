@@ -7,11 +7,12 @@ from fastapi import Cookie, Depends, Request
 
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
-from medleyplay.application.events import JobEvents
+from medleyplay.application.events import Events
 from medleyplay.application.jobs import JobService
 from medleyplay.application.libraries import LibraryService
 from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.links import LinkService
+from medleyplay.application.mode import ModeService
 from medleyplay.application.playback import PlaybackService
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.policy import PolicyService
@@ -35,10 +36,11 @@ class Services:
     playback: PlaybackService
     linked: LinkedAccountService
     links: LinkService
-    events: JobEvents
+    events: Events
     settings: SettingsService
     policy: PolicyService
     preferences: PreferencesService
+    mode: ModeService
 
 
 def _services(request: Request) -> Services:
@@ -81,7 +83,7 @@ def _links(services: Annotated[Services, Depends(_services)]) -> LinkService:
     return services.links
 
 
-def _events(services: Annotated[Services, Depends(_services)]) -> JobEvents:
+def _events(services: Annotated[Services, Depends(_services)]) -> Events:
     return services.events
 
 
@@ -97,6 +99,10 @@ def _preferences(services: Annotated[Services, Depends(_services)]) -> Preferenc
     return services.preferences
 
 
+def _mode(services: Annotated[Services, Depends(_services)]) -> ModeService:
+    return services.mode
+
+
 AccountsDep = Annotated[AccountService, Depends(_accounts)]
 CatalogDep = Annotated[CatalogService, Depends(_catalog)]
 PluginsDep = Annotated[PluginService, Depends(_plugins)]
@@ -105,10 +111,11 @@ LibrariesDep = Annotated[LibraryService, Depends(_libraries)]
 PlaybackDep = Annotated[PlaybackService, Depends(_playback)]
 LinkedDep = Annotated[LinkedAccountService, Depends(_linked)]
 LinksDep = Annotated[LinkService, Depends(_links)]
-EventsDep = Annotated[JobEvents, Depends(_events)]
+EventsDep = Annotated[Events, Depends(_events)]
 SettingsDep = Annotated[SettingsService, Depends(_settings)]
 PolicyDep = Annotated[PolicyService, Depends(_policy)]
 PreferencesDep = Annotated[PreferencesService, Depends(_preferences)]
+ModeDep = Annotated[ModeService, Depends(_mode)]
 SessionToken = Annotated[str | None, Cookie(alias=SESSION_COOKIE, include_in_schema=False)]
 
 

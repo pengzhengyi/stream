@@ -15,7 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
-from medleyplay.application.events import JobEvents
+from medleyplay.application.events import Events
 from medleyplay.domain.accounts import Account, AccountId
 from medleyplay.domain.errors import ConflictError, ForbiddenError, NotFoundError
 from medleyplay.domain.jobs import ACTIVE_STATES, Job, JobId, JobState, JobView, Progress
@@ -89,7 +89,7 @@ class JobService:
         clock: Clock,
         kinds: Mapping[str, AnyJobKind],
         runner: Runner,
-        events: JobEvents | None = None,
+        events: Events | None = None,
     ) -> None:
         """Create a service over the database `units` open, for Jobs of `kinds`.
 

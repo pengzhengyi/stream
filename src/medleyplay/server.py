@@ -2,6 +2,7 @@
 
 import contextlib
 import fcntl
+import functools
 import os
 import socket
 import sys
@@ -21,13 +22,16 @@ from medleyplay.application import Clock
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.changes import Changes
+from medleyplay.application.connectivity import reachable
 from medleyplay.application.downloads import DownloadService, download_source_kind
-from medleyplay.application.events import JobEvents
+from medleyplay.application.events import Events
 from medleyplay.application.job_runner import JobProcesses, JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.libraries import LibraryService, scan_library_kind
 from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.links import LinkService
+from medleyplay.application.mode import ModeService
+from medleyplay.application.network import probe_network
 from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.policy import PolicyService
@@ -161,7 +165,7 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         **(kinds or {}),
     }
     processes = JobProcesses(source.command, source.package)
-    events = JobEvents()
+    events = Events()
     runner = JobRunner(
         units,
         clock,
@@ -180,6 +184,14 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
     policy = PolicyService(units, clock, downloads, plugins, data_dir)
     changes.listen(policy.request)
     events.listen(policy.request)
+    checks = tuple(check.check() for check in config.mode.checks)
+    mode = ModeService(
+        units,
+        clock,
+        probe=probe_network,
+        check=functools.partial(reachable, checks),
+        on_change=events.publish_mode,
+    )
     return Services(
         accounts=AccountService(
             units,
@@ -200,17 +212,18 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         settings=SettingsService(units, clock, changes.tell),
         policy=policy,
         preferences=PreferencesService(units, clock),
+        mode=mode,
     )
 
 
 def build_app(settings: Settings, source: PluginSource = PluginSource()) -> FastAPI:  # noqa: B008 -- a frozen value
     """Return the server's app for `settings`.
 
-    The app starts the plugin host, removes stale cache copies, and starts the Job
-    runner and the download policy, which evaluates at once, when it starts; it
-    stops them and closes the database when it shuts down. A config file that
-    doesn't parse raises `ConfigError`; another server using the same data folder
-    raises `AlreadyRunningError` as the app starts.
+    The app starts deciding the Mode and the plugin host, removes stale cache
+    copies, and starts the Job runner and the download policy, which evaluates at
+    once, when it starts; it stops them and closes the database when it shuts
+    down. A config file that doesn't parse raises `ConfigError`; another server
+    using the same data folder raises `AlreadyRunningError` as the app starts.
     """
     config = load_config(settings.data_dir / CONFIG_FILE)
     engine = open_database(settings.data_dir)
@@ -222,17 +235,21 @@ def build_app(settings: Settings, source: PluginSource = PluginSource()) -> Fast
     async def run_in_background(_: FastAPI) -> AsyncIterator[None]:
         try:
             with hold_instance_lock(settings.data_dir):
-                services.plugins.start()
-                services.playback.sweep_cache()
-                services.playback.sweep_downloads()
-                services.jobs.start()
-                services.policy.start()
+                services.mode.start()
                 try:
-                    yield
+                    services.plugins.start()
+                    services.playback.sweep_cache()
+                    services.playback.sweep_downloads()
+                    services.jobs.start()
+                    services.policy.start()
+                    try:
+                        yield
+                    finally:
+                        services.policy.stop()
+                        services.jobs.stop()
+                        services.plugins.close()
                 finally:
-                    services.policy.stop()
-                    services.jobs.stop()
-                    services.plugins.close()
+                    services.mode.stop()
         finally:
             engine.dispose()
 

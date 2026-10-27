@@ -320,3 +320,18 @@ class SettingRow(Base):
     document: Mapped[dict[str, object]] = mapped_column(JSON)
     revision: Mapped[int] = mapped_column(Integer)
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
+class ModeSettingRow(Base):
+    """The Mode's setting and the metered networks, as one document; the only row has id 1."""
+
+    __tablename__ = "mode_setting"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="single"),
+        CheckConstraint("revision >= 1", name="revision"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    document: Mapped[dict[str, object]] = mapped_column(JSON)
+    revision: Mapped[int] = mapped_column(Integer)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime)

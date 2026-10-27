@@ -5,8 +5,20 @@ multiple_accounts = false
 
 [plugins.bilibili]
 enabled = false
+
+# The connectivity checks, tried in turn; these are the defaults.
+[[mode.checks]]
+url = "http://captive.apple.com/hotspot-detect.html"
+status = 200
+body = "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>"
+
+[[mode.checks]]
+url = "http://connect.rom.miui.com/generate_204"
+status = 204
 ```
 """
+
+# cspell:ignore miui
 
 import tomllib
 from collections.abc import Iterable
@@ -14,6 +26,8 @@ from pathlib import Path
 from typing import Final
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+from medleyplay.application.connectivity import DEFAULT_CHECKS, Check
 
 CONFIG_FILE: Final = "medleyplay.toml"
 OFF_BY_DEFAULT: Final = frozenset({"bilibili"})
@@ -33,6 +47,31 @@ class PluginConfig(BaseModel):
     """`None` leaves the plugin as it is by default."""
 
 
+class CheckConfig(BaseModel):
+    """A connectivity check: an http or https endpoint, its status, and its body if it has one."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    url: str = Field(pattern=r"^https?://")
+    status: int = Field(ge=100, le=599)
+    body: str | None = None
+
+    def check(self) -> Check:
+        """Return the check this setting describes."""
+        return Check(self.url, self.status, self.body)
+
+
+class ModeConfig(BaseModel):
+    """The Mode's settings in the file: the connectivity checks, tried in turn."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    checks: tuple[CheckConfig, ...] = Field(
+        default=tuple(CheckConfig(url=c.url, status=c.status, body=c.body) for c in DEFAULT_CHECKS),
+        min_length=1,
+    )
+
+
 class Config(BaseModel):
     """Every setting in the config file; a missing setting takes its default."""
 
@@ -40,6 +79,7 @@ class Config(BaseModel):
 
     multiple_accounts: bool = False
     plugins: dict[str, PluginConfig] = Field(default_factory=dict)
+    mode: ModeConfig = Field(default_factory=ModeConfig)
 
     def enabled_plugins(self, available: Iterable[str]) -> tuple[str, ...]:
         """Return the plugins of `available` that are on.
