@@ -3,7 +3,7 @@
  */
 
 import { KeyboardIcon, SignOutIcon, WaveformIcon } from "@phosphor-icons/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { type Account, type Track, api } from "../api";
 import { useLibrary } from "../library/useLibrary";
@@ -53,6 +53,24 @@ export function Library({
   const [adding, setAdding] = useState<Track | undefined>(undefined);
   const [notice, setNotice] = useState("");
   const [listingShortcuts, setListingShortcuts] = useState(false);
+  // The header stays at the top, so what else stays there sits under it, however tall it is.
+  const top = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const header = top.current;
+    if (header === null || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const measured = new ResizeObserver(() => {
+      document.documentElement.style.setProperty(
+        "--top-height",
+        `${String(header.offsetHeight)}px`,
+      );
+    });
+    measured.observe(header);
+    return () => {
+      measured.disconnect();
+    };
+  }, []);
   const keys = useBindings();
   // The Account's shortcuts, read again when the page is shown, as they may have
   // changed on another device.
@@ -176,7 +194,7 @@ export function Library({
 
   return (
     <div className={queueOpen ? "library queue-open" : "library"}>
-      <header className="top">
+      <header ref={top} className="top">
         <h1>
           <a className="wordmark" href={hrefOf({ view: "songs" })}>
             <WaveformIcon weight="bold" aria-hidden />

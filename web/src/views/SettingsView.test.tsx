@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -130,5 +130,58 @@ describe("storage settings", () => {
 
     expect(screen.getByText("Type a size in GB, such as 20.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+});
+
+describe("the Settings sections", () => {
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it("fold under their headings, and stay folded on the next visit", async () => {
+    open(true);
+    const heading = screen.getByRole("button", { name: "Keyboard shortcuts" });
+
+    await userEvent.click(heading);
+
+    expect(heading).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("button", { name: "Reset to defaults" })).not.toBeInTheDocument();
+
+    cleanup();
+    open(true);
+
+    expect(screen.getByRole("button", { name: "Keyboard shortcuts" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+  });
+
+  it("open from their names at the top, which go to them", async () => {
+    localStorage.setItem("medleyplay.settings.folded.v1", JSON.stringify(["storage"]));
+    open(true);
+    const sections = screen.getByRole("navigation", { name: "Settings sections" });
+
+    await userEvent.click(
+      within(sections).getByRole("button", { name: "Go to Downloads and storage" }),
+    );
+
+    const heading = screen.getByRole("button", { name: "Downloads and storage" });
+    expect(heading).toHaveAttribute("aria-expanded", "true");
+    expect(heading).toHaveFocus();
+    expect(await screen.findByText(/of 20 GB used/)).toBeVisible();
+  });
+
+  it("fold all at once, and open all again", async () => {
+    open(true);
+
+    await userEvent.click(screen.getByRole("button", { name: "Fold all" }));
+
+    expect(
+      screen.getAllByRole("button", { expanded: false }).map((button) => button.textContent),
+    ).toEqual(["Appearance", "Keyboard shortcuts", "Downloads and storage"]);
+
+    await userEvent.click(screen.getByRole("button", { name: "Open all" }));
+
+    expect(screen.queryAllByRole("button", { expanded: false })).toEqual([]);
   });
 });

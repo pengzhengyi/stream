@@ -53,7 +53,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   let go, and a row's actions show on touch screens.
 - **Settings** — choose the theme, and see what Downloads and prepared copies
   use against the storage limit. An admin changes the limit, with a preview of
-  what a lower one would remove before saving.
+  what a lower one would remove before saving. Each section folds, and a bar of
+  their names under the header goes to one.
 - **Views and search** — Songs, Artists, Albums, Downloaded, and Playlists, with
   a built-in *Favorites*, worked out in the browser from the Library, so moving
   between them asks the server nothing; Back, Forward, and bookmarks work. One
