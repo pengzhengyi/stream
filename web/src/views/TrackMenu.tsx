@@ -10,6 +10,7 @@ import {
   DotsThreeIcon,
   ListPlusIcon,
   MicrophoneStageIcon,
+  PencilSimpleIcon,
   PlaylistIcon,
   QueueIcon,
   VinylRecordIcon,
@@ -26,6 +27,7 @@ export interface TrackMenuActions {
   readonly onPlayNext: (track: Track) => void;
   readonly onAdd: (track: Track) => void;
   readonly onAddToPlaylist: (track: Track) => void;
+  readonly onEditDetails: (track: Track) => void;
 }
 
 /** The "…" button of `track`, and its menu; `queueing` offers Play next and Add to queue. */
@@ -100,6 +102,14 @@ export function TrackMenu({
             }}
           >
             Add to playlist…
+          </Item>
+          <Item
+            icon={<PencilSimpleIcon />}
+            onSelect={() => {
+              actions.onEditDetails(track);
+            }}
+          >
+            Edit details…
           </Item>
         </Menu.Content>
       </Menu.Portal>

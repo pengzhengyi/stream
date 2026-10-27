@@ -6,6 +6,7 @@ import { vi } from "vitest";
 
 import type {
   Account,
+  Details,
   Features,
   MeteredNetwork,
   Mode,
@@ -55,6 +56,10 @@ export function trackOf(id: number, title: string, change: Partial<Track> = {}):
     artist: "The Band",
     album: "Blue",
     album_artist: "",
+    track_number: null,
+    disc_number: null,
+    year: null,
+    genre: "",
     duration_ms: 187_000,
     added_at: "2026-10-01T12:00:00Z",
     favorite: false,
@@ -64,6 +69,43 @@ export function trackOf(id: number, title: string, change: Partial<Track> = {}):
     availability: "ok",
     downloaded: false,
     ...change,
+  };
+}
+
+/**
+ * The details of a Bilibili album file saved under its video id, with no tags:
+ *
+ * ```text
+ * title    file_name: "BV1dm4y1s7ak"   video: "ケビョウニンゲン"
+ * artist   video: "GUMI/MAYU"
+ * ```
+ *
+ * `household` adds the household's own values, which then show.
+ */
+export function detailsOf(
+  trackId: number,
+  household: Partial<Record<keyof Details["shown"], string | number>> = {},
+): Details {
+  const video = { title: "ケビョウニンゲン", artist: "GUMI/MAYU" };
+  const found = {
+    title: { value: video.title, origin: "video" as const },
+    artist: { value: video.artist, origin: "video" as const },
+  };
+  const yours = Object.fromEntries(
+    Object.entries(household).map(([field, value]) => [
+      field,
+      { value, origin: "household" as const },
+    ]),
+  );
+  return {
+    track_id: trackId,
+    shown: { ...found, ...yours },
+    found,
+    origins: {
+      file_name: { title: "BV1dm4y1s7ak" },
+      video,
+      ...(Object.keys(household).length > 0 ? { household } : {}),
+    },
   };
 }
 

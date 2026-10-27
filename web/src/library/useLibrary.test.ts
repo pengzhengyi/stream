@@ -1,7 +1,14 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { favoritesPlaylistOf, playlistOf, serve, signedIn, trackOf } from "../testing/server";
+import {
+  detailsOf,
+  favoritesPlaylistOf,
+  playlistOf,
+  serve,
+  signedIn,
+  trackOf,
+} from "../testing/server";
 import { useLibrary } from "./useLibrary";
 
 /** A stand-in for the event stream: the test sends the events the server would. */
@@ -226,5 +233,48 @@ describe("adding a song to Playlists", () => {
     expect(result.current.playlists.find((playlist) => playlist.id === "p1")?.track_ids).toEqual([
       1, 2,
     ]);
+  });
+});
+
+describe("saving a song's details", () => {
+  async function libraryOf(routes: Parameters<typeof serve>[0]) {
+    serve({ ...signedIn([trackOf(7, "BV1dm4y1s7ak")]), ...routes });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+    return result;
+  }
+
+  it("sends the household's values, then shows the Track as the server now has it", async () => {
+    const sent: unknown[] = [];
+    const result = await libraryOf({
+      "PUT /api/tracks/7/details": (body: unknown) => {
+        sent.push(body);
+        return { body: detailsOf(7, { title: "ケビョウニンゲン", year: 2014 }) };
+      },
+      "GET /api/tracks/7": { body: trackOf(7, "ケビョウニンゲン", { year: 2014 }) },
+    });
+
+    await act(() => result.current.saveDetails(7, { title: "ケビョウニンゲン", year: 2014 }));
+
+    expect(sent).toEqual([{ values: { title: "ケビョウニンゲン", year: 2014 } }]);
+    expect(result.current.tracks.get(7)).toMatchObject({ title: "ケビョウニンゲン", year: 2014 });
+  });
+
+  it("passes on why the server refused, leaving the Track as it was", async () => {
+    const result = await libraryOf({
+      "PUT /api/tracks/7/details": { status: 422, body: { detail: "year is from 1000 to 2999." } },
+    });
+
+    let refused: unknown;
+    await act(async () => {
+      await result.current.saveDetails(7, { year: 14 }).catch((failure: unknown) => {
+        refused = failure;
+      });
+    });
+
+    expect(String(refused)).toContain("year is from 1000 to 2999.");
+    expect(result.current.tracks.get(7)?.title).toBe("BV1dm4y1s7ak");
   });
 });

@@ -19,6 +19,15 @@ describe("the Track store", () => {
     expect(EMPTY.loaded).toBe(false);
   });
 
+  it("replaces one Track with the server's answer, and ignores a Track it never listed", () => {
+    const edited = reduce(LOADED, { type: "track", track: trackOf(1, "Night Drive") });
+    const unknown = reduce(LOADED, { type: "track", track: trackOf(9, "Nowhere") });
+
+    expect(tracksOf(edited).get(1)?.title).toBe("Night Drive");
+    expect(tracksOf(edited).get(2)?.title).toBe("Outro");
+    expect(unknown).toBe(LOADED);
+  });
+
   it("shows a write at once, and keeps it once the server confirms it", () => {
     const writing = reduce(LOADED, {
       type: "write",

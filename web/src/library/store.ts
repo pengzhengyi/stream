@@ -31,6 +31,7 @@ export interface Store {
 /** A change to the store. */
 export type StoreAction =
   | { readonly type: "loaded"; readonly tracks: readonly Track[] }
+  | { readonly type: "track"; readonly track: Track }
   | {
       readonly type: "write";
       readonly id: number;
@@ -61,6 +62,15 @@ export function reduce(store: Store, action: StoreAction): Store {
         [...store.pending].filter(([key]) => confirmed.has(Number(key.split(":")[0]))),
       );
       return { confirmed, pending, loaded: true };
+    }
+    case "track": {
+      // One Track the server answered with in full, such as after its details were edited.
+      if (!store.confirmed.has(action.track.id)) {
+        return store;
+      }
+      const confirmed = new Map(store.confirmed);
+      confirmed.set(action.track.id, action.track);
+      return { ...store, confirmed };
     }
     case "write": {
       if (!store.confirmed.has(action.id)) {

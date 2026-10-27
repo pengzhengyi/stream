@@ -13,6 +13,10 @@ export interface Track {
   readonly artist: string;
   readonly album: string;
   readonly album_artist: string;
+  readonly track_number: number | null;
+  readonly disc_number: number | null;
+  readonly year: number | null;
+  readonly genre: string;
   readonly duration_ms: number | null;
   /** When the Track was added, as an ISO 8601 date and time. */
   readonly added_at: string;
@@ -24,6 +28,29 @@ export interface Track {
   readonly availability: Availability;
   /** Whether a Source of the Track has a Download kept on the server. */
   readonly downloaded: boolean;
+}
+
+/** A detail of a Track the household can edit. */
+export type Detail =
+  "title" | "artist" | "album" | "album_artist" | "track_number" | "disc_number" | "year" | "genre";
+
+/** Where a value came from, the first shown when several give one. */
+export type Origin = "household" | "files" | "musicbrainz" | "video" | "album_file" | "file_name";
+
+/** A value of a detail, and where it came from. */
+export interface Found {
+  readonly value: string | number;
+  readonly origin: Origin;
+}
+
+/** A Track's details: what shows, what would show without the household's, and every origin's. */
+export interface Details {
+  readonly track_id: number;
+  readonly shown: Partial<Readonly<Record<Detail, Found>>>;
+  readonly found: Partial<Readonly<Record<Detail, Found>>>;
+  readonly origins: Partial<
+    Readonly<Record<Origin, Partial<Readonly<Record<Detail, string | number>>>>>
+  >;
 }
 
 /** A Playlist; a smart one's Tracks are the ones its rules match now. */
@@ -219,6 +246,11 @@ export const api = {
   signOut: () => call<undefined>("DELETE", "/api/session"),
   me: () => call<Account>("GET", "/api/me"),
   tracks: () => call<Track[]>("GET", "/api/tracks"),
+  track: (trackId: number) => call<Track>("GET", `/api/tracks/${String(trackId)}`),
+  details: (trackId: number) => call<Details>("GET", `/api/tracks/${String(trackId)}/details`),
+  /** Make `values` the household's values for the Track, replacing its earlier ones. */
+  putDetails: (trackId: number, values: Partial<Record<Detail, string | number>>) =>
+    call<Details>("PUT", `/api/tracks/${String(trackId)}/details`, { values }),
   playlists: () => call<Playlist[]>("GET", "/api/playlists"),
   /** Create or replace a plain Playlist under an id the client chose. */
   putPlaylist: (id: string, playlist: PlainPlaylist) =>

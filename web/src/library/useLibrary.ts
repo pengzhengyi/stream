@@ -4,7 +4,15 @@
 
 import { useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
 
-import { ApiError, type JobEvent, type Mode, type Playlist, type Track, api } from "../api";
+import {
+  ApiError,
+  type Detail,
+  type JobEvent,
+  type Mode,
+  type Playlist,
+  type Track,
+  api,
+} from "../api";
 import { newId } from "../ids";
 import { EMPTY, type Field, reduce, tracksOf } from "./store";
 
@@ -22,6 +30,14 @@ export interface Library {
   readonly mode: Mode | null;
   readonly setFavorite: (id: number, favorite: boolean) => void;
   readonly setRating: (id: number, rating: number | null) => void;
+  /**
+   * Make `values` the household's values for the Track; the Track shows the server's
+   * answer. The promise rejects with why when the server refuses.
+   */
+  readonly saveDetails: (
+    id: number,
+    values: Partial<Record<Detail, string | number>>,
+  ) => Promise<void>;
   /**
    * Add `track` to the end of the Playlists `ids`, and to a new Playlist for each
    * of `newNames`. The Playlists the server saves show at once; the promise rejects
@@ -135,6 +151,17 @@ export function useLibrary(onSignedOut: () => void): Library {
     setRating: (id, rating) => {
       setError("");
       write(id, "rating", rating, api.setRating(id, rating));
+    },
+    saveDetails: async (id, values) => {
+      try {
+        await api.putDetails(id, values);
+        dispatch({ type: "track", track: await api.track(id) });
+      } catch (failure) {
+        if (failure instanceof ApiError && failure.status === 401) {
+          onSignedOut();
+        }
+        throw failure;
+      }
     },
     addToPlaylists: async (track, ids, newNames) => {
       const puts = [
