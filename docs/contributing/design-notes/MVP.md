@@ -263,8 +263,9 @@
 **Not in the MVP:** video and MVs, searching Bilibili, importing Bilibili
 favorites, network drives, other removal orders, merging duplicate Tracks,
 splitting a video by chapter, playback on the server itself, a terminal client,
-other music sites, lyrics, HTTPS, third-party plugins, and per-Account storage
-quotas.
+other music sites, lyrics, HTTPS, a phone that plays without the server (see
+[Architecture](Architecture.md#deliberately-left-out)), third-party plugins, and
+per-Account storage quotas.
 
 ## Build order
 

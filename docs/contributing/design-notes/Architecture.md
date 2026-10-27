@@ -318,6 +318,25 @@ one downloader, and one credential spec, never the tools.
 - **An event bus:** no extension point needs one yet. Progress reaches clients
   from the core over SSE.
 - **Plugin routes, tables, and UI:** see Core and plugins.
-- **HTTPS on the LAN:** sessions travel in the clear on the home network. A
-  reverse proxy with a local certificate can be added later.
+- **HTTPS, and a phone that plays without the server:** sessions travel in the
+  clear on the home network, and a phone plays only while it reaches the server.
+  Both wait on one decision already made: the secure origin will be
+  `tailscale serve`, which gives `https://<machine>.<tailnet>.ts.net` a real
+  certificate and reaches the server away from home too. A browser keeps a
+  service worker and durable storage only on a secure origin, so that origin is
+  what lets a phone keep songs.
+  - **Plain HTTP on the LAN keeps working,** with the phone's own copies offered
+    only where the browser supports them.
+  - **The costs:** each phone needs Tailscale; the machine and tailnet names
+    appear in a public certificate log; the new address starts every browser
+    signed out, with nothing it stored carried over; and the session cookie
+    becomes `Secure` there.
+  - **When it is picked up,** a day's check on an iPhone comes first, in a
+    Safari tab and installed to the Home Screen: a saved song plays in airplane
+    mode, from the lock screen, and is still there after eight days. If iOS
+    fails it, the fallback is a native wrapper such as Capacitor.
+  - **What a phone keeps** is each Account's own, wiped at sign-out: songs under
+    a size limit, a Library snapshot, and an outbox of favorites and ratings,
+    the last write winning, as plays already have one. How it relates to
+    *Keep downloaded* Playlists is open.
 - **Per-Account storage quotas.**
