@@ -54,6 +54,10 @@ def test_a_lookup_answers_the_videos_details_parts_and_qualities(
     assert [q.id for q in lookup.qualities] == ["30280", "30232", "30216"]
 
 
+def test_a_bare_video_code_looks_up_its_video(site: Site, alice: Account) -> None:
+    assert site.links.lookup(alice, " BV1Xx41117Tz ").video == "BV1Xx41117Tz"
+
+
 def test_a_short_link_looks_up_the_video_it_leads_to(site: Site, alice: Account) -> None:
     assert site.links.lookup(alice, "https://b23.tv/night").video == "BV1Xx41117Tz"
 

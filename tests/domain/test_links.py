@@ -5,6 +5,7 @@ import pytest
 from medleyplay.domain.errors import InvalidInputError
 from medleyplay.domain.links import (
     MAX_LINK_LENGTH,
+    link_of,
     parse_part_locator,
     part_locator,
     recognize_link,
@@ -53,6 +54,36 @@ def test_a_link_longer_than_the_limit_is_refused() -> None:
 
     with pytest.raises(InvalidInputError, match="long"):
         recognize_link(link)
+
+
+@pytest.mark.parametrize(
+    ("text", "link"),
+    [
+        ("BV1Xx41117Tz", "https://www.bilibili.com/video/BV1Xx41117Tz"),
+        ("  bv1Xx41117Tz ", "https://www.bilibili.com/video/BV1Xx41117Tz"),
+        ("av170001", "https://www.bilibili.com/video/av170001"),
+        ("AV170001", "https://www.bilibili.com/video/av170001"),
+    ],
+)
+def test_a_video_code_becomes_its_link(text: str, link: str) -> None:
+    assert link_of(text) == link
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "https://b23.tv/abc123",
+        "BV1Xx41117Tz/p2",
+        "BV1Xx41117",
+        "BV1Xx41117Tz1",
+        "av",
+        "av17x",
+        "../BV1Xx41117Tz",
+        "",
+    ],
+)
+def test_any_other_text_is_left_as_it_is(text: str) -> None:
+    assert link_of(text) == text
 
 
 def test_a_part_locator_names_the_video_and_its_part() -> None:

@@ -23,7 +23,7 @@ from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import SourceId, SourceKey, SourceState, TrackDetails, TrackId
 from medleyplay.domain.errors import InvalidInputError, OfflineError
 from medleyplay.domain.jobs import Job
-from medleyplay.domain.links import part_locator, recognize_link
+from medleyplay.domain.links import link_of, part_locator, recognize_link
 from medleyplay.persistence.schema import DownloadRow, SourceRow
 from medleyplay.plugin_api import (
     BEST_QUALITY,
@@ -177,6 +177,7 @@ class LinkService:
             raise OfflineError(message)
 
     def _resolve(self, link: str) -> tuple[str, str, VideoDetails]:
+        link = link_of(link)
         kind = recognize_link(link)
         canonical = self._plugins.call(CANONICALIZE, kind, Canonicalize(link=link.strip()))
         # The plugin may have followed a short link; where it ended must be the site too.
