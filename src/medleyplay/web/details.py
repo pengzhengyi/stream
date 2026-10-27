@@ -11,6 +11,7 @@ from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.details import Field as Detail
 from medleyplay.domain.details import Origin, Shown
 from medleyplay.web.deps import DetailsDep, SignedInAccount
+from medleyplay.web.ids import RowId
 
 router = APIRouter(prefix="/api/tracks", tags=["details"])
 
@@ -68,7 +69,7 @@ class HouseholdIn(BaseModel):
 class ManyIn(BaseModel):
     """Household values to set on several Tracks; `null` drops one, so the next origin shows."""
 
-    track_ids: Annotated[list[int], Field(min_length=1, max_length=10_000)]
+    track_ids: Annotated[list[RowId], Field(min_length=1, max_length=10_000)]
     values: dict[str, DetailValue | None] = Field(
         examples=[{"album": "Re:Start", "album_artist": "wowaka"}]
     )
@@ -81,14 +82,14 @@ class ManyOut(BaseModel):
 
 
 @router.get("/{track_id}/details")
-def details(track_id: int, _: SignedInAccount, service: DetailsDep) -> DetailsOut:
+def details(track_id: RowId, _: SignedInAccount, service: DetailsDep) -> DetailsOut:
     """Return the Track's shown values, and what each origin says."""
     return DetailsOut.of(service.details(TrackId(track_id)))
 
 
 @router.put("/{track_id}/details")
 def put_details(
-    track_id: int, body: HouseholdIn, _: SignedInAccount, service: DetailsDep
+    track_id: RowId, body: HouseholdIn, _: SignedInAccount, service: DetailsDep
 ) -> DetailsOut:
     """Make `values` the household's values for the Track, replacing its earlier ones."""
     return DetailsOut.of(service.put_household(TrackId(track_id), body.values))

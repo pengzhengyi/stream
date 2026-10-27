@@ -12,6 +12,7 @@ from medleyplay.web.deps import (
     SessionToken,
     SignedInAccount,
 )
+from medleyplay.web.ids import RowId
 
 router = APIRouter(prefix="/api", tags=["accounts"])
 
@@ -122,7 +123,7 @@ def create_account(body: AccountIn, me: SignedInAccount, accounts: AccountsDep) 
 
 @router.put("/accounts/{account_id}/role")
 def set_role(
-    account_id: int, body: RoleIn, me: SignedInAccount, accounts: AccountsDep
+    account_id: RowId, body: RoleIn, me: SignedInAccount, accounts: AccountsDep
 ) -> AccountOut:
     """Make an Account an admin or a member; admins only. The last admin stays an admin."""
     return AccountOut.of(accounts.set_role(me, AccountId(account_id), body.role))
@@ -130,7 +131,7 @@ def set_role(
 
 @router.delete("/accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_account(
-    account_id: int, me: SignedInAccount, accounts: AccountsDep, linked: LinkedDep
+    account_id: RowId, me: SignedInAccount, accounts: AccountsDep, linked: LinkedDep
 ) -> None:
     """Delete an Account and everything that is its own; admins only. Never the last admin.
 

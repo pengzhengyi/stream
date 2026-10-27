@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from medleyplay.domain.jobs import JobId, JobState, JobView
 from medleyplay.web.deps import JobsDep, SignedInAccount
+from medleyplay.web.ids import RowId
 
 router = APIRouter(prefix="/api", tags=["jobs"])
 
@@ -64,19 +65,19 @@ def list_jobs(_: SignedInAccount, jobs: JobsDep) -> list[JobOut]:
 
 
 @router.get("/jobs/{job_id}")
-def get_job(job_id: int, _: SignedInAccount, jobs: JobsDep) -> JobOut:
+def get_job(job_id: RowId, _: SignedInAccount, jobs: JobsDep) -> JobOut:
     """Return one Job."""
     return JobOut.of(jobs.get_job(JobId(job_id)))
 
 
 @router.post("/jobs/{job_id}/cancel")
-def cancel_job(job_id: int, me: SignedInAccount, jobs: JobsDep) -> JobOut:
+def cancel_job(job_id: RowId, me: SignedInAccount, jobs: JobsDep) -> JobOut:
     """Cancel a Job; the Account that asked for it, or an admin. Cancelling twice is fine."""
     return JobOut.of(jobs.cancel(me, JobId(job_id)))
 
 
 @router.post("/jobs/{job_id}/retry")
-def retry_job(job_id: int, me: SignedInAccount, jobs: JobsDep) -> JobOut:
+def retry_job(job_id: RowId, me: SignedInAccount, jobs: JobsDep) -> JobOut:
     """Submit a failed or cancelled Job again, and return the new Job."""
     retried = jobs.retry(me, JobId(job_id))
     return JobOut.of(jobs.get_job(retried.id))
