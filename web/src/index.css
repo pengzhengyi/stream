@@ -2091,6 +2091,7 @@ dialog.modal::backdrop {
 }
 
 .detail-origin {
+  margin: 0;
   color: var(--muted);
   font-size: 0.75rem;
 }
