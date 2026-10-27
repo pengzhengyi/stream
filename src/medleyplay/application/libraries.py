@@ -15,7 +15,7 @@ from medleyplay.application.jobs import JobKind, JobService
 from medleyplay.application.plugins import PluginService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import SourceState, TrackId
-from medleyplay.domain.details import MAX_NUMBER, Field, Origin, Value
+from medleyplay.domain.details import Field, Origin, Value
 from medleyplay.domain.errors import ForbiddenError, InvalidInputError, NotFoundError
 from medleyplay.domain.jobs import Job
 from medleyplay.domain.libraries import (
@@ -39,6 +39,8 @@ from medleyplay.programs.scan_library import (
 )
 
 SCAN_KIND: Final = "scan_library"
+READER_VERSION: Final = 2
+"""What a scan reads from a file; raised when it reads more, so the next scan reads each again."""
 
 type ScanKind = JobKind[ScanLibrary, LibraryScan]
 
@@ -209,6 +211,7 @@ def apply_scan(db: Session, library_id: LibraryId, scan: LibraryScan, clock: Clo
         else:
             unseen.pop(path_of_locator(source.locator))
             source.locator = library_locator(library_id, file.path)
+            _record_name(db, TrackId(source.track_id), file, now)
             _update(db, source, file, now)
     for path, file in files.items():
         if path in sources and path not in unseen:
@@ -246,6 +249,7 @@ def _add(db: Session, library_id: LibraryId, file: ScannedFile, now: datetime) -
         track_id=track.id, kind=LIBRARY_SOURCE, locator=library_locator(library_id, file.path)
     )
     db.add(source)
+    _record_name(db, TrackId(track.id), file, now)
     _update(db, source, file, now, added=True)
 
 
@@ -254,11 +258,14 @@ def _update(
 ) -> None:
     previous = dict(source.details or {})
     track_id = TrackId(source.track_id)
-    # A moved file is renamed too, so its name is recorded every time.
-    details.record(db, track_id, Origin.FILE_NAME, {Field.TITLE: _title(file)}, now)
     if file.changed:
         source.fingerprint = file.fingerprint
-        source.details = {"size": file.size, "modified_ns": file.modified_ns, "error": file.error}
+        source.details = {
+            "size": file.size,
+            "modified_ns": file.modified_ns,
+            "error": file.error,
+            "reader": READER_VERSION,
+        }
         if file.tags is not None or added:
             _set_details(db, track_id, file, now)
     else:
@@ -280,7 +287,7 @@ def _set_details(db: Session, track_id: TrackId, file: ScannedFile, now: datetim
             Field.ALBUM: tags.album,
             Field.ALBUM_ARTIST: tags.album_artist,
         }
-        if tags.track_number is not None and 1 <= tags.track_number <= MAX_NUMBER:
+        if tags.track_number is not None:
             values[Field.TRACK_NUMBER] = tags.track_number
     details.record(db, track_id, Origin.FILES, values, now)
     track = db.get(TrackRow, track_id)
@@ -288,16 +295,22 @@ def _set_details(db: Session, track_id: TrackId, file: ScannedFile, now: datetim
         track.duration_ms = tags.duration_ms if tags else None
 
 
+def _record_name(db: Session, track_id: TrackId, file: ScannedFile, now: datetime) -> None:
+    # Recorded when a file is added or moved: a file keeps its name otherwise.
+    details.record(db, track_id, Origin.FILE_NAME, {Field.TITLE: _title(file)}, now)
+
+
 def _title(file: ScannedFile) -> str:
     return PurePosixPath(file.path).stem
 
 
 def _known_files(db: Session, library_id: LibraryId) -> dict[str, KnownFile]:
-    # A file whose tags couldn't be read isn't known, so the next scan tries again.
+    # A file whose tags couldn't be read, or that an older reader read, isn't known,
+    # so the next scan reads it again.
     known = {}
     for source in db.scalars(_sources_of(library_id)):
         details = source.details or {}
-        if not details.get("error") and "size" in details:
+        if not details.get("error") and details.get("reader") == READER_VERSION:
             known[path_of_locator(source.locator)] = KnownFile(
                 size=int(str(details["size"])), modified_ns=int(str(details["modified_ns"]))
             )

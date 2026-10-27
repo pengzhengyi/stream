@@ -41,7 +41,9 @@ and lets the household's word win.
 | `genre` | text | Vocaloid |
 | `cover` | a cover's id; see [Covers](#covers) | `9f2c…` |
 
-- **Text** is at most 512 characters, trimmed.
+- **Text** is at most 512 characters, trimmed. The household's value outside these
+  rules is refused; a value read from a file or a site is cut to fit instead, and
+  blank text or a number out of range is no value.
 - **The Track's row keeps the shown value** of each field, so sorting, search,
   smart playlists, and the Albums and Artists views read it as they do now.
 - **A song list,** the songs inside a long file, is kept the same way; see
@@ -71,6 +73,9 @@ values.
   for any of them still wins on its own.
 - **Empty text is a value:** the household can set a field to show nothing, and
   dropping its value shows the next origin's again.
+- **A scan reads a file again** when it changed, or when the medleyplay that last
+  read it read less from a file, so a field the tag reader learns fills in on the
+  next scan.
 - **Every value is a row** of `track_value`: the Track, the field, the origin,
   the value, and when it was recorded. One function writes values and rewrites
   the Track's shown values in the same transaction; the scan, adding a link,

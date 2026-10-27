@@ -15,6 +15,7 @@ from medleyplay.domain.details import (
     Values,
     check_value,
     check_values,
+    found_value,
     shown,
 )
 from medleyplay.domain.errors import InvalidInputError
@@ -124,6 +125,38 @@ def test_values_are_checked_by_their_field_names() -> None:
 def test_a_field_unknown_to_tracks_is_refused() -> None:
     with pytest.raises(InvalidInputError, match="lyrics"):
         check_values({"lyrics": "la la"})
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "kept"),
+    [
+        (Field.TITLE, "  Intro \n", "Intro"),
+        (Field.TITLE, "x" * (MAX_TEXT + 1), "x" * MAX_TEXT),
+        (Field.TITLE, " ", None),
+        (Field.TRACK_NUMBER, 3, 3),
+        (Field.TRACK_NUMBER, 0, None),
+        (Field.YEAR, 99, None),
+    ],
+    ids=[
+        "text is trimmed",
+        "long text is cut",
+        "blank text is no value",
+        "a whole number is kept",
+        "a track number of 0 is no value",
+        "a year of two digits is no value",
+    ],
+)
+def test_a_found_value_is_kept_as_it_can_be_rather_than_refused(
+    field: Field, value: Value, kept: Value | None
+) -> None:
+    assert found_value(field, value) == kept
+
+
+@given(st.sampled_from(Field), st.one_of(st.text(), st.integers()))
+def test_a_found_value_kept_is_one_the_household_could_enter(field: Field, value: Value) -> None:
+    kept = found_value(field, value)
+
+    assert kept is None or check_value(field, kept) == kept
 
 
 _VALUE = st.one_of(st.text(max_size=4), st.integers(min_value=1, max_value=9))

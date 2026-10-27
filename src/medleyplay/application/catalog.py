@@ -95,12 +95,17 @@ class CatalogService:
                 track = TrackRow(title=details.title, duration_ms=details.duration_ms, added_at=now)
                 db.add(track)
                 db.flush()
-                values: dict[Field, Value] = {
+                given: dict[Field, Value | None] = {
                     Field.TITLE: details.title,
                     Field.ARTIST: details.artist,
                     Field.ALBUM: details.album,
                     Field.ALBUM_ARTIST: details.album_artist,
+                    Field.TRACK_NUMBER: details.track_number,
+                    Field.DISC_NUMBER: details.disc_number,
+                    Field.YEAR: details.year,
+                    Field.GENRE: details.genre,
                 }
+                values = {field: value for field, value in given.items() if value is not None}
                 record_details(db, TrackId(track.id), origin, values, now)
                 db.add(
                     SourceRow(

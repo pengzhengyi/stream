@@ -99,11 +99,30 @@ def check_value(field: Field, value: object) -> Value:
     if not isinstance(value, int) or isinstance(value, bool):
         message = f"{field} is a whole number."
         raise InvalidInputError(message)
-    low, high = (MIN_YEAR, MAX_YEAR) if field is Field.YEAR else (1, MAX_NUMBER)
+    low, high = _range_of(field)
     if not low <= value <= high:
         message = f"{field} is from {low} to {high}."
         raise InvalidInputError(message)
     return value
+
+
+def found_value(field: Field, value: Value) -> Value | None:
+    """Return `value`, read from a file or a site, as `field` keeps it, or `None` for no value.
+
+    Such a value is never refused, as the household's is: text is trimmed and cut to
+    `MAX_TEXT` characters, and blank text or a number out of range is no value.
+    """
+    if field in TEXT_FIELDS:
+        text = value.strip()[:MAX_TEXT].strip() if isinstance(value, str) else ""
+        return text or None
+    if not isinstance(value, int) or isinstance(value, bool):
+        return None
+    low, high = _range_of(field)
+    return value if low <= value <= high else None
+
+
+def _range_of(field: Field) -> tuple[int, int]:
+    return (MIN_YEAR, MAX_YEAR) if field is Field.YEAR else (1, MAX_NUMBER)
 
 
 def check_values(values: Mapping[str, object]) -> dict[Field, Value]:

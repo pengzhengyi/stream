@@ -22,6 +22,7 @@ from medleyplay.domain.details import (
     Value,
     check_values,
     field_named,
+    found_value,
     shown,
 )
 from medleyplay.domain.errors import InvalidInputError, NotFoundError
@@ -45,13 +46,15 @@ def record(
 ) -> None:
     """Replace `origin`'s values for the Track with `values`, and rewrite its shown values.
 
-    Empty text is no value from any origin but the household, so it is dropped.
+    Each is kept as `found_value` keeps a value read from a file or a site, so
+    blank text and numbers out of range are dropped.
     """
     if origin is Origin.HOUSEHOLD:
         message = "The household's values are set with set_household."
         raise ValueError(message)
     _require(db, track_id)
-    kept = {field: value for field, value in values.items() if value != ""}
+    found = {field: found_value(field, value) for field, value in values.items()}
+    kept = {field: value for field, value in found.items() if value is not None}
     db.execute(
         delete(TrackValueRow).where(
             TrackValueRow.track_id == track_id, TrackValueRow.origin == origin

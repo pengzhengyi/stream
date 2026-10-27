@@ -1,5 +1,6 @@
 """The details API: what each origin says about a Track, and the household's own values."""
 
+import pytest
 from fastapi.testclient import TestClient
 
 from medleyplay.application.catalog import CatalogService
@@ -73,6 +74,20 @@ def test_a_detail_unknown_to_tracks_is_refused(client: TestClient, catalog: Cata
     track_id = _one_track(catalog)
 
     response = client.put(f"/api/tracks/{track_id}/details", json={"values": {"lyrics": "la"}})
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("value", [True, 3.0])
+def test_a_number_detail_given_as_anything_but_a_whole_number_is_refused(
+    client: TestClient, catalog: CatalogService, value: object
+) -> None:
+    set_up_as_alice(client)
+    track_id = _one_track(catalog)
+
+    response = client.put(
+        f"/api/tracks/{track_id}/details", json={"values": {"track_number": value}}
+    )
 
     assert response.status_code == 422
 

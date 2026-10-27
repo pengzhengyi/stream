@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from typing import Annotated
 
 from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictInt, StrictStr
 
 from medleyplay.application.details import DetailsView
 from medleyplay.domain.catalog import TrackId
@@ -14,7 +14,8 @@ from medleyplay.web.deps import DetailsDep, SignedInAccount
 
 router = APIRouter(prefix="/api/tracks", tags=["details"])
 
-type DetailValue = str | int
+# Strict, so JSON `true` or `3.0` is refused rather than taken as a whole number.
+type DetailValue = StrictStr | StrictInt
 
 
 class ShownOut(BaseModel):

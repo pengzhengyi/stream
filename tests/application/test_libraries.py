@@ -5,13 +5,16 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
+from medleyplay.application.libraries import READER_VERSION
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.errors import ForbiddenError, InvalidInputError
 from medleyplay.domain.jobs import JobState
 from medleyplay.domain.libraries import LibraryKind, LibraryState
+from medleyplay.persistence.schema import SourceRow
 from tests.support.audio import Song, folder_of, zip_of
 from tests.support.factories import NewAccountFactory
 from tests.support.fakes import FakeClock
@@ -161,6 +164,32 @@ def test_a_full_rescan_reads_files_that_look_unchanged(
     libraries.wait_for(full.id, JobState.SUCCEEDED)
 
     assert after_quick == ["Intro", "Outro"]
+    assert _titles(libraries, alice) == ["Intra", "Outro"]
+
+
+def test_a_rescan_reads_again_the_files_an_older_medleyplay_read(
+    libraries: Libraries,
+    household: tuple[Account, Account],
+    tmp_path: Path,
+    units: sessionmaker[Session],
+) -> None:
+    alice, _ = household
+    music = _music(tmp_path)
+    registered = libraries.service.register(alice, "Music", LibraryKind.FOLDER, str(music))
+    assert registered.scan is not None
+    libraries.wait_for(registered.scan.id, JobState.SUCCEEDED)
+    intro = music / "Blue" / "01 Intro.wav"
+    stat = intro.stat()  # "Intra" has as many letters as "Intro", so the size stays
+    folder_of(music, {"Blue/01 Intro.wav": Song("Intra")})
+    os.utime(intro, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+    with units.begin() as db:
+        for source in db.scalars(select(SourceRow)):
+            # What a medleyplay whose tag reader read less wrote for each file.
+            source.details = {**(source.details or {}), "reader": READER_VERSION - 1}
+
+    rescan = libraries.service.scan(alice, registered.library.id)
+    libraries.wait_for(rescan.id, JobState.SUCCEEDED)
+
     assert _titles(libraries, alice) == ["Intra", "Outro"]
 
 

@@ -1,7 +1,7 @@
 """Applying a completed scan to the catalog: new, changed, moved, missing, and offline."""
 
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
 from sqlalchemy import select
@@ -14,7 +14,7 @@ from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.catalog import Availability, TrackId
 from medleyplay.domain.details import Field, Origin
 from medleyplay.domain.libraries import LibraryId, LibraryState
-from medleyplay.persistence.schema import LibraryRow, SourceRow, TrackRow
+from medleyplay.persistence.schema import LibraryRow, SourceRow, TrackRow, TrackValueRow
 from medleyplay.plugin_api import Tags
 from medleyplay.programs.scan_library import LibraryScan, ScannedFile
 from tests.support.factories import ScannedFileFactory
@@ -107,6 +107,14 @@ def test_a_file_without_a_title_is_named_after_its_file(
     assert _catalog(units)["Blue/07 Hidden.wav"].title == "07 Hidden"
 
 
+def test_a_file_whose_title_tag_is_blank_is_named_after_its_file(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId
+) -> None:
+    _scan(units, clock, library, ScannedFileFactory.song("Blue/07 Hidden.wav", "  "))
+
+    assert _catalog(units)["Blue/07 Hidden.wav"].title == "07 Hidden"
+
+
 def test_a_changed_file_updates_its_track_and_an_unchanged_one_keeps_it(
     units: sessionmaker[Session], clock: FakeClock, library: LibraryId
 ) -> None:
@@ -130,6 +138,25 @@ def test_a_changed_file_updates_its_track_and_an_unchanged_one_keeps_it(
 
     assert after["a.wav"] == Seen("ok", "A, retagged", before["a.wav"].track_id)
     assert after["b.wav"] == before["b.wav"]
+
+
+def test_a_rescan_leaves_the_values_of_an_unchanged_file_as_they_were_recorded(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId
+) -> None:
+    _scan(units, clock, library, ScannedFileFactory.song("a.wav", "A"))
+    first = _recorded(units)
+    clock.advance(timedelta(days=1))
+
+    _scan(units, clock, library, ScannedFileFactory.unchanged("a.wav"))
+
+    assert _recorded(units) == first
+
+
+def _recorded(units: sessionmaker[Session]) -> list[tuple[str, str, datetime]]:
+    """Return each value's field, origin, and when it was recorded."""
+    with units() as db:
+        rows = db.scalars(select(TrackValueRow).order_by(TrackValueRow.field))
+        return [(row.field, row.origin, row.recorded_at) for row in rows]
 
 
 def test_a_file_the_scan_did_not_find_is_missing_until_it_returns(
