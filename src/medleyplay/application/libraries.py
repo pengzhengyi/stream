@@ -10,11 +10,12 @@ from typing import Final
 from sqlalchemy import Select, delete, exists, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from medleyplay.application import Clock
+from medleyplay.application import Clock, details
 from medleyplay.application.jobs import JobKind, JobService
 from medleyplay.application.plugins import PluginService
 from medleyplay.domain.accounts import Account
-from medleyplay.domain.catalog import SourceState
+from medleyplay.domain.catalog import SourceState, TrackId
+from medleyplay.domain.details import Field, Origin, Value
 from medleyplay.domain.errors import ForbiddenError, InvalidInputError, NotFoundError
 from medleyplay.domain.jobs import Job
 from medleyplay.domain.libraries import (
@@ -38,6 +39,8 @@ from medleyplay.programs.scan_library import (
 )
 
 SCAN_KIND: Final = "scan_library"
+READER_VERSION: Final = 2
+"""What a scan reads from a file; raised when it reads more, so the next scan reads each again."""
 
 type ScanKind = JobKind[ScanLibrary, LibraryScan]
 
@@ -208,10 +211,11 @@ def apply_scan(db: Session, library_id: LibraryId, scan: LibraryScan, clock: Clo
         else:
             unseen.pop(path_of_locator(source.locator))
             source.locator = library_locator(library_id, file.path)
-            _update(db, source, file)
+            _record_name(db, TrackId(source.track_id), file, now)
+            _update(db, source, file, now)
     for path, file in files.items():
         if path in sources and path not in unseen:
-            _update(db, sources[path], file)
+            _update(db, sources[path], file, now)
     for source in unseen.values():
         source.state = SourceState.MISSING
     library.state = LibraryState.ONLINE
@@ -239,25 +243,31 @@ def _moves(new: Iterable[ScannedFile], unseen: dict[str, SourceRow]) -> dict[str
 
 def _add(db: Session, library_id: LibraryId, file: ScannedFile, now: datetime) -> None:
     track = TrackRow(title=_title(file), added_at=now)
-    _set_details(track, file)
     db.add(track)
     db.flush()
     source = SourceRow(
         track_id=track.id, kind=LIBRARY_SOURCE, locator=library_locator(library_id, file.path)
     )
     db.add(source)
-    _update(db, source, file)
+    _record_name(db, TrackId(track.id), file, now)
+    _update(db, source, file, now, added=True)
 
 
-def _update(db: Session, source: SourceRow, file: ScannedFile) -> None:
+def _update(
+    db: Session, source: SourceRow, file: ScannedFile, now: datetime, *, added: bool = False
+) -> None:
     previous = dict(source.details or {})
+    track_id = TrackId(source.track_id)
     if file.changed:
         source.fingerprint = file.fingerprint
-        source.details = {"size": file.size, "modified_ns": file.modified_ns, "error": file.error}
-        if file.tags is not None:
-            track = db.get(TrackRow, source.track_id)
-            if track is not None:
-                _set_details(track, file)
+        source.details = {
+            "size": file.size,
+            "modified_ns": file.modified_ns,
+            "error": file.error,
+            "reader": READER_VERSION,
+        }
+        if file.tags is not None or added:
+            _set_details(db, track_id, file, now)
     else:
         source.details = {**previous, "size": file.size, "modified_ns": file.modified_ns}
     protected = file.tags is not None and file.tags.protected
@@ -267,13 +277,27 @@ def _update(db: Session, source: SourceRow, file: ScannedFile) -> None:
         source.state = SourceState.OK
 
 
-def _set_details(track: TrackRow, file: ScannedFile) -> None:
+def _set_details(db: Session, track_id: TrackId, file: ScannedFile, now: datetime) -> None:
     tags = file.tags
-    track.title = (tags.title if tags else "") or _title(file)
-    track.artist = tags.artist if tags else ""
-    track.album = tags.album if tags else ""
-    track.album_artist = tags.album_artist if tags else ""
-    track.duration_ms = tags.duration_ms if tags else None
+    values: dict[Field, Value] = {}
+    if tags is not None:
+        values = {
+            Field.TITLE: tags.title,
+            Field.ARTIST: tags.artist,
+            Field.ALBUM: tags.album,
+            Field.ALBUM_ARTIST: tags.album_artist,
+        }
+        if tags.track_number is not None:
+            values[Field.TRACK_NUMBER] = tags.track_number
+    details.record(db, track_id, Origin.FILES, values, now)
+    track = db.get(TrackRow, track_id)
+    if track is not None:
+        track.duration_ms = tags.duration_ms if tags else None
+
+
+def _record_name(db: Session, track_id: TrackId, file: ScannedFile, now: datetime) -> None:
+    # Recorded when a file is added or moved: a file keeps its name otherwise.
+    details.record(db, track_id, Origin.FILE_NAME, {Field.TITLE: _title(file)}, now)
 
 
 def _title(file: ScannedFile) -> str:
@@ -281,11 +305,12 @@ def _title(file: ScannedFile) -> str:
 
 
 def _known_files(db: Session, library_id: LibraryId) -> dict[str, KnownFile]:
-    # A file whose tags couldn't be read isn't known, so the next scan tries again.
+    # A file whose tags couldn't be read, or that an older reader read, isn't known,
+    # so the next scan reads it again.
     known = {}
     for source in db.scalars(_sources_of(library_id)):
         details = source.details or {}
-        if not details.get("error") and "size" in details:
+        if not details.get("error") and details.get("reader") == READER_VERSION:
             known[path_of_locator(source.locator)] = KnownFile(
                 size=int(str(details["size"])), modified_ns=int(str(details["modified_ns"]))
             )

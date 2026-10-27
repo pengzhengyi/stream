@@ -47,6 +47,19 @@ def test_adding_a_source_creates_a_track_with_its_details(
     assert (track.favorite, track.rating, track.play_count) == (False, None, 0)
 
 
+def test_a_new_track_keeps_every_detail_its_source_gives(
+    catalog: CatalogService, accounts: AccountService
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+    details = replace(
+        TrackDetailsFactory.song(), track_number=3, disc_number=1, year=2014, genre="Vocaloid"
+    )
+
+    track_id = catalog.add_track(SourceKeyFactory.bilibili(), details)
+
+    assert catalog.get_track(alice.id, track_id).details == details
+
+
 def test_adding_a_known_source_again_returns_its_track_unchanged(
     catalog: CatalogService, accounts: AccountService
 ) -> None:
