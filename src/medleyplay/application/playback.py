@@ -37,7 +37,7 @@ from medleyplay.domain.errors import (
     PluginCallError,
     PluginUnavailableError,
 )
-from medleyplay.domain.jobs import Job
+from medleyplay.domain.jobs import Job, JobState
 from medleyplay.domain.libraries import (
     LIBRARY_SOURCE,
     LibraryKind,
@@ -299,7 +299,7 @@ class PlaybackService:
             job = self._downloads.start(caller, to_download.source_id)
             if job is None:
                 found.append(Availability.UNAVAILABLE)
-            elif not self._online():
+            elif not self._online() and job.state in {JobState.QUEUED, JobState.WAITING}:
                 found.append(Availability.WAITING_ONLINE)
             else:
                 return Preparing(to_download.source_id, job)

@@ -120,6 +120,8 @@ class _Running:
     thread: threading.Thread | None = None
     held: bool = False
     """Stopped because the Mode went Offline, so it goes back to the queue uncounted."""
+    done: bool = False
+    """Its process has ended, so nothing is left to stop."""
 
     def redact(self, message: str) -> str:
         return redact(message, self.login.lent.text if self.login else None)
@@ -201,7 +203,9 @@ class JobRunner:
         """
         if not self._online():
             with self._lock:
-                held = [job for job in self._running.values() if job.kind.needs_network]
+                held = [
+                    job for job in self._running.values() if job.kind.needs_network and not job.done
+                ]
                 for job in held:
                     job.held = True
             for job in held:
@@ -324,8 +328,13 @@ class JobRunner:
         running = _Running(job_id, kind, work_dir, process, login)
         with self._lock:
             self._running[job_id] = running
+        # The Mode may have gone Offline since the claim, before `follow_mode` could
+        # see this Job: checked after registering, one of the two stops it.
+        if kind.needs_network and not self._online():
+            with self._lock:
+                running.held = True
         # A cancel that landed while the process was starting found nothing to kill.
-        if not self._set_pid(job_id, process.pid):
+        if running.held or not self._set_pid(job_id, process.pid):
             process.kill()
         with contextlib.suppress(ChildExitedError):
             process.send(
@@ -367,6 +376,8 @@ class JobRunner:
 
     def _supervise(self, running: _Running) -> None:
         outcome = self._watch(running)
+        with self._lock:
+            running.done = True
         if isinstance(outcome, JobFinished | JobFailed):
             running.process.finish()
         else:

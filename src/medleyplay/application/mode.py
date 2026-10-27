@@ -256,7 +256,10 @@ class ModeService:
             with self._state:
                 listeners = tuple(self._listeners)
             for listener in listeners:
-                listener()
+                try:
+                    listener()
+                except Exception:  # noqa: BLE001 -- one listener's failure mustn't keep the rest from hearing
+                    _log.exception("A listener to the Mode failed")
 
     def start(self) -> None:
         """Tick on a thread of its own, at once and then as each tick asks."""

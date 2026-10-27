@@ -112,6 +112,19 @@ class TestDeciding:
 
         assert seen == [False]
 
+    def test_a_listener_that_fails_keeps_no_other_from_hearing(
+        self, mode: ModeService, told: list[str]
+    ) -> None:
+        def fail() -> None:
+            raise RuntimeError
+
+        mode.listen(fail)
+        mode.listen(lambda: told.append("after"))
+
+        mode.tick()
+
+        assert told == ["mode", "after"]
+
 
 class TestCheckingTheInternet:
     def test_checks_at_the_first_tick(self, mode: ModeService, internet: FakeInternet) -> None:

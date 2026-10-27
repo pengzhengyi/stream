@@ -536,6 +536,7 @@ def test_going_offline_puts_a_running_network_job_back_without_counting_it(
         job = jobs.submit(EchoJob(text="x", steps=1, fail="hang"))
         jobs.wait_for(job.id, JobState.RUNNING, until=lambda view: view.progress is not None)
         mode.online = False
+        counted_before_stopping = jobs.service.held_count()
         jobs.runner.follow_mode()
         _wait_until_no_job_runs(jobs.runner)
         after = jobs.service.get_job(job.id)
@@ -543,6 +544,7 @@ def test_going_offline_puts_a_running_network_job_back_without_counting_it(
     with units() as db:
         interruptions = db.get_one(JobRow, job.id).interruptions
     assert (after.job.state, after.job.attempts, interruptions) == (JobState.QUEUED, 0, 0)
+    assert counted_before_stopping == 1
 
 
 def test_a_network_failure_asks_for_the_internet_to_be_checked(
@@ -572,3 +574,27 @@ def test_offline_a_held_job_says_it_waits_for_online_and_is_counted(
         online = (jobs.service.get_job(job.id).waits_for_online, jobs.service.held_count())
 
     assert (offline, online) == ((True, 1), (False, 0))
+
+
+def test_a_network_job_whose_launch_outlasts_the_mode_going_offline_is_put_back(
+    units: sessionmaker[Session], clock: FakeClock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mode = OnlineSwitch(online=True)
+    completed: list[str] = []
+    kind = echo_kind(completed, needs_network=True)
+    with running_jobs(units, clock, tmp_path / "jobs", kind=kind, online=mode) as jobs:
+        spawn = jobs.runner._spawn  # noqa: SLF001 -- the Mode changes while the process starts
+
+        def spawn_as_the_mode_goes_offline(work_dir: Path) -> object:
+            mode.online = False
+            jobs.runner.follow_mode()
+            return spawn(work_dir)
+
+        monkeypatch.setattr(jobs.runner, "_spawn", spawn_as_the_mode_goes_offline)
+        job = jobs.submit(EchoJob(text="x"))
+        held = jobs.wait_for(
+            job.id, JobState.QUEUED, until=lambda view: view.job.started_at is not None
+        )
+        _wait_until_no_job_runs(jobs.runner)
+
+    assert (held.job.attempts, completed) == (0, [])

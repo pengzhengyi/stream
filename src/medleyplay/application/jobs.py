@@ -237,12 +237,15 @@ class JobService:
             self._events.publish(job_id)
 
     def held_count(self) -> int:
-        """Return how many Jobs wait for the Mode to be Online; none while it is."""
+        """Return how many Jobs wait for the Mode to be Online; none while it is.
+
+        A running Job that needs the network counts, since going Offline stops it.
+        """
         if self._online():
             return 0
         with self._units() as db:
             held = select(func.count()).where(
-                JobRow.state.in_((JobState.QUEUED, JobState.WAITING)),
+                JobRow.state.in_((JobState.QUEUED, JobState.WAITING, JobState.RUNNING)),
                 JobRow.kind.in_(self._network_kinds()),
             )
             return db.scalar(held) or 0
