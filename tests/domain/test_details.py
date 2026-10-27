@@ -121,7 +121,7 @@ def test_values_are_checked_by_their_field_names() -> None:
     }
 
 
-def test_a_field_a_track_doesnt_have_is_refused() -> None:
+def test_a_field_unknown_to_tracks_is_refused() -> None:
     with pytest.raises(InvalidInputError, match="lyrics"):
         check_values({"lyrics": "la la"})
 

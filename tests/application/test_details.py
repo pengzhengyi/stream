@@ -121,7 +121,7 @@ def test_a_value_a_track_cant_keep_is_refused(
         details.put_household(track_id, values)
 
 
-def test_the_details_of_a_track_that_isnt_there_are_not_found(details: DetailsService) -> None:
+def test_the_details_of_a_missing_track_are_not_found(details: DetailsService) -> None:
     with pytest.raises(NotFoundError):
         details.details(TrackId(999))
 

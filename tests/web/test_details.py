@@ -67,7 +67,7 @@ def test_values_are_set_on_many_tracks_at_once(client: TestClient, catalog: Cata
     assert {t["album"] for t in client.get("/api/tracks").json()} == {"Re:Start"}
 
 
-def test_a_detail_a_track_doesnt_have_is_refused(
+def test_a_detail_unknown_to_tracks_is_refused(
     client: TestClient, catalog: CatalogService
 ) -> None:
     set_up_as_alice(client)
@@ -78,7 +78,7 @@ def test_a_detail_a_track_doesnt_have_is_refused(
     assert response.status_code == 422
 
 
-def test_the_details_of_a_track_that_isnt_there_are_not_found(client: TestClient) -> None:
+def test_the_details_of_a_missing_track_are_not_found(client: TestClient) -> None:
     set_up_as_alice(client)
 
     assert client.get("/api/tracks/999/details").status_code == 404
