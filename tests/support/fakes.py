@@ -1,8 +1,10 @@
-"""Fakes for the core's boundaries: the clock and the Keychain."""
+"""Fakes for the core's boundaries: the clock, the Keychain, and the network."""
 
 from datetime import UTC, datetime, timedelta
 
 from medleyplay.domain.errors import KeychainUnavailableError
+from medleyplay.domain.mode import Network, Unread
+from tests.support.factories import NetworkFactory
 
 
 class FakeClock:
@@ -45,3 +47,25 @@ class MemorySecrets:
         if self.unavailable:
             message = "The Keychain didn't answer within 5 s."
             raise KeychainUnavailableError(message)
+
+
+class FakeNetwork:
+    """The network the server is on, as a test sets it: the home Wi-Fi unless changed."""
+
+    def __init__(self) -> None:
+        self.network: Network | Unread | None = NetworkFactory.home_wifi()
+
+    def __call__(self) -> Network | Unread | None:
+        return self.network
+
+
+class FakeInternet:
+    """Whether the connectivity check reaches the internet, as a test sets it; it counts checks."""
+
+    def __init__(self) -> None:
+        self.reachable = True
+        self.checks = 0
+
+    def __call__(self) -> bool:
+        self.checks += 1
+        return self.reachable

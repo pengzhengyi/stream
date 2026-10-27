@@ -1,8 +1,11 @@
 """Object Mothers: one factory per type the suites build."""
 
+from ipaddress import IPv4Network
+
 from medleyplay.application.accounts import NewAccount
 from medleyplay.domain.accounts import Account, AccountId, Role, Username
 from medleyplay.domain.catalog import SourceKey, TrackDetails
+from medleyplay.domain.mode import Network, NetworkKind
 from medleyplay.plugin_api import Tags
 from medleyplay.programs.scan_library import ScannedFile
 
@@ -76,3 +79,20 @@ class ScannedFileFactory:
     def unchanged(path: str = "Blue/01 Intro.wav") -> ScannedFile:
         """Return a file the scan skipped because it hasn't changed."""
         return ScannedFile(path=path, size=1000, modified_ns=1, changed=False)
+
+
+class NetworkFactory:
+    """Builds the networks the server finds itself on."""
+
+    @staticmethod
+    def home_wifi(router: str | None = "a2:b3:c4:d5:e6:f7") -> Network:
+        """The household's Wi-Fi: router `192.168.31.1`, at `a2:b3:c4:d5:e6:f7`, on a /24.
+
+        With `router=None`, the router's hardware address couldn't be read.
+        """
+        return Network(NetworkKind.WIFI, IPv4Network("192.168.31.0/24"), router)
+
+    @staticmethod
+    def iphone_hotspot() -> Network:
+        """An iPhone's Personal Hotspot: router `172.20.10.1`, on the iPhone's usual /28."""
+        return Network(NetworkKind.WIFI, IPv4Network("172.20.10.0/28"), "02:0f:c4:d5:e6:07")

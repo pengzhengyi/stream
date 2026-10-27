@@ -10,36 +10,53 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
-from medleyplay.application.events import JobEvents
+from medleyplay.application.events import Events
+from medleyplay.application.mode import ModeService
 from medleyplay.domain.jobs import JobState
 from medleyplay.web import events as events_api
 from medleyplay.web.app import create_app
 from medleyplay.web.deps import SESSION_COOKIE, Services
 from tests.conftest import TEST_HOST
 from tests.support.api import set_up_as_alice
-from tests.support.fakes import FakeClock
+from tests.support.fakes import FakeClock, FakeInternet, FakeNetwork
 from tests.support.jobs import Jobs, running_jobs
 from tests.support.programs import EchoJob
 
 
 @pytest.fixture
-def hub() -> JobEvents:
-    return JobEvents()
+def hub() -> Events:
+    return Events()
 
 
 @pytest.fixture
 def running(
-    units: sessionmaker[Session], clock: FakeClock, tmp_path: Path, hub: JobEvents
+    units: sessionmaker[Session], clock: FakeClock, tmp_path: Path, hub: Events
 ) -> Iterator[Jobs]:
     with running_jobs(units, clock, tmp_path / "jobs", events=hub) as jobs:
         yield jobs
 
 
 @pytest.fixture
-def events_client(running: Jobs, services: Services, hub: JobEvents) -> Iterator[TestClient]:
+def hub_mode(
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    network: FakeNetwork,
+    internet: FakeInternet,
+    hub: Events,
+) -> ModeService:
+    """The Mode service, telling the hub of each change as the server's does."""
+    return ModeService(units, clock, probe=network, check=internet, on_change=hub.publish_mode)
+
+
+@pytest.fixture
+def events_client(
+    running: Jobs, services: Services, hub: Events, hub_mode: ModeService
+) -> Iterator[TestClient]:
     plugins = running.runner._plugins  # noqa: SLF001 -- the plugin service the runner uses
     app = create_app(
-        dataclasses.replace(services, plugins=plugins, jobs=running.service, events=hub),
+        dataclasses.replace(
+            services, plugins=plugins, jobs=running.service, events=hub, mode=hub_mode
+        ),
         allowed_hosts=[TEST_HOST],
     )
     with TestClient(app, base_url=f"http://{TEST_HOST}") as client:
@@ -66,6 +83,18 @@ def _job_events(lines: Iterator[str], until_state: str) -> list[dict[str, object
             if heard[-1]["state"] == until_state:
                 return heard
     return heard
+
+
+def _next_mode(lines: Iterator[str]) -> dict[str, object]:
+    """Read the stream until a `mode` event, and return the Mode it carries."""
+    event = None
+    for line in lines:
+        if line.startswith("event: "):
+            event = line.removeprefix("event: ")
+        elif line.startswith("data: ") and event == "mode":
+            body: dict[str, object] = json.loads(line.removeprefix("data: "))
+            return body
+    raise AssertionError
 
 
 def _progress_heard(lines: Iterator[str]) -> None:
@@ -141,3 +170,18 @@ def test_a_busy_stream_ends_when_its_session_does_without_waiting_for_quiet(
 
 def test_events_need_a_signed_in_account(client: TestClient) -> None:
     assert client.get("/api/events").status_code == 401
+
+
+def test_a_browser_hears_the_mode_when_the_stream_opens_and_when_it_changes(
+    events_client: TestClient, hub_mode: ModeService
+) -> None:
+    set_up_as_alice(events_client)
+
+    with events_client.stream("GET", "/api/events") as stream:
+        lines = stream.iter_lines()
+        _ready(lines)
+        opened = _next_mode(lines)
+        hub_mode.tick()
+        changed = _next_mode(lines)
+
+    assert (opened["reason"], changed["reason"]) == ("unreachable", "settling")

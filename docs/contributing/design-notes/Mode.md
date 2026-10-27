@@ -1,12 +1,13 @@
 # Mode
 
 > [!NOTE]
-> **Status: being built (step 6b).** Deciding the Mode and reading the network
-> are built; the settings, the API, and what waits while Offline are not yet.
-> This note describes the Mode: whether medleyplay may contact music sites now,
-> how *Auto* decides, and what waits while Offline. Why there is a Mode is in
-> [Architecture](Architecture.md#online-and-offline); the
-> Downloads it holds are in [Download policy](Download%20policy.md).
+> **Status: being built (step 6b).** Deciding the Mode, reading the network,
+> the settings, the API, and the `mode` event are built; what waits while
+> Offline, and `held_jobs`, are not yet. This note describes the Mode: whether
+> medleyplay may contact music sites now, how *Auto* decides, and what waits
+> while Offline. Why there is a Mode is in
+> [Architecture](Architecture.md#online-and-offline); the Downloads it holds are
+> in [Download policy](Download%20policy.md).
 
 ## Contents
 
@@ -110,11 +111,13 @@ Auto is Online when all of these hold, and Offline when any doesn't:
 ## Settings and the API
 
 - **The Mode has its own settings,** apart from the storage limit, so marking a
-  network doesn't conflict with an edit of the limit: `GET` and `PUT
-  /api/mode/settings` hold `setting` (`auto`, `online`, or `offline`) and the
-  metered networks, at their own revision. `POST /api/mode/metered` marks the
-  network the server is on now, with a name, and `DELETE
-  /api/mode/metered/{id}` removes a mark. Changing them is for admins.
+  network doesn't conflict with an edit of the limit: `GET /api/mode/settings`
+  holds `setting` (`auto`, `online`, or `offline`) and the metered networks,
+  each with its name and subnet, at their own revision, and `PUT` changes the
+  setting at the revision read. `POST /api/mode/metered` marks the network the
+  server is on now, with a name, or renames its mark, and answers 409 for a
+  network the server can't tell apart; `DELETE /api/mode/metered/{id}` removes
+  a mark, and one already gone answers 204 too. Changing them is for admins.
 - **`GET /api/mode`** answers what the Mode is now, for any signed-in Account:
 
   ```json

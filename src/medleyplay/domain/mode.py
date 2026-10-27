@@ -90,7 +90,7 @@ class Network:
     @property
     def hotspot_like(self) -> bool:
         """Return whether the network is on a phone hotspot's usual subnet."""
-        return any(self.subnet.subnet_of(hotspot) for hotspot in HOTSPOT_SUBNETS)
+        return on_hotspot_subnet(self.subnet)
 
 
 @dataclass(frozen=True)
@@ -121,6 +121,11 @@ class Mode:
     wait: timedelta = FIRST_WAIT
     flapped_at: datetime | None = None
     last_metered: bool = False
+
+
+def on_hotspot_subnet(subnet: IPv4Network) -> bool:
+    """Return whether `subnet` is a phone hotspot's usual subnet, or within one."""
+    return any(subnet.subnet_of(hotspot) for hotspot in HOTSPOT_SUBNETS)
 
 
 def starting(setting: ModeSetting, now: datetime) -> Mode:
@@ -207,3 +212,30 @@ def _verdict(
     if network is not None and metered_as is not None:
         return Reason.METERED
     return Reason.ONLINE if facts.reachable else Reason.UNREACHABLE
+
+
+@dataclass(frozen=True)
+class MeteredNetwork:
+    """A network the admin marked metered, with the name they gave it."""
+
+    id: int
+    name: str
+    key: NetworkKey
+
+    @property
+    def hotspot_like(self) -> bool:
+        """Return whether the network is on a phone hotspot's usual subnet."""
+        return on_hotspot_subnet(self.key.subnet)
+
+
+@dataclass(frozen=True)
+class ModeSettings:
+    """The Mode's setting and the metered networks, at the revision read; 0 was never saved."""
+
+    setting: ModeSetting = ModeSetting.AUTO
+    metered: tuple[MeteredNetwork, ...] = ()
+    revision: int = 0
+
+    def names(self) -> dict[NetworkKey, str]:
+        """Return each metered network's name, by what it is known by."""
+        return {network.key: network.name for network in self.metered}

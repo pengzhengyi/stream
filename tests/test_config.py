@@ -1,9 +1,10 @@
-"""The config file: core settings and plugin toggles, and refusing a file that's wrong."""
+"""The config file: core settings, plugin toggles, and the Mode's checks; a wrong one refused."""
 
 from pathlib import Path
 
 import pytest
 
+from medleyplay.application.connectivity import DEFAULT_CHECKS, Check
 from medleyplay.config import Config, ConfigError, PluginConfig, load_config
 
 
@@ -67,6 +68,9 @@ def test_a_file_that_is_not_toml_is_refused_with_its_path(tmp_path: Path) -> Non
         'multiple_accounts = "maybe"',
         "unknown_setting = 1",
         "[plugins.bilibili]\nenable = false",
+        "[mode]\nchecks = []",
+        '[[mode.checks]]\nurl = "ftp://example.org/ok"\nstatus = 200',
+        '[[mode.checks]]\nurl = "http://example.org/ok"\nstatus = 999',
     ],
 )
 def test_a_setting_with_the_wrong_name_or_type_is_refused(tmp_path: Path, text: str) -> None:
@@ -74,3 +78,23 @@ def test_a_setting_with_the_wrong_name_or_type_is_refused(tmp_path: Path, text: 
 
     with pytest.raises(ConfigError, match="has an invalid setting"):
         load_config(path)
+
+
+def test_the_connectivity_checks_are_the_defaults_unless_the_file_names_its_own(
+    tmp_path: Path,
+) -> None:
+    path = _written(
+        tmp_path,
+        """
+        [[mode.checks]]
+        url = "http://router.lan/generate_204"
+        status = 204
+        """,
+    )
+
+    config = load_config(path)
+
+    assert [check.check() for check in Config().mode.checks] == list(DEFAULT_CHECKS)
+    assert [check.check() for check in config.mode.checks] == [
+        Check("http://router.lan/generate_204", 204)
+    ]

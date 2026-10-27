@@ -13,12 +13,13 @@ from sqlalchemy.orm import Session, sessionmaker
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
 from medleyplay.application.downloads import DownloadService, download_source_kind
-from medleyplay.application.events import JobEvents
+from medleyplay.application.events import Events
 from medleyplay.application.job_runner import JobRunner
 from medleyplay.application.jobs import AnyJobKind, JobService
 from medleyplay.application.libraries import LibraryService, scan_library_kind
 from medleyplay.application.linked_accounts import LinkedAccountService
 from medleyplay.application.links import LinkService
+from medleyplay.application.mode import ModeService
 from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.policy import PolicyService
@@ -28,7 +29,7 @@ from medleyplay.application.throttle import SignInThrottle
 from medleyplay.persistence.database import database_url, make_engine, make_sessionmaker, migrate
 from medleyplay.web.app import create_app
 from medleyplay.web.deps import Services
-from tests.support.fakes import FakeClock, MemorySecrets
+from tests.support.fakes import FakeClock, FakeInternet, FakeNetwork, MemorySecrets
 
 TEST_HOST = "testserver"
 
@@ -87,6 +88,35 @@ def settings(units: sessionmaker[Session], clock: FakeClock, changes: list[str])
 @pytest.fixture
 def preferences(units: sessionmaker[Session], clock: FakeClock) -> PreferencesService:
     return PreferencesService(units, clock)
+
+
+@pytest.fixture
+def network() -> FakeNetwork:
+    return FakeNetwork()
+
+
+@pytest.fixture
+def internet() -> FakeInternet:
+    return FakeInternet()
+
+
+@pytest.fixture
+def told() -> list[str]:
+    """What the Mode service has told of: `mode` each time the Mode changed."""
+    return []
+
+
+@pytest.fixture
+def mode(
+    units: sessionmaker[Session],
+    clock: FakeClock,
+    network: FakeNetwork,
+    internet: FakeInternet,
+    told: list[str],
+) -> ModeService:
+    return ModeService(
+        units, clock, probe=network, check=internet, on_change=lambda: told.append("mode")
+    )
 
 
 @pytest.fixture
@@ -195,6 +225,7 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
     settings: SettingsService,
     policy: PolicyService,
     preferences: PreferencesService,
+    mode: ModeService,
 ) -> Services:
     """The services of a server with no plugins on; a suite replaces what it runs for real."""
     return Services(
@@ -206,10 +237,11 @@ def services(  # noqa: PLR0913, PLR0917 -- one argument per service
         playback=playback,
         linked=linked,
         links=links,
-        events=JobEvents(),
+        events=Events(),
         settings=settings,
         policy=policy,
         preferences=preferences,
+        mode=mode,
     )
 
 

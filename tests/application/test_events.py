@@ -1,4 +1,4 @@
-"""Job events reach every subscriber, paced for progress, without a slow one holding anyone up."""
+"""Events reach every subscriber, Job progress paced, without a slow one holding anyone up."""
 
 import asyncio
 import threading
@@ -7,7 +7,9 @@ import pytest
 
 from medleyplay.application.events import (
     MAX_QUEUED,
-    JobEvents,
+    MODE,
+    Event,
+    Events,
     Subscription,
     SubscriptionEndedError,
 )
@@ -24,7 +26,7 @@ class Ticks:
         return self.now
 
 
-async def _drained(subscription: Subscription) -> list[JobId]:
+async def _drained(subscription: Subscription) -> list[Event]:
     """Let published events land, then return what the subscriber has queued."""
     await asyncio.sleep(0.01)
     found = []
@@ -34,9 +36,9 @@ async def _drained(subscription: Subscription) -> list[JobId]:
 
 
 def test_a_change_published_from_another_thread_reaches_every_subscriber() -> None:
-    events = JobEvents()
+    events = Events()
 
-    async def scenario() -> tuple[JobId, JobId]:
+    async def scenario() -> tuple[Event, Event]:
         async with events.subscribe() as first, events.subscribe() as second:
             thread = threading.Thread(target=events.publish, args=(JobId(7),))
             thread.start()
@@ -48,9 +50,9 @@ def test_a_change_published_from_another_thread_reaches_every_subscriber() -> No
 
 def test_progress_is_sent_at_most_four_times_a_second_and_state_always() -> None:
     ticks = Ticks()
-    events = JobEvents(ticks)
+    events = Events(ticks)
 
-    async def scenario() -> list[JobId]:
+    async def scenario() -> list[Event]:
         async with events.subscribe() as subscription:
             events.publish(JobId(1), progress=True)
             ticks.now += 0.1
@@ -65,7 +67,7 @@ def test_progress_is_sent_at_most_four_times_a_second_and_state_always() -> None
 
 def test_a_full_queue_drops_progress_but_ends_on_a_change_of_state() -> None:
     ticks = Ticks()
-    events = JobEvents(ticks)
+    events = Events(ticks)
 
     async def scenario() -> tuple[int, bool, bool]:
         async with events.subscribe() as subscription:
@@ -81,7 +83,7 @@ def test_a_full_queue_drops_progress_but_ends_on_a_change_of_state() -> None:
 
 
 def test_a_subscription_that_ended_raises_for_its_reader() -> None:
-    events = JobEvents()
+    events = Events()
 
     async def scenario() -> None:
         async with events.subscribe() as subscription:
@@ -93,7 +95,7 @@ def test_a_subscription_that_ended_raises_for_its_reader() -> None:
 
 
 def test_a_change_after_the_subscription_closed_reaches_nobody() -> None:
-    events = JobEvents()
+    events = Events()
 
     async def scenario() -> Subscription:
         async with events.subscribe() as subscription:
@@ -105,7 +107,7 @@ def test_a_change_after_the_subscription_closed_reaches_nobody() -> None:
 
 
 def test_a_listener_hears_each_change_of_state_but_not_progress() -> None:
-    events = JobEvents()
+    events = Events()
     heard: list[JobId] = []
     events.listen(heard.append)
 
@@ -114,3 +116,16 @@ def test_a_listener_hears_each_change_of_state_but_not_progress() -> None:
     events.publish(JobId(2))
 
     assert heard == [1, 2]
+
+
+def test_a_change_of_mode_reaches_every_subscriber_and_no_job_listener() -> None:
+    events = Events()
+    heard: list[JobId] = []
+    events.listen(heard.append)
+
+    async def scenario() -> list[Event]:
+        async with events.subscribe() as subscription:
+            events.publish_mode()
+            return await _drained(subscription)
+
+    assert (asyncio.run(scenario()), heard) == ([MODE], [])

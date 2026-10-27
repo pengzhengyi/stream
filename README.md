@@ -71,6 +71,10 @@ enabled = true
 enabled = false
 ```
 
+`[[mode.checks]]` tables, each a `url`, a `status`, and an optional `body`,
+replace the connectivity checks *Auto* uses to tell whether the internet can be
+reached; see the [Mode](docs/contributing/design-notes/Mode.md#auto) note.
+
 > [!TIP]
 > When the macOS firewall is on, other devices can't connect until Python is
 > allowed incoming connections: accept the prompt on first start, or add it in

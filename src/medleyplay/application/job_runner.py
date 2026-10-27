@@ -20,7 +20,7 @@ from sqlalchemy import ColumnElement, or_, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
-from medleyplay.application.events import JobEvents
+from medleyplay.application.events import Events
 from medleyplay.application.jobs import AnyJobKind, to_job
 from medleyplay.application.plugins import PluginService
 from medleyplay.domain.accounts import AccountId
@@ -140,7 +140,7 @@ class JobRunner:
         online: Callable[[], bool] = lambda: True,
         memory_limit: int = JOB_MEMORY_LIMIT,
         logins: Logins | None = None,
-        events: JobEvents | None = None,
+        events: Events | None = None,
     ) -> None:
         """Create a runner keeping Jobs' working folders in `jobs_dir`."""
         self._units = units
