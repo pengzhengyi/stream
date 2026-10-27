@@ -228,7 +228,7 @@ class TestReadingTheNetwork:
 
         assert PING_HOME not in run.ran
 
-    def test_pings_the_router_and_asks_again_when_arp_doesnt_have_it(self) -> None:
+    def test_pings_the_router_and_asks_again_when_arp_lacks_it(self) -> None:
         run = FakeCommands({ORDER: service_order_behind_vpns(), WIFI: wifi_at_home(), CABLE: ""})
 
         read_network(run)
