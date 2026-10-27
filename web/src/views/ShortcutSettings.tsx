@@ -36,7 +36,7 @@ const QUIET: Note = { text: "", refused: false };
 
 const nameOf = (command: Command) => COMMANDS.find((each) => each.command === command)?.name;
 
-/** The Settings section for the keyboard shortcuts. */
+/** What the Settings section for the keyboard shortcuts holds. */
 export function ShortcutSettings() {
   const bindings = useBindings();
   const [recording, setRecording] = useState<Command | undefined>(undefined);
@@ -98,8 +98,7 @@ export function ShortcutSettings() {
   };
 
   return (
-    <section className="settings-section" aria-labelledby="keyboard-shortcuts">
-      <h3 id="keyboard-shortcuts">Keyboard shortcuts</h3>
+    <>
       <p className="hint">Keys for the player, kept with your account.</p>
       <ul className="shortcut-settings">
         {COMMANDS.map(({ command, name }) => {
@@ -174,6 +173,6 @@ export function ShortcutSettings() {
       >
         Reset to defaults
       </button>
-    </section>
+    </>
   );
 }

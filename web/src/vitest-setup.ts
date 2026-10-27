@@ -13,6 +13,8 @@ HTMLMediaElement.prototype.load = () => undefined;
 HTMLMediaElement.prototype.pause = () => undefined;
 HTMLMediaElement.prototype.play = () => Promise.resolve();
 HTMLMediaElement.prototype.canPlayType = () => "maybe";
+// jsdom has no layout, so there is nothing to scroll.
+Element.prototype.scrollIntoView = () => undefined;
 // jsdom dispatches pointer events but can't capture the pointer.
 Element.prototype.setPointerCapture = () => undefined;
 Element.prototype.releasePointerCapture = () => undefined;

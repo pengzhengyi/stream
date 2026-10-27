@@ -1,11 +1,14 @@
 /**
  * @file Settings: how the page looks, its keyboard shortcuts, and the room Downloads may take.
  *
- * Each section saves on its own. The storage limit is the household's, so only
- * an admin changes it; a member sees it and what it holds.
+ * Each section saves on its own, and folds away under its heading; a bar of the
+ * sections' names goes to one, opening it. Which are folded is this browser's
+ * own. The storage limit is the household's, so only an admin changes it; a
+ * member sees it and what it holds.
  */
 
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { CaretDownIcon } from "@phosphor-icons/react";
+import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { ApiError, type Preview, type Settings, type Storage, api } from "../api";
 import { formatBytes } from "../format";
@@ -16,21 +19,152 @@ const GB = 1_000_000_000;
 /** How long after the limit stops changing its preview is asked for. */
 const SETTLE_MS = 300;
 
+/** The sections, in the order the page shows them. */
+const SECTIONS = [
+  { id: "appearance", title: "Appearance" },
+  { id: "keyboard-shortcuts", title: "Keyboard shortcuts" },
+  { id: "storage", title: "Downloads and storage" },
+] as const;
+
+type SectionId = (typeof SECTIONS)[number]["id"];
+
+const FOLDED = "medleyplay.settings.folded.v1";
+
+/** Return the sections this browser last kept folded. */
+function loadFolded(): ReadonlySet<SectionId> {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(FOLDED) ?? "[]");
+    return new Set(
+      SECTIONS.map(({ id }) => id).filter((id) => Array.isArray(saved) && saved.includes(id)),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+function keepFolded(folded: ReadonlySet<SectionId>): void {
+  try {
+    localStorage.setItem(FOLDED, JSON.stringify([...folded]));
+  } catch {
+    // A browser that keeps nothing opens every section next time.
+  }
+}
+
 /** The Settings view; `admin` may change what the household shares. */
 export function SettingsView({ admin }: { readonly admin: boolean }) {
+  const [folded, setFolded] = useState(loadFolded);
+  const fold = (next: ReadonlySet<SectionId>) => {
+    setFolded(next);
+    keepFolded(next);
+  };
+  const toggle = (id: SectionId) => {
+    const next = new Set(folded);
+    if (!next.delete(id)) {
+      next.add(id);
+    }
+    fold(next);
+  };
+  const go = (id: SectionId) => {
+    if (folded.has(id)) {
+      fold(new Set([...folded].filter((each) => each !== id)));
+    }
+    const section = document.getElementById(id);
+    section?.scrollIntoView({ block: "start" });
+    document.getElementById(`${id}-toggle`)?.focus({ preventScroll: true });
+  };
+  const allFolded = folded.size === SECTIONS.length;
+  const contents: Record<SectionId, ReactNode> = {
+    appearance: (
+      <>
+        <p className="hint">Follow this device's light or dark setting, or keep one.</p>
+        <ThemeSwitch />
+      </>
+    ),
+    "keyboard-shortcuts": <ShortcutSettings />,
+    storage: <StorageSettings admin={admin} />,
+  };
   return (
     <>
       <header className="view-heading">
         <h2 className="section">Settings</h2>
       </header>
-      <section className="settings-section" aria-labelledby="appearance">
-        <h3 id="appearance">Appearance</h3>
-        <p className="hint">Follow this device's light or dark setting, or keep one.</p>
-        <ThemeSwitch />
-      </section>
-      <ShortcutSettings />
-      <StorageSection admin={admin} />
+      <nav className="settings-toc" aria-label="Settings sections">
+        <ul>
+          {SECTIONS.map(({ id, title }) => (
+            <li key={id}>
+              <button
+                type="button"
+                className="secondary outline"
+                aria-label={`Go to ${title}`}
+                onClick={() => {
+                  go(id);
+                }}
+              >
+                {title}
+              </button>
+            </li>
+          ))}
+        </ul>
+        <button
+          type="button"
+          className="fold-all"
+          onClick={() => {
+            fold(allFolded ? new Set() : new Set(SECTIONS.map(({ id }) => id)));
+          }}
+        >
+          {allFolded ? "Open all" : "Fold all"}
+        </button>
+      </nav>
+      {SECTIONS.map(({ id, title }) => (
+        <SettingsSection
+          key={id}
+          id={id}
+          title={title}
+          folded={folded.has(id)}
+          onToggle={() => {
+            toggle(id);
+          }}
+        >
+          {contents[id]}
+        </SettingsSection>
+      ))}
     </>
+  );
+}
+
+/** A section whose heading opens and folds it; folded, it keeps what it holds, hidden. */
+function SettingsSection({
+  id,
+  title,
+  folded,
+  onToggle,
+  children,
+}: {
+  readonly id: SectionId;
+  readonly title: string;
+  readonly folded: boolean;
+  readonly onToggle: () => void;
+  readonly children: ReactNode;
+}) {
+  return (
+    <section id={id} className="settings-section" aria-labelledby={`${id}-title`}>
+      <h3 id={`${id}-title`}>
+        <button
+          id={`${id}-toggle`}
+          type="button"
+          className="section-toggle"
+          aria-expanded={!folded}
+          aria-controls={`${id}-body`}
+          onClick={onToggle}
+        >
+          {title}
+          <CaretDownIcon className="caret" weight="bold" aria-hidden />
+        </button>
+      </h3>
+      <div id={`${id}-body`} className="section-body" hidden={folded}>
+        {children}
+      </div>
+    </section>
   );
 }
 
@@ -54,7 +188,8 @@ function bytesOf(draft: Draft): number | null | undefined {
   return draft.gb.trim() === "" || !Number.isFinite(gb) || gb < 0 ? undefined : Math.round(gb * GB);
 }
 
-function StorageSection({ admin }: { readonly admin: boolean }) {
+/** What the Downloads hold, and the storage limit. */
+function StorageSettings({ admin }: { readonly admin: boolean }) {
   const [settings, setSettings] = useState<Settings | undefined>(undefined);
   const [storage, setStorage] = useState<Storage | undefined>(undefined);
   const [draft, setDraft] = useState<Draft>({ unlimited: true, gb: "" });
@@ -133,8 +268,7 @@ function StorageSection({ admin }: { readonly admin: boolean }) {
   };
 
   return (
-    <section className="settings-section" aria-labelledby="storage">
-      <h3 id="storage">Downloads and storage</h3>
+    <>
       {error !== "" && <p role="alert">{error}</p>}
       {storage === undefined || settings === undefined ? (
         error === "" && (
@@ -216,7 +350,7 @@ function StorageSection({ admin }: { readonly admin: boolean }) {
           </p>
         </>
       )}
-    </section>
+    </>
   );
 }
 

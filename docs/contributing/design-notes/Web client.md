@@ -234,6 +234,11 @@ One view, in sections, each saved on its own:
 - **Later sections** come with their features: Mode, linked accounts,
   Libraries, Accounts, and plugins.
 
+Each section folds under its heading, a button that says whether it is open;
+which are folded is kept per browser. A bar of the section names stays under the header as the page scrolls:
+choosing one opens that section, scrolls to it, and moves focus to its heading,
+and its last button folds or opens them all.
+
 ## Layout
 
 | Width | Navigation | Queue |
