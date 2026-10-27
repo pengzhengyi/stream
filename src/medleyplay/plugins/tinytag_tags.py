@@ -7,11 +7,14 @@ from typing import Final, override
 from tinytag import TinyTag, TinyTagException
 
 from medleyplay.plugin_api import TAG_READER, Plugin, ReadTags, Registry, Tags
+from medleyplay.plugins.mp4_length import read_fragmented_length
 
 AUDIO_EXTENSIONS: Final = frozenset(
     {"aif", "aifc", "aiff", "flac", "m4a", "m4b", "mp3", "mp4", "oga", "ogg", "opus", "wav", "wma"}
 )
 """The extensions this plugin reads: tinytag's audio formats, leaving out video."""
+MP4_EXTENSIONS: Final = frozenset({"m4a", "m4b", "mp4"})
+"""The extensions of MP4 files, whose length can also be read from their fragments."""
 PROTECTED_EXTENSION: Final = "m4p"
 
 
@@ -57,9 +60,14 @@ class _Slice(io.RawIOBase):
 class TinytagReader:
     """Reads tags with tinytag; `protected` marks every file it reads as locked."""
 
-    def __init__(self, *, protected: bool = False) -> None:
-        """Create a reader for unprotected files, or with `protected`, for locked ones."""
+    def __init__(self, *, protected: bool = False, mp4: bool = False) -> None:
+        """Create a reader for unprotected files, or with `protected`, for locked ones.
+
+        With `mp4`, a file tinytag finds no length for has its length read from its
+        fragments instead, as in an MP4 file downloaded over DASH.
+        """
         self._protected = protected
+        self._mp4 = mp4
 
     def read_tags(self, request: ReadTags) -> Tags:
         """Read the tags; a file tinytag can't parse has none, rather than failing the call."""
@@ -71,12 +79,15 @@ class TinytagReader:
                 tag = TinyTag.get(file_obj=view)
             except TinyTagException:
                 return Tags(protected=self._protected)
+            duration = tag.duration
+            if self._mp4 and not (duration is not None and duration > 0):
+                duration = read_fragmented_length(view) or duration
         return Tags(
             title=tag.title or "",
             artist=tag.artist or "",
             album=tag.album or "",
             album_artist=tag.albumartist or "",
-            duration_ms=None if tag.duration is None else round(tag.duration * 1000),
+            duration_ms=None if duration is None else round(duration * 1000),
             track_number=tag.track,
             protected=self._protected,
         )
@@ -85,7 +96,7 @@ class TinytagReader:
 def register(registry: Registry) -> None:
     """Add a reader for each audio extension, and one for protected `.m4p` files."""
     for extension in sorted(AUDIO_EXTENSIONS):
-        registry.add(TAG_READER, extension, TinytagReader())
+        registry.add(TAG_READER, extension, TinytagReader(mp4=extension in MP4_EXTENSIONS))
     registry.add(TAG_READER, PROTECTED_EXTENSION, TinytagReader(protected=True))
 
 
