@@ -116,8 +116,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   comes back Online only once that has held for a while; an admin can also set
   it Online or Offline. While Offline, Downloads wait queued, running ones stop
   without counting a try, a Track still to download is *available when online*,
-  links wait, and no Download is removed. `GET /api/mode` and the event stream
-  say which it is and why. See the
+  links wait, and no Download is removed. The header says when medleyplay is
+  Offline and why, and Settings has a Network section to choose the setting and
+  mark networks metered. See the
   [Mode](docs/contributing/design-notes/Mode.md) note.
 
 ### Changed

@@ -2,8 +2,8 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { Settings, Storage } from "../api";
-import { type Routes, serve } from "../testing/server";
+import type { MeteredNetwork, Mode, Settings, Storage } from "../api";
+import { type Routes, modeOf, modeSettingsOf, serve } from "../testing/server";
 import { SettingsView } from "./SettingsView";
 
 const GB = 1_000_000_000;
@@ -25,15 +25,37 @@ const USING_2: Storage = {
   preview: null,
 };
 
-function open(admin: boolean, routes: Routes = {}) {
+function open(
+  admin: boolean,
+  routes: Routes = {},
+  mode: Mode = modeOf(),
+  metered: readonly MeteredNetwork[] = [],
+) {
   const served = serve({
     "GET /api/settings": { body: LIMIT_20 },
     "GET /api/storage": { body: USING_2 },
+    ...modeSettingsOf(mode, metered),
     ...routes,
   });
-  render(<SettingsView admin={admin} />);
+  render(<SettingsView admin={admin} mode={mode} />);
   return served;
 }
+
+/** The server on an iPhone hotspot an admin marked metered, so Offline. */
+const ON_THE_HOTSPOT = modeOf({
+  online: false,
+  reason: "metered",
+  network: { kind: "wifi", metered_as: "iPhone hotspot", hotspot_like: true },
+});
+
+const HOTSPOT_MARK: MeteredNetwork = {
+  id: 1,
+  name: "iPhone hotspot",
+  subnet: "172.20.10.0/28",
+  hotspot_like: true,
+};
+
+const network = () => within(screen.getByRole("region", { name: "Network" }));
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -178,10 +200,88 @@ describe("the Settings sections", () => {
 
     expect(
       screen.getAllByRole("button", { expanded: false }).map((button) => button.textContent),
-    ).toEqual(["Appearance", "Keyboard shortcuts", "Downloads and storage"]);
+    ).toEqual(["Appearance", "Keyboard shortcuts", "Network", "Downloads and storage"]);
 
     await userEvent.click(screen.getByRole("button", { name: "Open all" }));
 
     expect(screen.queryAllByRole("button", { expanded: false })).toEqual([]);
+  });
+});
+
+describe("the Network section", () => {
+  it("says why medleyplay is Offline, and the network the server is on", async () => {
+    open(false, {}, ON_THE_HOTSPOT, [HOTSPOT_MARK]);
+
+    expect(await network().findByText("Offline: on a metered network.")).toBeVisible();
+    expect(network().getByText("On Wi-Fi, marked metered as “iPhone hotspot”.")).toBeVisible();
+  });
+
+  it("says when a settling Mode goes Online, and how many downloads wait", async () => {
+    const settling = modeOf({
+      online: false,
+      reason: "settling",
+      online_at: "2026-10-27T12:00:30Z",
+      held_jobs: 2,
+    });
+
+    open(false, {}, settling);
+
+    expect(await network().findByText(/Goes Online at .+ if nothing changes\./)).toBeVisible();
+    expect(network().getByText("2 downloads wait for Online.")).toBeVisible();
+  });
+
+  it("lets an admin choose the setting, saved at the revision read", async () => {
+    const served = open(true);
+
+    await userEvent.click(await network().findByRole("radio", { name: /^Always Offline/ }));
+
+    expect(network().getByRole("radio", { name: /^Always Offline/ })).toBeChecked();
+    expect(served.calls).toContain("PUT /api/mode/settings");
+  });
+
+  it("shows the setting as it is now when it changed elsewhere", async () => {
+    open(true, {
+      "PUT /api/mode/settings": { status: 409, body: { detail: "Saved since." } },
+    });
+
+    await userEvent.click(await network().findByRole("radio", { name: /^Always Online/ }));
+
+    expect(await network().findByText(/changed elsewhere/)).toBeVisible();
+    expect(network().getByRole("radio", { name: /^Auto/ })).toBeChecked();
+  });
+
+  it("lets an admin mark the network the server is on metered, and remove the mark", async () => {
+    open(true);
+
+    await userEvent.type(
+      await network().findByRole("textbox", { name: /Mark this network/ }),
+      "Office",
+    );
+    await userEvent.click(network().getByRole("button", { name: "Mark metered" }));
+    const removing = await network().findByRole("button", { name: "Remove the mark on Office" });
+    await userEvent.click(removing);
+
+    await waitFor(() => {
+      expect(network().queryByText("Office")).not.toBeInTheDocument();
+    });
+  });
+
+  it("says a network on a phone hotspot's usual subnet looks like one", async () => {
+    const onAHotspot = modeOf({
+      network: { kind: "wifi", metered_as: null, hotspot_like: true },
+    });
+
+    open(true, {}, onAHotspot);
+
+    expect(await network().findByText("This network looks like a phone's hotspot.")).toBeVisible();
+  });
+
+  it("shows a member the setting and the marks, with nothing to change", async () => {
+    open(false, {}, ON_THE_HOTSPOT, [HOTSPOT_MARK]);
+
+    expect(await network().findByText(/^Auto: .+\. An admin changes this\.$/)).toBeVisible();
+    expect(network().getByText("iPhone hotspot")).toBeVisible();
+    expect(network().queryByRole("radio")).not.toBeInTheDocument();
+    expect(network().queryByRole("button", { name: /Remove/ })).not.toBeInTheDocument();
   });
 });

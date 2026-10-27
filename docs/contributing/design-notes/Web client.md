@@ -220,6 +220,12 @@ One view, in sections, each saved on its own:
   switch on the page shows the one chosen.
 - **Keyboard shortcuts:** each command's keys, and changing them; see
   [Keyboard shortcuts](#keyboard-shortcuts).
+- **Network:** whether medleyplay is Online or Offline and why, the network the
+  server is on, and how many downloads wait for Online, from the `mode` event
+  and `GET /api/mode`; the setting and the metered networks, from `GET
+  /api/mode/settings`. An admin chooses the setting, which saves at once, marks
+  the network the server is on metered with a name, and removes a mark; a member
+  sees them. See [Mode](Mode.md#the-web-client).
 - **Downloads and storage:** what the Downloads, prepared copies, and Downloads
   under way use, against the limit or the free disk, and what kept Playlists
   want, from `GET /api/storage`; and the storage limit, from `GET` and `PUT
@@ -231,8 +237,8 @@ One view, in sections, each saved on its own:
   - **A member sees the limit** and what it holds, with nothing to change.
   - **The removal order** has one choice today, so it is said in a sentence
     rather than offered as a menu.
-- **Later sections** come with their features: Mode, linked accounts,
-  Libraries, Accounts, and plugins.
+- **Later sections** come with their features: linked accounts, Libraries,
+  Accounts, and plugins.
 
 Each section folds under its heading, a button that says whether it is open;
 which are folded is kept per browser. A bar of the section names stays under the header as the page scrolls:

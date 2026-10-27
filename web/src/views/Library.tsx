@@ -2,12 +2,13 @@
  * @file The signed-in page: the views, the search, the queue, and the player.
  */
 
-import { KeyboardIcon, SignOutIcon, WaveformIcon } from "@phosphor-icons/react";
+import { CloudSlashIcon, KeyboardIcon, SignOutIcon, WaveformIcon } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { type Account, type Track, api } from "../api";
 import { useLibrary } from "../library/useLibrary";
 import { current, repeatAfter } from "../player/queue";
+import { offlineBecause } from "../mode";
 import { usePlayer } from "../player/usePlayer";
 import { stepVolume } from "../player/volume";
 import { hrefOf, useRoute } from "../routes";
@@ -202,6 +203,18 @@ export function Library({
           </a>
         </h1>
         <SearchBox route={route} providers={library.providers} />
+        {library.mode !== null && !library.mode.online && (
+          <a
+            className="mode-note"
+            href={hrefOf({ view: "settings" })}
+            title="See the network in Settings"
+          >
+            <CloudSlashIcon weight="bold" aria-hidden />
+            <span>
+              Offline<span className="why">: {offlineBecause(library.mode)}</span>
+            </span>
+          </a>
+        )}
         <ThemeSwitch />
         <button
           type="button"
@@ -236,6 +249,7 @@ export function Library({
             playingId={playingId}
             actions={actions}
             admin={account.role === "admin"}
+            mode={library.mode}
           />
         ) : (
           <p className="empty" aria-busy="true">

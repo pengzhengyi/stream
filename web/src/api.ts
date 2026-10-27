@@ -3,7 +3,8 @@
  */
 
 /** Whether a Track can play now, best first. */
-export type Availability = "ok" | "offline" | "unavailable" | "missing" | "cant_play";
+export type Availability =
+  "ok" | "offline" | "waiting_online" | "unavailable" | "missing" | "cant_play";
 
 /** A Track with the signed-in Account's own state. */
 export interface Track {
@@ -66,7 +67,6 @@ export interface Settings {
   readonly revision: number;
 }
 
-/** What a plan at another storage limit would remove. */
 /** An Account's own preferences, and their revision; 0 if never saved. */
 export interface Preferences {
   /** The keyboard shortcuts changed from the page's defaults, or `null` for none. */
@@ -74,6 +74,7 @@ export interface Preferences {
   readonly revision: number;
 }
 
+/** What a plan at another storage limit would remove. */
 export interface Preview {
   readonly removals: readonly {
     readonly kind: "download" | "cache";
@@ -99,6 +100,54 @@ export interface Storage {
   } | null;
   readonly error: string | null;
   readonly preview: Preview | null;
+}
+
+/** What the admin chose: decide from the network, or always Online or Offline. */
+export type ModeSetting = "auto" | "online" | "offline";
+
+/** Why the Mode is what it is. */
+export type ModeReason =
+  | "set_online"
+  | "set_offline"
+  | "online"
+  | "no_network"
+  | "metered"
+  | "unknown_network"
+  | "unreachable"
+  | "settling";
+
+/** Whether medleyplay may contact music sites now, and why. */
+export interface Mode {
+  readonly setting: ModeSetting;
+  readonly online: boolean;
+  readonly reason: ModeReason;
+  /** The network the server is on, or `null` when there is none or it can't be read. */
+  readonly network: {
+    readonly kind: "wifi" | "wired" | "unknown";
+    readonly metered_as: string | null;
+    readonly hotspot_like: boolean;
+  } | null;
+  readonly since: string;
+  readonly checked_at: string | null;
+  /** While settling, when the Mode goes Online if nothing changes. */
+  readonly online_at: string | null;
+  /** How many Jobs wait for Online. */
+  readonly held_jobs: number;
+}
+
+/** A network an admin marked metered. */
+export interface MeteredNetwork {
+  readonly id: number;
+  readonly name: string;
+  readonly subnet: string;
+  readonly hotspot_like: boolean;
+}
+
+/** The Mode's setting and the metered networks, at their revision; 0 if never saved. */
+export interface ModeSettings {
+  readonly setting: ModeSetting;
+  readonly metered: readonly MeteredNetwork[];
+  readonly revision: number;
 }
 
 /** The signed-in Account. */
@@ -185,6 +234,13 @@ export const api = {
       "GET",
       previewLimit === undefined ? "/api/storage" : `/api/storage?limit=${String(previewLimit)}`,
     ),
+  mode: () => call<Mode>("GET", "/api/mode"),
+  modeSettings: () => call<ModeSettings>("GET", "/api/mode/settings"),
+  saveModeSetting: (setting: ModeSetting, revision: number) =>
+    call<ModeSettings>("PUT", "/api/mode/settings", { setting, revision }),
+  /** Mark the network the server is on now metered, as `name`. */
+  markMetered: (name: string) => call<MeteredNetwork>("POST", "/api/mode/metered", { name }),
+  unmarkMetered: (id: number) => call<undefined>("DELETE", `/api/mode/metered/${String(id)}`),
   setFavorite: (trackId: number, favorite: boolean) =>
     call<Track>("PUT", `/api/tracks/${String(trackId)}/favorite`, { favorite }),
   setRating: (trackId: number, rating: number | null) =>

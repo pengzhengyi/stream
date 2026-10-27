@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
-import { ALICE, serve, signedIn, trackOf } from "./testing/server";
+import { ALICE, modeOf, serve, signedIn, trackOf } from "./testing/server";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -17,6 +17,27 @@ describe("App", () => {
 
     expect(await screen.findByRole("button", { name: "Night Drive" })).toBeInTheDocument();
     expect(screen.getByText("Alice")).toBeInTheDocument();
+  });
+
+  it("says in the header when medleyplay is Offline, and why, leading to Settings", async () => {
+    serve({
+      ...signedIn([trackOf(1, "Night Drive")]),
+      "GET /api/mode": { body: modeOf({ online: false, reason: "no_network", network: null }) },
+    });
+
+    render(<App />);
+
+    const note = await screen.findByRole("link", { name: "Offline: no network" });
+    expect(note).toHaveAttribute("href", "#/settings");
+  });
+
+  it("says nothing in the header while medleyplay is Online", async () => {
+    serve(signedIn([trackOf(1, "Night Drive")]));
+
+    render(<App />);
+
+    expect(await screen.findByRole("button", { name: "Night Drive" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^Offline/ })).not.toBeInTheDocument();
   });
 
   it("asks a signed-out browser to sign in, then shows the Library", async () => {
