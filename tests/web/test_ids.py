@@ -33,6 +33,9 @@ PLAY_ID = "00000000-0000-4000-8000-000000000002"
         ("POST", f"/api/libraries/{TOO_LARGE}/scan", None),
         ("DELETE", f"/api/libraries/{TOO_LARGE}", None),
         ("DELETE", f"/api/mode/metered/{TOO_LARGE}", None),
+        ("GET", f"/api/tracks/{TOO_LARGE}/details", None),
+        ("PUT", f"/api/tracks/{TOO_LARGE}/details", {"values": {}}),
+        ("POST", "/api/tracks/details", {"track_ids": [TOO_LARGE], "values": {}}),
     ],
 )
 def test_an_id_too_large_for_the_database_answers_422(
