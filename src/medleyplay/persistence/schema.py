@@ -95,8 +95,26 @@ class TrackRow(Base):
     artist: Mapped[str] = mapped_column(String(512), default="")
     album: Mapped[str] = mapped_column(String(512), default="")
     album_artist: Mapped[str] = mapped_column(String(512), default="")
+    track_number: Mapped[int | None]
+    disc_number: Mapped[int | None]
+    year: Mapped[int | None]
+    genre: Mapped[str] = mapped_column(String(512), default="")
     duration_ms: Mapped[int | None]
     added_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
+class TrackValueRow(Base):
+    """One detail of a Track as one origin gives it; the Track's row holds the value shown."""
+
+    __tablename__ = "track_value"
+
+    track_id: Mapped[int] = mapped_column(
+        ForeignKey("track.id", ondelete="CASCADE"), primary_key=True
+    )
+    field: Mapped[str] = mapped_column(String(32), primary_key=True)
+    origin: Mapped[str] = mapped_column(String(32), primary_key=True)
+    value: Mapped[str | int] = mapped_column(JSON)
+    recorded_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 
 class SourceRow(Base):

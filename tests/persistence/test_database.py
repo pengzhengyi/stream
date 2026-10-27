@@ -115,6 +115,49 @@ def test_migrating_keeps_an_accounts_oldest_smart_playlist_of_favorites_as_its_f
     assert marked == [("Hearts", "favorites")]
 
 
+def test_migrating_records_each_tracks_values_with_the_origin_they_most_likely_had(
+    tmp_path: Path,
+) -> None:
+    engine = make_engine(database_url(tmp_path))
+    _migrate_to(engine, "0011")
+    with engine.begin() as connection:
+        for track_id, title, artist, kind, locator in [
+            (1, "Night Drive", "Blue Room", "library", "1/Albums/01 Intro.flac"),
+            (2, "BV1dm4y1s7ak", "", "library", "2/BV1dm4y1s7ak.m4a"),
+            (3, "Mixtape", "Blue Room", "bilibili", "BV17x411w7KC/p1"),
+        ]:
+            connection.execute(
+                text(
+                    "INSERT INTO track (id, title, artist, album, album_artist, added_at)"
+                    " VALUES (:id, :title, :artist, '', '', '2026-10-01 00:00:00.000000')"
+                ),
+                {"id": track_id, "title": title, "artist": artist},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO source (track_id, kind, locator, state, details)"
+                    " VALUES (:id, :kind, :locator, 'ok', '{}')"
+                ),
+                {"id": track_id, "kind": kind, "locator": locator},
+            )
+
+    migrate(engine)
+
+    with engine.connect() as connection:
+        values = connection.execute(
+            text("SELECT track_id, field, origin, value FROM track_value ORDER BY 1, 2, 3")
+        ).all()
+    engine.dispose()
+    assert [(track, field, origin, json.loads(value)) for track, field, origin, value in values] == [
+        (1, "artist", "files", "Blue Room"),
+        (1, "title", "file_name", "01 Intro"),
+        (1, "title", "files", "Night Drive"),
+        (2, "title", "file_name", "BV1dm4y1s7ak"),
+        (3, "artist", "video", "Blue Room"),
+        (3, "title", "video", "Mixtape"),
+    ]
+
+
 _FAVORITE = {"field": "favorite", "op": "is", "value": True}
 
 
