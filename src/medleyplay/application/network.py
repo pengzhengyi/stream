@@ -107,8 +107,8 @@ def parse_arp(output: str) -> str | None:
 def read_network(run: Commands) -> Network | Unread | None:
     """Return the network the server is on, `None` for none, or `UNREAD` if it can't be told.
 
-    The router is pinged once first, since it is on the local network, so the ARP
-    cache holds its address after a wake or a join.
+    When the ARP cache doesn't hold the router, as after a wake or a join, the
+    router is pinged once, since it is on the local network, and asked again.
     """
     order = run(["networksetup", "-listnetworkserviceorder"])
     if order is None:
@@ -123,10 +123,17 @@ def read_network(run: Commands) -> Network | Unread | None:
         info = parse_service_info(output)
         if info is None:
             continue
-        run(["ping", "-c", "1", "-t", "1", info.router])
-        arp = run(["arp", "-n", info.router])
-        return Network(service.kind, info.subnet, None if arp is None else parse_arp(arp))
+        router = _router_address(run, info.router)
+        if router is None:
+            run(["ping", "-c", "1", "-t", "1", info.router])
+            router = _router_address(run, info.router)
+        return Network(service.kind, info.subnet, router)
     return None
+
+
+def _router_address(run: Commands, router: str) -> str | None:
+    arp = run(["arp", "-n", router])
+    return None if arp is None else parse_arp(arp)
 
 
 def run_command(args: Sequence[str]) -> str | None:

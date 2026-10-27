@@ -53,8 +53,8 @@ Auto is Online when all of these hold, and Offline when any doesn't:
 - **A network is known by its router's hardware address and subnet.** macOS 15
   hides the Wi-Fi name from a process without Location access, and asking for
   that access from a server is out of place. The router's address comes from
-  `arp -n`, after one `ping` to the router, which is on the local network, so
-  the cache holds it after a wake or a join.
+  `arp -n`; when the cache doesn't hold it, as after a wake or a join, one
+  `ping` to the router, which is on the local network, puts it there.
 - **Marking a network metered** keeps the network the server is on now, with a
   name the admin gives, such as *iPhone hotspot*; the server reads which network
   that is, so the client never sends an address. A network on a phone hotspot's

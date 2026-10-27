@@ -214,12 +214,26 @@ class TestReadingTheNetwork:
             NetworkKind.WIFI, IPv4Network("192.168.31.0/24"), "a2:b3:c4:d5:e6:f7"
         )
 
-    def test_pings_the_router_before_reading_its_address(self) -> None:
+    def test_reads_the_routers_address_without_a_ping_when_arp_has_it(self) -> None:
+        run = FakeCommands(
+            {
+                ORDER: service_order_behind_vpns(),
+                CABLE: "",
+                WIFI: wifi_at_home(),
+                ARP_HOME: home_router_arp(),
+            }
+        )
+
+        read_network(run)
+
+        assert PING_HOME not in run.ran
+
+    def test_pings_the_router_and_asks_again_when_arp_doesnt_have_it(self) -> None:
         run = FakeCommands({ORDER: service_order_behind_vpns(), WIFI: wifi_at_home(), CABLE: ""})
 
         read_network(run)
 
-        assert run.ran[-2:] == [PING_HOME, ARP_HOME]
+        assert run.ran[-3:] == [ARP_HOME, PING_HOME, ARP_HOME]
 
     def test_keeps_the_network_without_its_routers_address_when_arp_has_none(self) -> None:
         run = FakeCommands({ORDER: service_order_behind_vpns(), CABLE: "", WIFI: wifi_at_home()})
