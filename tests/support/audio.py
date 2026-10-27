@@ -52,17 +52,19 @@ def folder_of(root: Path, songs: Mapping[str, Song]) -> Path:
 
 
 def zip_of(
-    archive: Path, songs: Mapping[str, Song], *, compressed: frozenset[str] = frozenset()
+    archive: Path, songs: Mapping[str, Song | bytes], *, compressed: frozenset[str] = frozenset()
 ) -> Path:
     """Write a zip archive holding each song at its path; return the archive.
 
-    Members in `compressed` are deflated; the rest are stored uncompressed.
+    A song is written as a WAV file, and bytes as they are. Members in `compressed`
+    are deflated; the rest are stored uncompressed.
     """
     archive.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(archive, "w") as zip_file:
         for path, song in songs.items():
             method = zipfile.ZIP_DEFLATED if path in compressed else zipfile.ZIP_STORED
-            zip_file.writestr(zipfile.ZipInfo(path), wav_bytes(song), compress_type=method)
+            content = song if isinstance(song, bytes) else wav_bytes(song)
+            zip_file.writestr(zipfile.ZipInfo(path), content, compress_type=method)
     return archive
 
 
