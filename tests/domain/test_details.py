@@ -49,7 +49,7 @@ def test_a_field_no_origin_has_is_absent() -> None:
 
 
 def test_the_album_fields_come_from_the_first_origin_naming_an_album() -> None:
-    values = {
+    values: dict[Origin, Values] = {
         Origin.FILES: {Field.TRACK_NUMBER: 7},
         Origin.VIDEO: {Field.ALBUM: "Re:Start", Field.YEAR: 2016, Field.TRACK_NUMBER: 2},
     }
@@ -62,7 +62,7 @@ def test_the_album_fields_come_from_the_first_origin_naming_an_album() -> None:
 
 
 def test_the_households_album_field_still_wins_on_its_own() -> None:
-    values = {
+    values: dict[Origin, Values] = {
         Origin.VIDEO: {Field.ALBUM: "Re:Start", Field.YEAR: 2016},
         Origin.HOUSEHOLD: {Field.YEAR: 2017},
     }

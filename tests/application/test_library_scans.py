@@ -8,9 +8,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.catalog import CatalogService
+from medleyplay.application.details import DetailsService
 from medleyplay.application.libraries import apply_scan
 from medleyplay.domain.accounts import AccountId
-from medleyplay.domain.catalog import Availability
+from medleyplay.domain.catalog import Availability, TrackId
+from medleyplay.domain.details import Field, Origin
 from medleyplay.domain.libraries import LibraryId, LibraryState
 from medleyplay.persistence.schema import LibraryRow, SourceRow, TrackRow
 from medleyplay.plugin_api import Tags
@@ -159,6 +161,31 @@ def test_a_moved_file_keeps_its_track(
     catalog = _catalog(units)
 
     assert catalog == {"new/a.wav": Seen("ok", "Intro", track_id)}
+
+
+def test_a_moved_file_without_a_title_is_named_after_its_new_name(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId
+) -> None:
+    untitled = ScannedFileFactory.song("old/BV1dm4y1s7ak.m4a", fingerprint="f1")
+    _scan(units, clock, library, untitled.model_copy(update={"tags": Tags()}))
+
+    _scan(units, clock, library, ScannedFileFactory.unchanged("new/Re-Start.m4a"))
+
+    assert _catalog(units)["new/Re-Start.m4a"].title == "Re-Start"
+
+
+def test_the_households_values_outlast_a_rescan_of_a_changed_file(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId
+) -> None:
+    _scan(units, clock, library, ScannedFileFactory.song("a.wav", "Intro"))
+    track_id = TrackId(_catalog(units)["a.wav"].track_id)
+    DetailsService(units, clock).put_household(track_id, {"title": "Night Drive"})
+
+    _scan(units, clock, library, ScannedFileFactory.song("a.wav", "Intro (Remaster)"))
+
+    details = DetailsService(units, clock).details(track_id)
+    assert _catalog(units)["a.wav"].title == "Night Drive"
+    assert details.values[Origin.FILES][Field.TITLE] == "Intro (Remaster)"
 
 
 def test_a_move_matched_by_two_new_files_is_no_move(

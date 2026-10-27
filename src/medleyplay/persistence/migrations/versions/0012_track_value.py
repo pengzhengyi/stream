@@ -99,9 +99,7 @@ def _record_todays_values() -> None:
                 origin = "file_name"
             else:
                 origin = "files"
-            rows.append(
-                {"track_id": track["id"], "field": field, "origin": origin, "value": value}
-            )
+            rows.append({"track_id": track["id"], "field": field, "origin": origin, "value": value})
     for row in rows:
         connection.execute(
             sa.text(

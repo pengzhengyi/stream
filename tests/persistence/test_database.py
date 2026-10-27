@@ -148,7 +148,9 @@ def test_migrating_records_each_tracks_values_with_the_origin_they_most_likely_h
             text("SELECT track_id, field, origin, value FROM track_value ORDER BY 1, 2, 3")
         ).all()
     engine.dispose()
-    assert [(track, field, origin, json.loads(value)) for track, field, origin, value in values] == [
+    assert [
+        (track, field, origin, json.loads(value)) for track, field, origin, value in values
+    ] == [
         (1, "artist", "files", "Blue Room"),
         (1, "title", "file_name", "01 Intro"),
         (1, "title", "files", "Night Drive"),

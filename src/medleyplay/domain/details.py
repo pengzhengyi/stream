@@ -108,15 +108,18 @@ def check_value(field: Field, value: object) -> Value:
 
 def check_values(values: Mapping[str, object]) -> dict[Field, Value]:
     """Return every value checked, keyed by its field; an unknown field is refused."""
-    checked: dict[Field, Value] = {}
-    for name, value in values.items():
-        try:
-            field = Field(name)
-        except ValueError:
-            message = f"A Track has no detail {name!r}."
-            raise InvalidInputError(message) from None
-        checked[field] = check_value(field, value)
-    return checked
+    return {
+        field_named(name): check_value(field_named(name), value) for name, value in values.items()
+    }
+
+
+def field_named(name: str) -> Field:
+    """Return the field called `name`, or raise `InvalidInputError` for one a Track lacks."""
+    try:
+        return Field(name)
+    except ValueError:
+        message = f"A Track has no detail {name!r}."
+        raise InvalidInputError(message) from None
 
 
 def shown(values: Mapping[Origin, Values]) -> dict[Field, Shown]:
