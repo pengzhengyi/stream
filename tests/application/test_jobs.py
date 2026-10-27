@@ -23,7 +23,7 @@ from medleyplay.persistence.schema import JobRow
 from medleyplay.plugin_host.process import HostCommand
 from tests.support.echo import Say
 from tests.support.factories import NewAccountFactory
-from tests.support.fakes import FakeClock
+from tests.support.fakes import FakeClock, OnlineSwitch
 from tests.support.jobs import running_jobs
 from tests.support.programs import EchoJob, echo_kind
 
@@ -497,3 +497,104 @@ def test_a_job_whose_process_cannot_start_fails(
         runner.stop()
 
     assert service.get_job(job.id).job.failure_message.startswith("Its process didn't start:")
+
+
+def test_offline_a_job_that_needs_the_network_waits_queued_and_runs_once_online(
+    units: sessionmaker[Session], clock: FakeClock, tmp_path: Path
+) -> None:
+    mode = OnlineSwitch(online=False)
+    kind = echo_kind([], needs_network=True)
+    with running_jobs(units, clock, tmp_path / "jobs", kind=kind, online=mode) as jobs:
+        job = jobs.submit(EchoJob(text="x"))
+        time.sleep(0.5)
+        held = jobs.service.get_job(job.id)
+        mode.online = True
+        jobs.runner.follow_mode()
+        done = jobs.wait_for(job.id, JobState.SUCCEEDED)
+
+    assert (held.job.state, held.job.started_at) == (JobState.QUEUED, None)
+    assert done.job.attempts == 0
+
+
+def test_offline_a_job_that_needs_no_network_runs(
+    units: sessionmaker[Session], clock: FakeClock, tmp_path: Path
+) -> None:
+    with running_jobs(units, clock, tmp_path / "jobs", online=OnlineSwitch(online=False)) as jobs:
+        job = jobs.submit(EchoJob(text="x"))
+
+        done = jobs.wait_for(job.id, JobState.SUCCEEDED)
+
+    assert done.job.state is JobState.SUCCEEDED
+
+
+def test_going_offline_puts_a_running_network_job_back_without_counting_it(
+    units: sessionmaker[Session], clock: FakeClock, tmp_path: Path
+) -> None:
+    mode = OnlineSwitch(online=True)
+    kind = echo_kind([], needs_network=True)
+    with running_jobs(units, clock, tmp_path / "jobs", kind=kind, online=mode) as jobs:
+        job = jobs.submit(EchoJob(text="x", steps=1, fail="hang"))
+        jobs.wait_for(job.id, JobState.RUNNING, until=lambda view: view.progress is not None)
+        mode.online = False
+        counted_before_stopping = jobs.service.held_count()
+        jobs.runner.follow_mode()
+        _wait_until_no_job_runs(jobs.runner)
+        after = jobs.service.get_job(job.id)
+
+    with units() as db:
+        interruptions = db.get_one(JobRow, job.id).interruptions
+    assert (after.job.state, after.job.attempts, interruptions) == (JobState.QUEUED, 0, 0)
+    assert counted_before_stopping == 1
+
+
+def test_a_network_failure_asks_for_the_internet_to_be_checked(
+    units: sessionmaker[Session], clock: FakeClock, tmp_path: Path
+) -> None:
+    asked: list[str] = []
+    request = EchoJob(text="x", say=Say(text="offline", raises="network"))
+    with running_jobs(
+        units, clock, tmp_path / "jobs", network_failed=lambda: asked.append("check")
+    ) as jobs:
+        job = jobs.submit(request)
+        jobs.wait_for(job.id, JobState.WAITING)
+
+    assert asked == ["check"]
+
+
+def test_offline_a_held_job_says_it_waits_for_online_and_is_counted(
+    units: sessionmaker[Session], clock: FakeClock, tmp_path: Path
+) -> None:
+    mode = OnlineSwitch(online=False)
+    kind = echo_kind([], needs_network=True)
+    with running_jobs(units, clock, tmp_path / "jobs", kind=kind, online=mode, start=False) as jobs:
+        job = jobs.submit(EchoJob(text="x"))
+
+        offline = (jobs.service.get_job(job.id).waits_for_online, jobs.service.held_count())
+        mode.online = True
+        online = (jobs.service.get_job(job.id).waits_for_online, jobs.service.held_count())
+
+    assert (offline, online) == ((True, 1), (False, 0))
+
+
+def test_a_network_job_whose_launch_outlasts_the_mode_going_offline_is_put_back(
+    units: sessionmaker[Session], clock: FakeClock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mode = OnlineSwitch(online=True)
+    completed: list[str] = []
+    kind = echo_kind(completed, needs_network=True)
+    with running_jobs(units, clock, tmp_path / "jobs", kind=kind, online=mode) as jobs:
+        spawn = jobs.runner._spawn  # noqa: SLF001 -- the Mode changes while the process starts
+
+        def spawn_as_the_mode_goes_offline(work_dir: Path) -> object:
+            mode.online = False
+            jobs.runner.follow_mode()
+            return spawn(work_dir)
+
+        monkeypatch.setattr(jobs.runner, "_spawn", spawn_as_the_mode_goes_offline)
+        job = jobs.submit(EchoJob(text="x"))
+        held = jobs.wait_for(
+            job.id, JobState.QUEUED, until=lambda view: view.job.started_at is not None
+        )
+        _wait_until_no_job_runs(jobs.runner)
+
+    assert (held.job.attempts, completed) == (0, [])

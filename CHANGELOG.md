@@ -110,6 +110,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   within the last day, nor the only copy of a video gone from the site.
   `GET /api/storage` shows the space in use and previews another limit. See the
   [Download policy](docs/contributing/design-notes/Download%20policy.md) note.
+- **Online and Offline** — medleyplay contacts music sites only while Online.
+  *Auto*, the default, is Offline with no network, on a network an admin marked
+  metered, such as a phone hotspot, or when the internet can't be reached, and
+  comes back Online only once that has held for a while; an admin can also set
+  it Online or Offline. While Offline, Downloads wait queued, running ones stop
+  without counting a try, a Track still to download is *available when online*,
+  links wait, and no Download is removed. `GET /api/mode` and the event stream
+  say which it is and why. See the
+  [Mode](docs/contributing/design-notes/Mode.md) note.
 
 ### Changed
 

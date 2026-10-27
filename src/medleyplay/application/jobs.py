@@ -10,7 +10,7 @@ from datetime import timedelta
 from typing import Any, Final, Generic, Protocol, TypeVar
 
 from pydantic import BaseModel
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -50,6 +50,7 @@ class JobKind(Generic[I, R]):  # noqa: UP046 -- invariant, so `submit` checks it
     idle_timeout: timedelta = IDLE_TIMEOUT
     max_attempts: int = MAX_ATTEMPTS
     login_site: str | None = None
+    needs_network: bool = False
 
 
 # Any: each kind has its own request and result models.
@@ -90,14 +91,17 @@ class JobService:
         kinds: Mapping[str, AnyJobKind],
         runner: Runner,
         events: Events | None = None,
+        online: Callable[[], bool] = lambda: True,
     ) -> None:
         """Create a service over the database `units` open, for Jobs of `kinds`.
 
-        Each change it makes is published to `events`.
+        Each change it makes is published to `events`; `online` says whether the
+        Mode is Online, so a view says when a Job waits for it.
         """
         self._units = units
         self._clock = clock
         self._kinds = kinds
+        self._online = online
         self._runner = runner
         self._events = events
 
@@ -232,9 +236,33 @@ class JobService:
         if self._events is not None:
             self._events.publish(job_id)
 
+    def held_count(self) -> int:
+        """Return how many Jobs wait for the Mode to be Online; none while it is.
+
+        A running Job that needs the network counts, since going Offline stops it.
+        """
+        if self._online():
+            return 0
+        with self._units() as db:
+            held = select(func.count()).where(
+                JobRow.state.in_((JobState.QUEUED, JobState.WAITING, JobState.RUNNING)),
+                JobRow.kind.in_(self._network_kinds()),
+            )
+            return db.scalar(held) or 0
+
+    def _network_kinds(self) -> tuple[str, ...]:
+        return tuple(name for name, kind in self._kinds.items() if kind.needs_network)
+
     def _view(self, job: Job) -> JobView:
         progress = self._runner.progress(job.id) if job.state == JobState.RUNNING else None
-        return JobView(job, progress)
+        kind = self._kinds.get(job.kind)
+        waits = (
+            job.state in {JobState.QUEUED, JobState.WAITING}
+            and kind is not None
+            and kind.needs_network
+            and not self._online()
+        )
+        return JobView(job, progress, waits_for_online=waits)
 
 
 def to_job(row: JobRow) -> Job:

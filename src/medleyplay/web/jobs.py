@@ -33,6 +33,8 @@ class JobOut(BaseModel):
     started_at: datetime | None
     finished_at: datetime | None
     progress: ProgressOut | None
+    waits_for_online: bool
+    """It needs the network, and waits while the Mode is Offline."""
 
     @classmethod
     def of(cls, view: JobView) -> "JobOut":
@@ -51,6 +53,7 @@ class JobOut(BaseModel):
             started_at=job.started_at,
             finished_at=job.finished_at,
             progress=None if progress is None else ProgressOut(**vars(progress)),
+            waits_for_online=view.waits_for_online,
         )
 
 

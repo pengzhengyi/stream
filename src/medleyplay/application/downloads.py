@@ -85,6 +85,7 @@ def download_source_kind(data_dir: Path, jobs_dir: Path, clock: Clock) -> Downlo
         complete=complete,
         points=(SOURCE_DOWNLOADER.name,),
         login_site=BILIBILI_SOURCE,
+        needs_network=True,
     )
 
 

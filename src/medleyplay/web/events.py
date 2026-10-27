@@ -49,7 +49,7 @@ async def stream_events(
     loop = asyncio.get_running_loop()
     async with events.subscribe() as subscription:
         yield ServerSentEvent(event="ready", data={})
-        yield ServerSentEvent(data=ModeOut.of(mode.now()), event="mode")
+        yield ServerSentEvent(data=await _mode_out(mode, jobs), event="mode")
         checked = loop.time()
         while True:
             event: Event | None
@@ -65,10 +65,14 @@ async def stream_events(
                     return
                 checked = loop.time()
             if event == MODE:
-                yield ServerSentEvent(data=ModeOut.of(mode.now()), event="mode")
+                yield ServerSentEvent(data=await _mode_out(mode, jobs), event="mode")
             elif event is not None:
                 view = await run_in_threadpool(jobs.get_job, event)
                 yield ServerSentEvent(data=JobOut.of(view), event="job")
+
+
+async def _mode_out(mode: ModeDep, jobs: JobsDep) -> ModeOut:
+    return ModeOut.of(mode.now(), await run_in_threadpool(jobs.held_count))
 
 
 def _still_signed_in(accounts: AccountsDep, token: str | None) -> bool:

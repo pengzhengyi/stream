@@ -143,8 +143,8 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
 
     `kinds` are the Job kinds the server runs; Jobs keep their working folders in
     `jobs` in the data folder. Logins are kept in `secrets`, by default the Keychain.
-    Every change the download policy depends on, and every Job's change of state,
-    asks it to evaluate.
+    Every change the download policy depends on, every Job's change of state, and
+    every change of the Mode asks it to evaluate; the services follow the Mode.
     """
     units = make_sessionmaker(engine)
     changes = Changes()
@@ -166,6 +166,10 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
     }
     processes = JobProcesses(source.command, source.package)
     events = Events()
+    checks = tuple(check.check() for check in config.mode.checks)
+    mode = ModeService(
+        units, clock, probe=probe_network, check=functools.partial(reachable, checks)
+    )
     runner = JobRunner(
         units,
         clock,
@@ -173,25 +177,23 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         plugins,
         data_dir / JOBS_FOLDER,
         processes=processes,
+        online=mode.online,
         logins=linked,
         events=events,
+        network_failed=mode.check_soon,
     )
-    jobs = JobService(units, clock, job_kinds, runner, events)
-    catalog = CatalogService(units, clock, changes.tell)
+    jobs = JobService(units, clock, job_kinds, runner, events, mode.online)
+    catalog = CatalogService(units, clock, changes.tell, mode.online)
     # A database from before built-in Playlists, or a restored one, gains them now.
     catalog.ensure_builtin_playlists()
     downloads = DownloadService(units, plugins, jobs, download, linked, data_dir, clock)
-    policy = PolicyService(units, clock, downloads, plugins, data_dir)
+    policy = PolicyService(units, clock, downloads, plugins, data_dir, online=mode.online)
     changes.listen(policy.request)
     events.listen(policy.request)
-    checks = tuple(check.check() for check in config.mode.checks)
-    mode = ModeService(
-        units,
-        clock,
-        probe=probe_network,
-        check=functools.partial(reachable, checks),
-        on_change=events.publish_mode,
-    )
+    # Each change of the Mode reaches the open browsers, the runner, and the policy.
+    mode.listen(events.publish_mode)
+    mode.listen(runner.follow_mode)
+    mode.listen(policy.request)
     return Services(
         accounts=AccountService(
             units,
@@ -205,9 +207,9 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         plugins=plugins,
         jobs=jobs,
         libraries=LibraryService(units, clock, plugins, jobs, scan, data_dir),
-        playback=PlaybackService(units, plugins, jobs, cache, data_dir, downloads),
+        playback=PlaybackService(units, plugins, jobs, cache, data_dir, downloads, mode.online),
         linked=linked,
-        links=LinkService(units, clock, plugins, catalog, downloads),
+        links=LinkService(units, clock, plugins, catalog, downloads, mode.online),
         events=events,
         settings=SettingsService(units, clock, changes.tell),
         policy=policy,

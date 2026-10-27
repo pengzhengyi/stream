@@ -368,3 +368,20 @@ def test_the_policy_never_downloads_a_source_already_downloaded(site: Site, alic
     _finished(site, added)
 
     assert site.downloads.start_for(alice.id, added.source_id) is None
+
+
+def test_offline_a_track_to_download_waits_for_online_and_its_download_waits_queued(
+    site: Site, alice: Account
+) -> None:
+    added = _added(site, alice, "BV1Xx41117Tz")
+    _finished(site, added)
+    (site.data_dir / "downloads" / f"{added.source_id}.m4a").unlink()
+    site.online.online = False
+
+    played = site.playback.play(alice, added.track_id)
+    job = site.jobs.active(site.download_kind.name, download_target(added.source_id))
+
+    assert played == Unplayable(Availability.WAITING_ONLINE)
+    assert job is not None
+    held = site.jobs.get_job(job.id)
+    assert (held.job.state, held.waits_for_online) == (JobState.QUEUED, True)

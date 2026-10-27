@@ -67,8 +67,13 @@ def running_jobs(  # noqa: PLR0913 -- the database and clock, then settings with
     idle_timeout: timedelta = timedelta(seconds=20),
     kind: JobKind[EchoJob, Echoed] | None = None,
     events: Events | None = None,
+    online: Callable[[], bool] = lambda: True,
+    network_failed: Callable[[], None] | None = None,
 ) -> Iterator[Jobs]:
-    """Run Jobs of the `echo` kind with the test plugin `parrot` on, and stop them afterwards."""
+    """Run Jobs of the `echo` kind with the test plugin `parrot` on, and stop them afterwards.
+
+    `online` stands for the Mode, and `network_failed` hears each network failure.
+    """
     completed: list[str] = []
     echo = kind or echo_kind(completed, idle_timeout=idle_timeout)
     with started_plugins(units, clock, "parrot") as plugins:
@@ -82,8 +87,10 @@ def running_jobs(  # noqa: PLR0913 -- the database and clock, then settings with
             poll=timedelta(seconds=0.1),
             memory_limit=memory_limit,
             events=events,
+            online=online,
+            network_failed=network_failed,
         )
-        service = JobService(units, clock, {"echo": echo}, runner, events)
+        service = JobService(units, clock, {"echo": echo}, runner, events, online)
         if start:
             runner.start()
         try:

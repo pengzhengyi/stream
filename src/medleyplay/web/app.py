@@ -108,7 +108,8 @@ def _handle_domain_error(_: Request, error: MedleyplayError) -> JSONResponse:
         if isinstance(error, SignInThrottledError)
         else None
     )
-    return JSONResponse({"detail": detail}, status_code=code, headers=headers)
+    body = {"detail": detail} if error.code is None else {"detail": detail, "code": error.code}
+    return JSONResponse(body, status_code=code, headers=headers)
 
 
 async def _refuse_cross_origin_writes(

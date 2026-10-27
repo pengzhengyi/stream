@@ -46,6 +46,8 @@ class Availability(StrEnum):
     OK = "ok"
     OFFLINE = "offline"
     """Its file is in a Library whose drive is unplugged."""
+    WAITING_ONLINE = "waiting_online"
+    """Its audio must be downloaded, and the Mode is Offline."""
     UNAVAILABLE = "unavailable"
     MISSING = "missing"
     CANT_PLAY = "cant_play"

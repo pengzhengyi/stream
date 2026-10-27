@@ -149,6 +149,17 @@ def test_a_lowered_limit_removes_least_favorite_first_until_use_is_under_it() ->
     assert plan(state).removals == (Remove(SourceId(2), 60 * MB), Remove(SourceId(1), 60 * MB))
 
 
+def test_offline_only_cache_copies_may_be_removed() -> None:
+    state = _state(
+        limit=100 * MB,
+        online=False,
+        downloads=(_old_download(1, 60 * MB), _old_download(2, 60 * MB)),
+        cache=(CacheCopy("1-a.flac", 10 * MB, NOW - timedelta(days=2)),),
+    )
+
+    assert removable(state) == [RemoveCache("1-a.flac", 10 * MB)]
+
+
 def test_a_limit_nothing_removable_can_meet_leaves_everything_in_place() -> None:
     state = _state(
         limit=100 * MB,

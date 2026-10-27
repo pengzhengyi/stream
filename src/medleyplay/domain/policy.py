@@ -139,6 +139,8 @@ class PolicyState:
     active_policy_jobs: int = 0
     downloadable_sites: frozenset[str] = frozenset()
     valid_logins: frozenset[tuple[AccountId, str]] = frozenset()
+    online: bool = True
+    """Whether the Mode is Online; Offline, no Download is removed, since it couldn't come back."""
 
     def use(self) -> int:
         """Return the bytes the limit counts: Downloads, cache copies, and reservations."""
@@ -202,7 +204,10 @@ def reservation(duration_ms: int | None, kbps: int) -> int:
 
 
 def removable(state: PolicyState) -> list[Remove | RemoveCache]:
-    """Return what may be removed, in the order it goes: cache copies, then Downloads."""
+    """Return what may be removed, in the order it goes: cache copies, then Downloads.
+
+    While Offline, only cache copies may go.
+    """
     if state.limit is None:
         return []
     cache = sorted(
@@ -210,7 +215,7 @@ def removable(state: PolicyState) -> list[Remove | RemoveCache]:
         key=lambda each: (each.touched_at, each.name),
     )
     downloads = sorted(
-        (each for each in state.downloads if _may_remove(each, state.now)),
+        (each for each in state.downloads if state.online and _may_remove(each, state.now)),
         key=lambda each: (each.standing.key(), each.source_id),
     )
     return [

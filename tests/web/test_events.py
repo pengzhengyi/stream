@@ -45,7 +45,9 @@ def hub_mode(
     hub: Events,
 ) -> ModeService:
     """The Mode service, telling the hub of each change as the server's does."""
-    return ModeService(units, clock, probe=network, check=internet, on_change=hub.publish_mode)
+    mode = ModeService(units, clock, probe=network, check=internet)
+    mode.listen(hub.publish_mode)
+    return mode
 
 
 @pytest.fixture

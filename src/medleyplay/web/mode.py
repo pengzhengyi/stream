@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from medleyplay.application.mode import MAX_NAME, ModeView
 from medleyplay.domain.mode import MeteredNetwork, ModeSetting, ModeSettings, NetworkKind, Reason
-from medleyplay.web.deps import ModeDep, SignedInAccount
+from medleyplay.web.deps import JobsDep, ModeDep, SignedInAccount
 
 router = APIRouter(prefix="/api/mode", tags=["mode"])
 
@@ -24,7 +24,8 @@ class ModeOut(BaseModel):
     """What the Mode is now, and why.
 
     `since` is when it last went Online or Offline; `online_at`, while settling,
-    is when it goes Online if nothing changes.
+    is when it goes Online if nothing changes. `held_jobs` counts the Jobs waiting
+    for Online.
     """
 
     setting: ModeSetting
@@ -34,10 +35,11 @@ class ModeOut(BaseModel):
     since: datetime
     checked_at: datetime | None
     online_at: datetime | None
+    held_jobs: int
 
     @classmethod
-    def of(cls, view: ModeView) -> "ModeOut":
-        """Return the API view of the Mode now."""
+    def of(cls, view: ModeView, held_jobs: int) -> "ModeOut":
+        """Return the API view of the Mode now, with how many Jobs wait for Online."""
         mode = view.mode
         network = (
             None
@@ -56,6 +58,7 @@ class ModeOut(BaseModel):
             since=mode.since,
             checked_at=view.checked_at,
             online_at=mode.online_at,
+            held_jobs=held_jobs,
         )
 
 
@@ -109,9 +112,9 @@ class MeteredIn(BaseModel):
 
 
 @router.get("")
-def get_mode(_: SignedInAccount, mode: ModeDep) -> ModeOut:
+def get_mode(_: SignedInAccount, mode: ModeDep, jobs: JobsDep) -> ModeOut:
     """Return what the Mode is now."""
-    return ModeOut.of(mode.now())
+    return ModeOut.of(mode.now(), jobs.held_count())
 
 
 @router.get("/settings")

@@ -18,7 +18,7 @@ from medleyplay.application.links import LinkService
 from medleyplay.application.playback import PlaybackService, cache_source_kind
 from medleyplay.application.plugins import PluginService
 from medleyplay.domain.jobs import JobId, JobState, JobView
-from tests.support.fakes import FakeClock, MemorySecrets
+from tests.support.fakes import FakeClock, MemorySecrets, OnlineSwitch
 from tests.support.hosts import TEST_COMMAND, TEST_PLUGINS, started_plugins
 
 WAIT: float = 20
@@ -38,6 +38,7 @@ class Site:
     plugins: PluginService
     secrets: MemorySecrets
     data_dir: Path
+    online: OnlineSwitch
 
     def wait_for(
         self, job_id: JobId, *states: JobState, until: Callable[[JobView], bool] | None = None
@@ -57,7 +58,11 @@ class Site:
 def running_site(
     units: sessionmaker[Session], clock: FakeClock, data_dir: Path, secrets: MemorySecrets
 ) -> Iterator[Site]:
-    """Run `tube`, download Jobs, and the link, download, and playback services over `data_dir`."""
+    """Run `tube`, download Jobs, and the link, download, and playback services over `data_dir`.
+
+    The services follow `Site.online`, which a test turns Offline.
+    """
+    online = OnlineSwitch()
     jobs_dir = data_dir / "jobs"
     download = download_source_kind(data_dir, jobs_dir, clock)
     cache = cache_source_kind(data_dir)
@@ -73,23 +78,25 @@ def running_site(
             processes=JobProcesses(TEST_COMMAND, TEST_PLUGINS),
             poll=timedelta(seconds=0.1),
             logins=linked,
+            online=online,
         )
-        jobs = JobService(units, clock, kinds, runner)
-        catalog = CatalogService(units, clock)
+        jobs = JobService(units, clock, kinds, runner, online=online)
+        catalog = CatalogService(units, clock, online=online)
         downloads = DownloadService(units, plugins, jobs, download, linked, data_dir, clock)
         jobs.start()
         try:
             yield Site(
-                links=LinkService(units, clock, plugins, catalog, downloads),
+                links=LinkService(units, clock, plugins, catalog, downloads, online),
                 downloads=downloads,
                 download_kind=download,
-                playback=PlaybackService(units, plugins, jobs, cache, data_dir, downloads),
+                playback=PlaybackService(units, plugins, jobs, cache, data_dir, downloads, online),
                 linked=linked,
                 catalog=catalog,
                 jobs=jobs,
                 plugins=plugins,
                 secrets=secrets,
                 data_dir=data_dir,
+                online=online,
             )
         finally:
             jobs.stop()
