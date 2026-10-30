@@ -13,11 +13,12 @@ from medleyplay.application.libraries import READER_VERSION
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.errors import ForbiddenError, InvalidInputError
 from medleyplay.domain.jobs import JobState
-from medleyplay.domain.libraries import LibraryKind, LibraryState
+from medleyplay.domain.libraries import Library, LibraryKind, LibraryState
 from medleyplay.persistence.schema import SourceRow
 from tests.support.audio import Song, folder_of, zip_of
 from tests.support.factories import NewAccountFactory
 from tests.support.fakes import FakeClock
+from tests.support.info_json import info_json_beside, melt_video, world_is_mine_video
 from tests.support.libraries import Libraries, running_libraries
 
 
@@ -242,3 +243,86 @@ def test_a_library_whose_folder_disappears_goes_offline_and_keeps_its_tracks(
 
     assert (library.state, library.message) == (LibraryState.OFFLINE, f"{music} isn't a folder.")
     assert _titles(libraries, alice) == ["Intro", "Outro"]
+
+
+def _downloaded_video(
+    libraries: Libraries, alice: Account, tmp_path: Path, sidecar: str | None
+) -> tuple[Path, Library]:
+    """Scan a folder holding `BV1dm4y1s7ak.wav`, which says nothing, and its sidecar if given."""
+    music = folder_of(tmp_path / "Music", {"BV1dm4y1s7ak.wav": Song("", "", "")})
+    if sidecar is not None:
+        info_json_beside(music / "BV1dm4y1s7ak.wav", sidecar)
+    registered = libraries.service.register(alice, "Music", LibraryKind.FOLDER, str(music))
+    assert registered.scan is not None
+    libraries.wait_for(registered.scan.id, JobState.SUCCEEDED)
+    return music, registered.library
+
+
+def _rescan(libraries: Libraries, alice: Account, library: Library) -> None:
+    rescan = libraries.service.scan(alice, library.id)
+    libraries.wait_for(rescan.id, JobState.SUCCEEDED)
+
+
+def test_a_scan_reads_the_info_json_beside_a_song_as_its_videos_text(
+    libraries: Libraries, household: tuple[Account, Account], tmp_path: Path
+) -> None:
+    alice, _ = household
+
+    _downloaded_video(libraries, alice, tmp_path, melt_video())
+
+    assert _titles(libraries, alice) == ["メルト"]
+
+
+def test_a_rescan_reads_an_info_json_added_beside_a_song_it_already_knew(
+    libraries: Libraries, household: tuple[Account, Account], tmp_path: Path
+) -> None:
+    alice, _ = household
+    music, library = _downloaded_video(libraries, alice, tmp_path, None)
+    before = _titles(libraries, alice)
+
+    info_json_beside(music / "BV1dm4y1s7ak.wav", melt_video())
+    _rescan(libraries, alice, library)
+
+    assert (before, _titles(libraries, alice)) == (["BV1dm4y1s7ak"], ["メルト"])
+
+
+def test_a_rescan_reads_a_changed_info_json_beside_a_song_that_is_unchanged(
+    libraries: Libraries, household: tuple[Account, Account], tmp_path: Path
+) -> None:
+    alice, _ = household
+    music, library = _downloaded_video(libraries, alice, tmp_path, melt_video())
+
+    info_json_beside(music / "BV1dm4y1s7ak.wav", world_is_mine_video())
+    _rescan(libraries, alice, library)
+
+    assert _titles(libraries, alice) == ["ワールドイズマイン"]
+
+
+def test_a_rescan_drops_the_text_of_an_info_json_that_was_removed(
+    libraries: Libraries, household: tuple[Account, Account], tmp_path: Path
+) -> None:
+    alice, _ = household
+    music, library = _downloaded_video(libraries, alice, tmp_path, melt_video())
+
+    (music / "BV1dm4y1s7ak.info.json").unlink()
+    _rescan(libraries, alice, library)
+
+    assert _titles(libraries, alice) == ["BV1dm4y1s7ak"]
+
+
+def test_a_rescan_keeps_the_earlier_text_when_the_info_json_is_malformed(
+    libraries: Libraries,
+    household: tuple[Account, Account],
+    tmp_path: Path,
+    units: sessionmaker[Session],
+) -> None:
+    alice, _ = household
+    music, library = _downloaded_video(libraries, alice, tmp_path, melt_video())
+
+    info_json_beside(music / "BV1dm4y1s7ak.wav", '{"title": ')
+    _rescan(libraries, alice, library)
+    with units() as db:
+        details = db.scalars(select(SourceRow)).one().details or {}
+
+    assert _titles(libraries, alice) == ["メルト"]
+    assert "isn't valid JSON" in str(details["info_json_error"])

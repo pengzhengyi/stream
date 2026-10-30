@@ -8,16 +8,24 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.catalog import CatalogService
-from medleyplay.application.details import DetailsService
+from medleyplay.application.details import DetailsService, video_text_of
 from medleyplay.application.libraries import apply_scan
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.catalog import Availability, TrackId
-from medleyplay.domain.details import Field, Origin
+from medleyplay.domain.details import Field, Origin, Shown
 from medleyplay.domain.libraries import LibraryId, LibraryState
-from medleyplay.persistence.schema import LibraryRow, SourceRow, TrackRow, TrackValueRow
+from medleyplay.domain.video_text import Chapter, VideoText
+from medleyplay.persistence.schema import (
+    LibraryRow,
+    SourceRow,
+    TrackRow,
+    TrackValueRow,
+    VideoTextRow,
+)
 from medleyplay.plugin_api import Tags
+from medleyplay.programs.info_json import InfoChapter
 from medleyplay.programs.scan_library import LibraryScan, ScannedFile
-from tests.support.factories import ScannedFileFactory
+from tests.support.factories import InfoJsonFactory, ScannedFileFactory
 from tests.support.fakes import FakeClock
 
 
@@ -335,3 +343,260 @@ def test_tracks_of_missing_and_protected_files_are_listed_as_such(
     _scan(units, clock, library, protected)
 
     assert _availability(catalog) == {"A": Availability.MISSING, "B": Availability.CANT_PLAY}
+
+
+# --- The video's text, read from the `.info.json` beside a file --------------
+
+MELT = "【初音ミク】メルト / ryo(supercell)【MV】"
+WORLD_IS_MINE = "【初音ミク】ワールドイズマイン / ryo(supercell)【MV】"
+VIDEO = "BV1dm4y1s7ak.m4a"
+BROKEN = "isn't valid JSON (JSONDecodeError)"
+
+
+def _shown(units: sessionmaker[Session], clock: FakeClock, path: str) -> dict[Field, Shown]:
+    """Return the details the file's Track shows."""
+    track_id = TrackId(_catalog(units)[path].track_id)
+    return DetailsService(units, clock).details(track_id).shown
+
+
+def _video_text(units: sessionmaker[Session], path: str) -> VideoText | None:
+    with units() as db:
+        return video_text_of(db, TrackId(_catalog(units)[path].track_id))
+
+
+def _came_from(units: sessionmaker[Session]) -> list[str]:
+    with units() as db:
+        return [row.came_from for row in db.scalars(select(VideoTextRow))]
+
+
+def _source_details(units: sessionmaker[Session]) -> dict[str, object]:
+    with units() as db:
+        return dict(db.scalars(select(SourceRow)).one().details or {})
+
+
+def _paste(units: sessionmaker[Session], clock: FakeClock, path: str, text: VideoText) -> None:
+    track_id = TrackId(_catalog(units)[path].track_id)
+    DetailsService(units, clock).read_video_text(track_id, text)
+
+
+@pytest.fixture
+def melt_read(units: sessionmaker[Session], clock: FakeClock, library: LibraryId) -> None:
+    """A library whose video was scanned with `MELT` read from its sidecar."""
+    sidecar = InfoJsonFactory.read(MELT)
+    _scan(units, clock, library, ScannedFileFactory.untagged(VIDEO, info_json=sidecar))
+
+
+def test_a_sidecar_read_gives_the_track_the_videos_title_and_artist(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId
+) -> None:
+    sidecar = InfoJsonFactory.read(MELT, "supercell's first single")
+
+    _scan(units, clock, library, ScannedFileFactory.untagged(VIDEO, info_json=sidecar))
+
+    assert _shown(units, clock, VIDEO) == {
+        Field.TITLE: Shown("メルト", Origin.VIDEO),
+        Field.ARTIST: Shown("ryo(supercell)", Origin.VIDEO),
+    }
+    assert _video_text(units, VIDEO) == VideoText(MELT, "supercell's first single")
+    assert _came_from(units) == ["file"]
+
+
+def test_a_sidecars_chapters_are_kept_with_the_text(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId
+) -> None:
+    chapters = (
+        InfoChapter(start_ms=0, title="アイネクライネ"),
+        InfoChapter(start_ms=252_400, title="Last"),
+    )
+    sidecar = InfoJsonFactory.read("ハチ 全专《Bremen》", chapters=chapters)
+
+    _scan(units, clock, library, ScannedFileFactory.untagged(VIDEO, info_json=sidecar))
+
+    assert _video_text(units, VIDEO) == VideoText(
+        "ハチ 全专《Bremen》", chapters=(Chapter(0, "アイネクライネ"), Chapter(252_400, "Last"))
+    )
+
+
+def test_the_stamp_of_a_sidecar_read_is_kept_with_the_source(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId
+) -> None:
+    sidecar = InfoJsonFactory.read(MELT, modified_ns=7)
+
+    _scan(units, clock, library, ScannedFileFactory.untagged(VIDEO, info_json=sidecar))
+
+    details = _source_details(units)
+    assert details["info_json"] == {"size": 200, "modified_ns": 7}
+    assert "info_json_error" not in details
+
+
+@pytest.mark.usefixtures("melt_read")
+def test_a_changed_sidecar_replaces_the_text_read_before(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId
+) -> None:
+    changed = InfoJsonFactory.read(WORLD_IS_MINE, modified_ns=2)
+
+    _scan(units, clock, library, ScannedFileFactory.unchanged(VIDEO, info_json=changed))
+
+    assert _shown(units, clock, VIDEO)[Field.TITLE] == Shown("ワールドイズマイン", Origin.VIDEO)
+    assert _source_details(units)["info_json"] == {"size": 200, "modified_ns": 2}
+
+
+@pytest.mark.usefixtures("melt_read")
+def test_a_sidecar_not_read_again_leaves_the_text_and_the_stamp(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId
+) -> None:
+    skipped = InfoJsonFactory.unchanged()
+
+    _scan(units, clock, library, ScannedFileFactory.unchanged(VIDEO, info_json=skipped))
+
+    assert _video_text(units, VIDEO) == VideoText(MELT)
+    assert _source_details(units)["info_json"] == {"size": 200, "modified_ns": 1}
+
+
+@pytest.mark.usefixtures("melt_read")
+def test_a_changed_audio_file_keeps_the_text_of_the_sidecar_beside_it(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId
+) -> None:
+    retagged = ScannedFileFactory.untagged(VIDEO, info_json=InfoJsonFactory.unchanged())
+
+    _scan(units, clock, library, retagged)
+
+    assert _video_text(units, VIDEO) == VideoText(MELT)
+    assert _source_details(units)["info_json"] == {"size": 200, "modified_ns": 1}
+
+
+def test_a_sidecar_with_no_words_records_nothing_but_keeps_its_stamp(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId
+) -> None:
+    wordless = InfoJsonFactory.wordless()
+
+    _scan(units, clock, library, ScannedFileFactory.untagged(VIDEO, info_json=wordless))
+
+    assert _video_text(units, VIDEO) is None
+    assert _source_details(units)["info_json"] == {"size": 200, "modified_ns": 1}
+    assert _shown(units, clock, VIDEO) == {Field.TITLE: Shown("BV1dm4y1s7ak", Origin.FILE_NAME)}
+
+
+@pytest.mark.usefixtures("melt_read")
+def test_a_removed_sidecar_takes_the_text_read_from_it_and_its_values(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId
+) -> None:
+    _scan(units, clock, library, ScannedFileFactory.unchanged(VIDEO))
+
+    assert _video_text(units, VIDEO) is None
+    assert _shown(units, clock, VIDEO) == {Field.TITLE: Shown("BV1dm4y1s7ak", Origin.FILE_NAME)}
+    assert "info_json" not in _source_details(units)
+
+
+@pytest.mark.usefixtures("melt_read")
+def test_a_removed_sidecar_leaves_the_text_the_household_pasted(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId
+) -> None:
+    _paste(units, clock, VIDEO, VideoText(WORLD_IS_MINE))
+
+    _scan(units, clock, library, ScannedFileFactory.unchanged(VIDEO))
+
+    assert _video_text(units, VIDEO) == VideoText(WORLD_IS_MINE)
+    assert _shown(units, clock, VIDEO)[Field.TITLE] == Shown("ワールドイズマイン", Origin.VIDEO)
+    assert "info_json" not in _source_details(units)
+
+
+@pytest.mark.usefixtures("melt_read")
+def test_a_paste_after_a_sidecar_read_survives_a_rescan_that_finds_the_sidecar_unchanged(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId
+) -> None:
+    _paste(units, clock, VIDEO, VideoText(WORLD_IS_MINE))
+    skipped = InfoJsonFactory.unchanged()
+
+    _scan(units, clock, library, ScannedFileFactory.unchanged(VIDEO, info_json=skipped))
+
+    assert _video_text(units, VIDEO) == VideoText(WORLD_IS_MINE)
+    assert _came_from(units) == ["household"]
+
+
+@pytest.mark.usefixtures("melt_read")
+def test_a_changed_sidecar_replaces_a_paste(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId
+) -> None:
+    _paste(units, clock, VIDEO, VideoText(WORLD_IS_MINE))
+    rewritten = InfoJsonFactory.read(MELT, "Rewritten", modified_ns=2)
+
+    _scan(units, clock, library, ScannedFileFactory.unchanged(VIDEO, info_json=rewritten))
+
+    assert _video_text(units, VIDEO) == VideoText(MELT, "Rewritten")
+    assert _came_from(units) == ["file"]
+
+
+@pytest.mark.usefixtures("melt_read")
+def test_a_malformed_sidecar_keeps_the_earlier_text_and_notes_the_error(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId
+) -> None:
+    broken = InfoJsonFactory.malformed(modified_ns=2)
+
+    _scan(units, clock, library, ScannedFileFactory.unchanged(VIDEO, info_json=broken))
+
+    details = _source_details(units)
+    assert _video_text(units, VIDEO) == VideoText(MELT)
+    assert _shown(units, clock, VIDEO)[Field.TITLE] == Shown("メルト", Origin.VIDEO)
+    assert details["info_json"] == {"size": 200, "modified_ns": 2}
+    assert details["info_json_error"] == BROKEN
+
+
+def test_a_noted_error_stays_noted_until_the_sidecar_is_read_well(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId
+) -> None:
+    broken = InfoJsonFactory.malformed()
+    _scan(units, clock, library, ScannedFileFactory.untagged(VIDEO, info_json=broken))
+
+    skipped = InfoJsonFactory.unchanged()
+    _scan(units, clock, library, ScannedFileFactory.unchanged(VIDEO, info_json=skipped))
+    still_noted = _source_details(units).get("info_json_error")
+    mended = InfoJsonFactory.read(MELT, modified_ns=2)
+    _scan(units, clock, library, ScannedFileFactory.unchanged(VIDEO, info_json=mended))
+
+    assert still_noted == BROKEN
+    assert "info_json_error" not in _source_details(units)
+    assert _video_text(units, VIDEO) == VideoText(MELT)
+
+
+def test_a_removed_sidecar_clears_the_error_noted_for_it(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId
+) -> None:
+    broken = InfoJsonFactory.malformed()
+    _scan(units, clock, library, ScannedFileFactory.untagged(VIDEO, info_json=broken))
+
+    _scan(units, clock, library, ScannedFileFactory.unchanged(VIDEO))
+
+    assert _source_details(units).keys() == {"size", "modified_ns", "error", "reader"}
+
+
+def test_a_moved_file_keeps_its_track_and_reads_the_sidecar_at_its_new_path(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId
+) -> None:
+    before = ScannedFileFactory.untagged(
+        f"old/{VIDEO}", fingerprint="f1", info_json=InfoJsonFactory.read(MELT)
+    )
+    _scan(units, clock, library, before)
+    track_id = _catalog(units)[f"old/{VIDEO}"].track_id
+    after = ScannedFileFactory.untagged(
+        f"new/{VIDEO}", fingerprint="f1", info_json=InfoJsonFactory.read(WORLD_IS_MINE)
+    )
+
+    _scan(units, clock, library, after)
+
+    assert [seen.track_id for seen in _catalog(units).values()] == [track_id]
+    assert _video_text(units, f"new/{VIDEO}") == VideoText(WORLD_IS_MINE)
+
+
+def test_a_moved_file_whose_sidecar_stayed_behind_loses_the_text_read_from_it(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId
+) -> None:
+    before = ScannedFileFactory.untagged(
+        f"old/{VIDEO}", fingerprint="f1", info_json=InfoJsonFactory.read(MELT)
+    )
+    _scan(units, clock, library, before)
+
+    _scan(units, clock, library, ScannedFileFactory.untagged(f"new/{VIDEO}", fingerprint="f1"))
+
+    assert _video_text(units, f"new/{VIDEO}") is None
+    assert "info_json" not in _source_details(units)

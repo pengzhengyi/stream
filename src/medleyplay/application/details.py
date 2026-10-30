@@ -101,6 +101,17 @@ def record_video_text(
     return reading
 
 
+def forget_video_text_read_from_a_file(db: Session, track_id: TrackId, now: datetime) -> None:
+    """Drop the Track's video's text and its `video` values, if the text was read from a file.
+
+    Text the household pasted stays.
+    """
+    row = db.get(VideoTextRow, track_id)
+    if row is not None and row.came_from == "file":
+        db.delete(row)
+        record(db, track_id, Origin.VIDEO, {}, now)
+
+
 def video_text_of(db: Session, track_id: TrackId) -> VideoText | None:
     """Return the Track's video's text, or `None` when none was read."""
     row = db.get(VideoTextRow, track_id)

@@ -29,16 +29,24 @@ from medleyplay.domain.libraries import (
     path_of_locator,
     scan_target,
 )
+from medleyplay.domain.video_text import Chapter, VideoText
 from medleyplay.persistence.schema import LibraryRow, SourceRow, TrackRow
 from medleyplay.plugin_api import CHECK_ROOT, LIBRARY_BACKEND, TAG_READER, CheckRoot, LibraryRoot
+from medleyplay.programs.info_json import InfoText
 from medleyplay.programs.scan_library import (
+    InfoJson,
     KnownFile,
     LibraryScan,
     ScanLibrary,
     ScannedFile,
+    Stamp,
 )
 
 SCAN_KIND: Final = "scan_library"
+INFO_JSON: Final = "info_json"
+INFO_JSON_ERROR: Final = "info_json_error"
+_SIDECAR_KEYS: Final = frozenset({INFO_JSON, INFO_JSON_ERROR})
+"""The keys of a Source's details for its `.info.json`: its stamp, and why the last read failed."""
 READER_VERSION: Final = 2
 """What a scan reads from a file; raised when it reads more, so the next scan reads each again."""
 
@@ -258,6 +266,7 @@ def _update(
 ) -> None:
     previous = dict(source.details or {})
     track_id = TrackId(source.track_id)
+    sidecar = _apply_info_json(db, track_id, file.info_json, previous, now)
     if file.changed:
         source.fingerprint = file.fingerprint
         source.details = {
@@ -265,16 +274,54 @@ def _update(
             "modified_ns": file.modified_ns,
             "error": file.error,
             "reader": READER_VERSION,
+            **sidecar,
         }
         if file.tags is not None or added:
             _set_details(db, track_id, file, now)
     else:
-        source.details = {**previous, "size": file.size, "modified_ns": file.modified_ns}
+        kept = {key: value for key, value in previous.items() if key not in _SIDECAR_KEYS}
+        source.details = {**kept, "size": file.size, "modified_ns": file.modified_ns, **sidecar}
     protected = file.tags is not None and file.tags.protected
     if file.changed:
         source.state = SourceState.CANT_PLAY if protected else SourceState.OK
     elif source.state == SourceState.MISSING:
         source.state = SourceState.OK
+
+
+def _apply_info_json(
+    db: Session,
+    track_id: TrackId,
+    info: InfoJson | None,
+    previous: dict[str, object],
+    now: datetime,
+) -> dict[str, object]:
+    """Apply the `.info.json` the scan found beside the file; return what the Source keeps of it.
+
+    Text read replaces the Track's video's text. A sidecar that couldn't be read
+    leaves the earlier text and notes the error until a later read succeeds, and
+    one the scan didn't read leaves both as they were. A sidecar that was there
+    last scan and isn't now takes with it the text read from a file, never a paste.
+    """
+    if info is None:
+        if INFO_JSON in previous:
+            details.forget_video_text_read_from_a_file(db, track_id, now)
+        return {}
+    kept: dict[str, object] = {INFO_JSON: {"size": info.size, "modified_ns": info.modified_ns}}
+    if info.error:
+        kept[INFO_JSON_ERROR] = info.error
+    elif info.text is None and INFO_JSON_ERROR in previous:
+        kept[INFO_JSON_ERROR] = previous[INFO_JSON_ERROR]
+    elif info.text is not None and (text := _video_text(info.text)) is not None:
+        details.record_video_text(db, track_id, text, "file", now)
+    return kept
+
+
+def _video_text(text: InfoText) -> VideoText | None:
+    """Return the sidecar's text, or `None` when it has no words."""
+    if not (text.title.strip() or text.description.strip() or text.chapters):
+        return None
+    chapters = tuple(Chapter(chapter.start_ms, chapter.title) for chapter in text.chapters)
+    return VideoText(text.title, text.description, chapters)
 
 
 def _set_details(db: Session, track_id: TrackId, file: ScannedFile, now: datetime) -> None:
@@ -312,9 +359,17 @@ def _known_files(db: Session, library_id: LibraryId) -> dict[str, KnownFile]:
         details = source.details or {}
         if not details.get("error") and details.get("reader") == READER_VERSION:
             known[path_of_locator(source.locator)] = KnownFile(
-                size=int(str(details["size"])), modified_ns=int(str(details["modified_ns"]))
+                size=int(str(details["size"])),
+                modified_ns=int(str(details["modified_ns"])),
+                info_json=_stamp_of(details.get(INFO_JSON)),
             )
     return known
+
+
+def _stamp_of(kept: object) -> Stamp | None:
+    if not isinstance(kept, dict):
+        return None
+    return Stamp(size=int(str(kept["size"])), modified_ns=int(str(kept["modified_ns"])))
 
 
 def _sources_of(library_id: LibraryId) -> Select[SourceRow]:
