@@ -15,12 +15,18 @@ router = APIRouter(prefix="/api", tags=["playback"])
 
 
 class ReadyOut(BaseModel):
-    """The Track plays from `audio_url` now."""
+    """The Track plays from `audio_url` now.
+
+    A song inside a longer file plays only from `start_ms` to `end_ms` of it; both
+    are `null` for a whole file, and `end_ms` alone for a last song of unknown end.
+    """
 
     state: Literal["ready"] = "ready"
     source_id: int
     audio_url: str
     media_type: str
+    start_ms: int | None
+    end_ms: int | None
 
 
 class PreparingOut(BaseModel):
@@ -45,10 +51,13 @@ def play(
     """Pick the Source a Track plays from, preparing it first when it must be."""
     found = playback.play(me, TrackId(track_id))
     if isinstance(found, Ready):
+        stretch = found.stretch
         return ReadyOut(
             source_id=found.source_id,
             audio_url=f"/api/sources/{found.source_id}/audio",
             media_type=found.media_type,
+            start_ms=None if stretch is None else stretch.start_ms,
+            end_ms=None if stretch is None else stretch.end_ms,
         )
     if isinstance(found, Preparing):
         return PreparingOut(source_id=found.source_id, job_id=found.job.id)

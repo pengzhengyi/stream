@@ -70,6 +70,8 @@ export function trackOf(id: number, title: string, change: Partial<Track> = {}):
     last_played_at: null,
     availability: "ok",
     downloaded: false,
+    segment_of: null,
+    split: false,
     ...change,
   };
 }

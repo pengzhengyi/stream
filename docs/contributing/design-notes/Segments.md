@@ -1,9 +1,13 @@
 # Segments
 
 > [!NOTE]
-> **Status: proposed.** This note describes splitting one long file, such as a
-> whole album uploaded as one video, into its songs, and playing them as Tracks.
-> Where a song list comes from is in [Track details](Track%20details.md).
+> **Status: in progress.** Splitting a file into songs, the songs API, and the
+> server's side of playing a song (its stretch, availability, smart playlists,
+> and the download policy) are built; the player, the editor, and the album view
+> follow. This note
+> describes splitting one long file, such as a whole album uploaded as one video,
+> into its songs, and playing them as Tracks. Where a song list comes from is in
+> [Track details](Track%20details.md).
 
 ## Contents
 
@@ -73,10 +77,20 @@ both read its full length.
   *Save* says how many songs it removes first.
 - **A segment's details** default to its album file's album fields, through an
   `album_file` origin just above `file_name`, with its title and artist from its
-  row and its track number from its place. The household can edit any of them.
-- **A rescan that changes the file** keeps its songs when the length changed by
-  less than a second; otherwise they are kept but marked to check, and the
-  album view says so.
+  row and its track number from its place. The album is the file's album, or its
+  title when it names none; the album artist is the file's album artist, or its
+  artist; a song with no artist of its own is the album artist's. A change to the
+  album file's details reaches its songs at once. The household can edit any of
+  them.
+- **A rescan that changes the file** keeps its songs, and the last song's length
+  follows the file's. Each split remembers the file's length; once the length
+  differs by a second or more, the songs are marked to check, and the album view
+  says so.
+- **A removed song's id is never reused,** so an editor left open can't give its
+  ratings to a new song, and an album file's Source can't be removed while its
+  songs remain.
+- **Removing a Library** removes the songs split from its files, with their
+  Tracks.
 - **Unsplitting** removes every segment, after asking.
 
 ## Playing a segment
@@ -110,7 +124,7 @@ both read its full length.
 
 | Route | Who | Does |
 | --- | --- | --- |
-| `GET /api/tracks/{id}/songs` | Signed in | The album file's songs, with ids, and the lists found |
+| `GET /api/tracks/{id}/songs` | Signed in | The album file's songs, with ids and ends, its length, whether to check them, and the lists found |
 | `PUT /api/tracks/{id}/songs` | Signed in | The household's rows, by id; answers the segment Tracks |
 | `DELETE /api/tracks/{id}/songs` | Signed in | Unsplits the file |
 | `POST /api/tracks/{id}/playback` | Signed in | Now answers a segment's `start_ms` and `end_ms` |

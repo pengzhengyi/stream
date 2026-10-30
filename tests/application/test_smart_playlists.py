@@ -9,10 +9,13 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.catalog import CatalogService
+from medleyplay.application.segments import SongsService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import PlaylistId, TrackId
 from medleyplay.domain.errors import InvalidInputError
 from medleyplay.domain.rules import Favorite, Kind, Match, Rules
+from medleyplay.domain.segments import SongRow
+from medleyplay.domain.video_text import Song
 from medleyplay.persistence.schema import PlaylistRow
 from tests.support.factories import NewAccountFactory, SourceKeyFactory, TrackDetailsFactory
 from tests.support.fakes import FakeClock
@@ -132,3 +135,20 @@ def test_stored_rules_this_server_cant_read_show_no_tracks_and_say_why(
 
     assert (unreadable.rules, unreadable.track_ids) == (None, ())
     assert "version 2" in unreadable.unreadable
+
+
+def test_a_smart_playlist_matches_a_split_files_songs_not_the_file(
+    catalog: CatalogService, songs: SongsService, accounts: AccountService, clock: FakeClock
+) -> None:
+    alice, _ = _alice_and_bob(accounts)
+    [album] = _added_a_day_apart(catalog, clock, 1)
+    split = songs.save(
+        album, [SongRow(None, Song(0, "Intro")), SongRow(None, Song(60_000, "Outro"))]
+    )
+
+    catalog.put_playlist(
+        alice.id, FAVORITES, "From Bilibili", rules=Rules(Match.ALL, (Kind("bilibili"),))
+    )
+
+    matched = set(catalog.get_playlist(alice.id, FAVORITES).track_ids)
+    assert matched == {song.track_id for song in split.songs}

@@ -15,6 +15,7 @@ from medleyplay.application import policy as policy_module
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.downloads import DOWNLOAD_KIND
 from medleyplay.application.policy import PolicyService
+from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import PlaylistId, SourceId, SourceState, TrackId
@@ -33,7 +34,9 @@ from medleyplay.domain.policy import (
     reservation,
 )
 from medleyplay.domain.rules import Favorite, Match, Rules
+from medleyplay.domain.segments import SongRow
 from medleyplay.domain.settings import Settings
+from medleyplay.domain.video_text import Song as ListedSong
 from medleyplay.persistence.schema import DownloadRow, PlaylistRow, SourceRow
 from tests.support.factories import NewAccountFactory, SourceKeyFactory, TrackDetailsFactory
 from tests.support.fakes import FakeClock, MemorySecrets
@@ -520,3 +523,20 @@ def _until(holds: Callable[[], bool], what: str) -> None:
     while not holds():
         assert time.monotonic() < ends, f"The policy {what}."
         time.sleep(0.05)
+
+
+def test_a_kept_song_downloads_the_file_it_is_inside(
+    site: Site,
+    policy: PolicyService,
+    songs: SongsService,
+    units: sessionmaker[Session],
+    alice: Account,
+) -> None:
+    [album] = _tracks(site, 1)
+    split = songs.save(
+        album, [SongRow(None, ListedSong(0, "Intro")), SongRow(None, ListedSong(60_000, "Outro"))]
+    )
+
+    _keep(site, alice, [split.songs[1].track_id])
+
+    _downloaded(site, policy, units, [album])

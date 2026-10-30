@@ -18,6 +18,7 @@ from medleyplay.application.playback import PlaybackService
 from medleyplay.application.plugins import PluginService
 from medleyplay.application.policy import PolicyService
 from medleyplay.application.preferences import PreferencesService
+from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.errors import NotSignedInError
@@ -43,6 +44,7 @@ class Services:
     preferences: PreferencesService
     mode: ModeService
     details: DetailsService
+    songs: SongsService
 
 
 def _services(request: Request) -> Services:
@@ -109,6 +111,10 @@ def _details(services: Annotated[Services, Depends(_services)]) -> DetailsServic
     return services.details
 
 
+def _songs(services: Annotated[Services, Depends(_services)]) -> SongsService:
+    return services.songs
+
+
 AccountsDep = Annotated[AccountService, Depends(_accounts)]
 CatalogDep = Annotated[CatalogService, Depends(_catalog)]
 PluginsDep = Annotated[PluginService, Depends(_plugins)]
@@ -123,6 +129,7 @@ PolicyDep = Annotated[PolicyService, Depends(_policy)]
 PreferencesDep = Annotated[PreferencesService, Depends(_preferences)]
 ModeDep = Annotated[ModeService, Depends(_mode)]
 DetailsDep = Annotated[DetailsService, Depends(_details)]
+SongsDep = Annotated[SongsService, Depends(_songs)]
 SessionToken = Annotated[str | None, Cookie(alias=SESSION_COOKIE, include_in_schema=False)]
 
 

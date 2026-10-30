@@ -3,7 +3,8 @@
 Everything that changes a Track's details writes through `record`,
 `record_video_text`, or `set_household`, in the caller's transaction, and each
 rewrites the Track's row from its values, so the row always holds what `shown`
-chooses.
+chooses. A change to a split file's details reaches its songs, whose album fields
+come from it as the `album_file` origin.
 """
 
 from collections.abc import Callable, Iterable, Mapping
@@ -28,8 +29,15 @@ from medleyplay.domain.details import (
     shown,
 )
 from medleyplay.domain.errors import InvalidInputError, NotFoundError
+from medleyplay.domain.segments import ends_of
 from medleyplay.domain.video_text import Chapter, Reading, Song, VideoText, read_video
-from medleyplay.persistence.schema import TrackRow, TrackValueRow, VideoTextRow
+from medleyplay.persistence.schema import (
+    SegmentRow,
+    SourceRow,
+    TrackRow,
+    TrackValueRow,
+    VideoTextRow,
+)
 
 type OriginValues = dict[Origin, dict[Field, Value]]
 
@@ -75,7 +83,7 @@ def record(
     )
     db.add_all(_rows(track_id, origin, kept, now))
     db.flush()
-    refresh(db, track_id)
+    refresh(db, track_id, now)
 
 
 def record_video_text(
@@ -131,7 +139,7 @@ def set_household(
     given = {field: value for field, value in values.items() if value is not None}
     db.add_all(_rows(track_id, Origin.HOUSEHOLD, given, now))
     db.flush()
-    refresh(db, track_id)
+    refresh(db, track_id, now)
 
 
 def values_of(db: Session, track_id: TrackId) -> OriginValues:
@@ -142,8 +150,8 @@ def values_of(db: Session, track_id: TrackId) -> OriginValues:
     return found
 
 
-def refresh(db: Session, track_id: TrackId) -> dict[Field, Shown]:
-    """Rewrite the Track's row with its shown values, and return them."""
+def refresh(db: Session, track_id: TrackId, now: datetime) -> dict[Field, Shown]:
+    """Rewrite the Track's row with its shown values, and its songs' if it is split; return them."""
     track = db.get(TrackRow, track_id)
     if track is None:
         raise _no_track(track_id)
@@ -151,7 +159,62 @@ def refresh(db: Session, track_id: TrackId) -> dict[Field, Shown]:
     for field in Field:
         value = found[field].value if field in found else None
         setattr(track, field.value, "" if value is None and field in TEXT_FIELDS else value)
+    _refresh_songs(db, track, found, now)
     return found
+
+
+def _refresh_songs(
+    db: Session, album: TrackRow, album_shown: Mapping[Field, Shown], now: datetime
+) -> None:
+    # Each song's length from the file's, and its values from the file's, when they changed.
+    songs = songs_of(db, TrackId(album.id))
+    ends = ends_of([song.start_ms for song in songs], album.duration_ms)
+    for song, end in zip(songs, ends, strict=True):
+        track = db.get(TrackRow, song.track_id)
+        if track is not None:
+            track.duration_ms = None if end is None else end - song.start_ms
+        values = album_file_values(song, album_shown)
+        song_id = TrackId(song.track_id)
+        if values_of(db, song_id).get(Origin.ALBUM_FILE, {}) != values:
+            record(db, song_id, Origin.ALBUM_FILE, values, now)
+
+
+def songs_of(db: Session, track_id: TrackId) -> list[SegmentRow]:
+    """Return the songs a Track's file is split into, in order; none when it isn't split."""
+    return list(
+        db.scalars(
+            select(SegmentRow)
+            .join(SourceRow, SourceRow.id == SegmentRow.album_source_id)
+            .where(SourceRow.track_id == track_id)
+            .order_by(SegmentRow.position)
+        )
+    )
+
+
+def album_file_values(song: SegmentRow, album_file: Mapping[Field, Shown]) -> dict[Field, Value]:
+    """Return what a song takes from its row, its place, and its album file's shown values.
+
+    The album is the file's album, or its title when it names none; the album
+    artist is the file's album artist, or its artist; a song with no artist of its
+    own is the album artist's.
+    """
+
+    def of(field: Field) -> Value | None:
+        return album_file[field].value if field in album_file else None
+
+    album = of(Field.ALBUM) or of(Field.TITLE)
+    album_artist = of(Field.ALBUM_ARTIST) or of(Field.ARTIST)
+    given: dict[Field, Value | None] = {
+        Field.TITLE: song.title,
+        Field.ARTIST: song.artist or album_artist,
+        Field.ALBUM: album,
+        Field.ALBUM_ARTIST: album_artist,
+        Field.TRACK_NUMBER: song.position + 1,
+        Field.DISC_NUMBER: of(Field.DISC_NUMBER),
+        Field.YEAR: of(Field.YEAR),
+        Field.GENRE: of(Field.GENRE),
+    }
+    return {field: value for field, value in given.items() if value is not None}
 
 
 class DetailsService:

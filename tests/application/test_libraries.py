@@ -5,16 +5,20 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.libraries import READER_VERSION
+from medleyplay.application.segments import SongsService
+from medleyplay.domain import video_text
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.errors import ForbiddenError, InvalidInputError
 from medleyplay.domain.jobs import JobState
 from medleyplay.domain.libraries import LibraryKind, LibraryState
-from medleyplay.persistence.schema import SourceRow
+from medleyplay.domain.segments import SongRow
+from medleyplay.persistence.schema import SegmentRow, SourceRow
 from tests.support.audio import Song, folder_of, zip_of
 from tests.support.factories import NewAccountFactory
 from tests.support.fakes import FakeClock
@@ -208,6 +212,73 @@ def test_removing_a_library_removes_its_tracks(
 
     assert libraries.service.list_libraries() == []
     assert _titles(libraries, alice) == []
+
+
+_TWO_SONGS = (
+    SongRow(None, video_text.Song(0, "アイネクライネ")),
+    SongRow(None, video_text.Song(2_000, "Last")),
+)
+"""A split of a five-second file into songs at 0 s and 2 s."""
+
+
+def test_removing_a_library_removes_the_songs_split_from_its_files(
+    libraries: Libraries,
+    songs: SongsService,
+    household: tuple[Account, Account],
+    tmp_path: Path,
+    units: sessionmaker[Session],
+) -> None:
+    alice, _ = household
+    music = folder_of(tmp_path / "Music", {"Bremen.wav": Song("Bremen", seconds=5.0)})
+    registered = libraries.service.register(alice, "Music", LibraryKind.FOLDER, str(music))
+    assert registered.scan is not None
+    libraries.wait_for(registered.scan.id, JobState.SUCCEEDED)
+    (album,) = libraries.catalog.list_tracks(alice.id)
+    songs.save(album.id, _TWO_SONGS)
+
+    libraries.service.remove(alice, registered.library.id)
+
+    assert _titles(libraries, alice) == []
+    with units() as db:
+        assert db.scalars(select(SegmentRow.id)).all() == []
+        assert db.scalars(select(SourceRow.id)).all() == []
+
+
+def test_an_album_files_source_cant_go_while_its_songs_remain(
+    libraries: Libraries,
+    songs: SongsService,
+    household: tuple[Account, Account],
+    tmp_path: Path,
+    units: sessionmaker[Session],
+) -> None:
+    alice, _ = household
+    music = folder_of(tmp_path / "Music", {"Bremen.wav": Song("Bremen", seconds=5.0)})
+    registered = libraries.service.register(alice, "Music", LibraryKind.FOLDER, str(music))
+    assert registered.scan is not None
+    libraries.wait_for(registered.scan.id, JobState.SUCCEEDED)
+    (album,) = libraries.catalog.list_tracks(alice.id)
+    songs.save(album.id, _TWO_SONGS)
+
+    with pytest.raises(IntegrityError), units.begin() as db:
+        db.execute(delete(SourceRow).where(SourceRow.track_id == album.id))
+
+
+def test_a_rescan_of_a_split_file_whose_length_changed_reaches_its_last_song(
+    libraries: Libraries, songs: SongsService, household: tuple[Account, Account], tmp_path: Path
+) -> None:
+    alice, _ = household
+    music = folder_of(tmp_path / "Music", {"Bremen.wav": Song("Bremen", seconds=5.0)})
+    registered = libraries.service.register(alice, "Music", LibraryKind.FOLDER, str(music))
+    assert registered.scan is not None
+    libraries.wait_for(registered.scan.id, JobState.SUCCEEDED)
+    (album,) = libraries.catalog.list_tracks(alice.id)
+    last = songs.save(album.id, _TWO_SONGS).songs[1]
+    folder_of(music, {"Bremen.wav": Song("Bremen", seconds=8.0)})
+
+    libraries.wait_for(libraries.service.scan(alice, registered.library.id).id, JobState.SUCCEEDED)
+
+    assert libraries.catalog.get_track(alice.id, last.track_id).details.duration_ms == 6_000
+    assert songs.songs(album.id).needs_check
 
 
 def test_removing_a_library_cancels_its_scan(

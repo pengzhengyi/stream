@@ -38,6 +38,7 @@ from medleyplay.application.plugins import Lineup, PluginService
 from medleyplay.application.policy import PolicyService
 from medleyplay.application.preferences import PreferencesService
 from medleyplay.application.secrets import KeychainSecrets, Secrets
+from medleyplay.application.segments import SongsService
 from medleyplay.application.settings import SettingsService
 from medleyplay.application.throttle import SignInThrottle
 from medleyplay.config import CONFIG_FILE, Config, load_config
@@ -217,6 +218,7 @@ def build_services(  # noqa: PLR0913 -- the database and folder, then settings w
         preferences=PreferencesService(units, clock),
         mode=mode,
         details=DetailsService(units, clock, changes.tell),
+        songs=SongsService(units, clock, changes.tell),
     )
 
 
