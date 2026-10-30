@@ -2137,6 +2137,15 @@ dialog.modal::backdrop {
   font-size: 0.8rem;
 }
 
+.paste-video-note:empty {
+  margin: 0;
+}
+
+.paste-video-hint {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
 .detail-origin {
   margin: 0;
   color: var(--muted);

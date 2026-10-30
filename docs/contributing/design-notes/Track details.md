@@ -105,9 +105,11 @@ values.
 - ***Paste the video's details*** takes a video's title and description, copied
   from the site in a browser, and reads them as the `video` origin, as if the
   file beside the audio had held them. This works today, for any video, and
-  asks the site nothing. The text is kept with the Track, so the dialog opens
-  with it to correct and read again, and the songs it lists stay for
-  [Segments](Segments.md).
+  asks the site nothing. What it reads replaces what the video said before,
+  including what adding a site link recorded, since both are the video's own
+  text; the latest text read wins. The text is kept with the Track, so the
+  dialog opens with it to correct and read again, and the songs it lists stay
+  for [Segments](Segments.md). A paste with no words is refused.
 - **Many Tracks at once:** the same values, such as an album and its artist, can
   be set on several Tracks.
 

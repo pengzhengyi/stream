@@ -71,6 +71,7 @@ export function EditDetails({
   const [saving, setSaving] = useState(false);
   const [reading, setReading] = useState(false);
   const [readNote, setReadNote] = useState("");
+  const [readError, setReadError] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -116,18 +117,14 @@ export function EditDetails({
   };
   const readVideo = async (text: VideoText) => {
     setReading(true);
-    setError("");
+    setReadError("");
     setReadNote("");
     try {
       const read = await onReadVideo(text);
       setDetails(read.details);
-      setReadNote(
-        read.songs.length > 0
-          ? `Read the video's details. It lists ${String(read.songs.length)} songs.`
-          : "Read the video's details.",
-      );
+      setReadNote(noteOf(read));
     } catch (failure) {
-      setError(messageOf(failure));
+      setReadError(messageOf(failure));
     } finally {
       setReading(false);
     }
@@ -161,8 +158,14 @@ export function EditDetails({
           <>
             <PasteVideo
               read={details.video_text}
+              busy={saving || reading}
               reading={reading}
               note={readNote}
+              error={readError}
+              onEdit={() => {
+                setReadNote("");
+                setReadError("");
+              }}
               onRead={(text) => void readVideo(text)}
             />
             <fieldset className="detail-group">
@@ -203,23 +206,32 @@ export function EditDetails({
   );
 }
 
-/** A video's title and description to paste, starting from the text `read` before. */
+/**
+ * A video's title and description to paste, starting from the text `read` before;
+ * it can't be read while the dialog is `busy` saving or reading.
+ */
 function PasteVideo({
   read,
+  busy,
   reading,
   note,
+  error,
+  onEdit,
   onRead,
 }: {
   readonly read: VideoText | null;
+  readonly busy: boolean;
   readonly reading: boolean;
   readonly note: string;
+  readonly error: string;
+  readonly onEdit: () => void;
   readonly onRead: (text: VideoText) => void;
 }) {
   const [title, setTitle] = useState(read?.title ?? "");
   const [description, setDescription] = useState(read?.description ?? "");
   const empty = title.trim() === "" && description.trim() === "";
   const submit = () => {
-    if (!empty && !reading) {
+    if (!empty && !busy) {
       onRead({ title, description });
     }
   };
@@ -237,10 +249,12 @@ function PasteVideo({
           value={title}
           onChange={(event) => {
             setTitle(event.currentTarget.value);
+            onEdit();
           }}
           onKeyDown={(event) => {
-            // Enter reads the video's details here, rather than saving the dialog.
-            if (event.key === "Enter") {
+            // Enter reads the video's details here, rather than saving the dialog; an
+            // Enter that ends composing a word, as in Japanese, only ends it.
+            if (event.key === "Enter" && !event.nativeEvent.isComposing) {
               event.preventDefault();
               submit();
             }
@@ -257,25 +271,46 @@ function PasteVideo({
           value={description}
           onChange={(event) => {
             setDescription(event.currentTarget.value);
+            onEdit();
           }}
         />
+        <small className="paste-video-hint">
+          Reading replaces what the video said before; your own values stay.
+        </small>
         <button
           type="button"
           className="secondary paste-video-read"
-          disabled={empty || reading}
+          disabled={empty || busy}
           aria-busy={reading}
           onClick={submit}
         >
           Read the video's details
         </button>
-        {note !== "" && (
-          <p className="paste-video-note" role="status">
-            {note}
+        <p className="paste-video-note" role="status">
+          {note}
+        </p>
+        {error !== "" && (
+          <p className="error" role="alert">
+            {error}
           </p>
         )}
       </div>
     </details>
   );
+}
+
+const LIST = new Intl.ListFormat("en", { style: "long", type: "conjunction" });
+
+/** Say what reading a video's text found: the details it gave, and how many songs it lists. */
+function noteOf(read: VideoRead): string {
+  const video = read.details.origins.video ?? {};
+  const found = DETAIL_FIELDS.filter(({ name }) => video[name] !== undefined).map(({ label }) =>
+    label.toLowerCase(),
+  );
+  const songs = read.songs.length > 0 ? ` It lists ${String(read.songs.length)} songs.` : "";
+  return found.length > 0
+    ? `Read the video's details: ${LIST.format(found)}.${songs}`
+    : `Read the video's details, but found no details in them.${songs}`;
 }
 
 /** One detail's box, where its value comes from, and what other origins say. */

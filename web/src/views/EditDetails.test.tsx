@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -270,8 +270,72 @@ describe("editing a song's details", () => {
       expect(box(dialog, "Album")).toHaveValue("Bremen");
       expect(box(dialog, "Album")).toHaveAccessibleDescription("From the video");
       expect(within(dialog).getByRole("status")).toHaveTextContent(
-        "Read the video's details. It lists 2 songs.",
+        "Read the video's details: title, artist, album, and album artist. It lists 2 songs.",
       );
+    });
+
+    it("says when the video's details gave nothing to fill in", async () => {
+      const nothing: VideoRead = { details: detailsOf(7, {}, {}, BREMEN), songs: [] };
+      const { dialog } = await renderDialog(
+        detailsOf(7),
+        undefined,
+        vi.fn(() => Promise.resolve(nothing)),
+      );
+
+      await paste(dialog, BREMEN);
+      await read(dialog);
+
+      expect(within(dialog).getByRole("status")).toHaveTextContent(
+        "Read the video's details, but found no details in them.",
+      );
+    });
+
+    it("shows a value the household typed as the video's once the video gives it too", async () => {
+      const { dialog, onSave } = await renderDialog(
+        detailsOf(7),
+        undefined,
+        vi.fn(() => Promise.resolve(BREMEN_READ)),
+      );
+
+      await userEvent.type(box(dialog, "Album"), "Bremen");
+      await paste(dialog, BREMEN);
+      await read(dialog);
+
+      expect(box(dialog, "Album")).toHaveAccessibleDescription("From the video");
+      await save(dialog);
+      expect(onSave).not.toHaveBeenCalled();
+    });
+
+    it("can't read while a save is under way", async () => {
+      const onReadVideo = vi.fn(() => Promise.resolve(BREMEN_READ));
+      const { dialog } = await renderDialog(
+        detailsOf(7),
+        vi.fn(() => new Promise<void>(() => undefined)),
+        onReadVideo,
+      );
+
+      await paste(dialog, BREMEN);
+      await userEvent.type(box(dialog, "Genre"), "Vocaloid");
+      await save(dialog);
+
+      expect(
+        within(dialog).getByRole("button", { name: "Read the video's details" }),
+      ).toBeDisabled();
+      await userEvent.type(within(dialog).getByRole("textbox", { name: "Video title" }), "{Enter}");
+      expect(onReadVideo).not.toHaveBeenCalled();
+    });
+
+    it("doesn't read on the Enter that ends composing a word", async () => {
+      const onReadVideo = vi.fn(() => Promise.resolve(BREMEN_READ));
+      const { dialog } = await renderDialog(detailsOf(7), undefined, onReadVideo);
+      await paste(dialog, BREMEN);
+
+      fireEvent.keyDown(within(dialog).getByRole("textbox", { name: "Video title" }), {
+        key: "Enter",
+        isComposing: true,
+      });
+
+      expect(onReadVideo).not.toHaveBeenCalled();
     });
 
     it("keeps what the household typed when the video's details are read", async () => {
