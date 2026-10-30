@@ -41,6 +41,7 @@ _ALBUM_WORD: Final = re.compile(
 _DASH: Final = re.compile(r"\s+[-\u2013\u2014]\s+|\s*\uff0d\s*")
 # Spaced slash, or a full-width slash with or without spaces.
 _SLASH: Final = re.compile(r"\s+/\s+|\s*\uff0f\s*")
+_LEADING_SEPARATOR: Final = re.compile(r"\s*[/\uff0f\-\u2013\u2014\uff0d]")
 # Whitespace, `|`, `/`, hyphens, dashes, and the middle dot, full-width forms included.
 _SEPARATORS: Final = r"\s|\uff5c/\uff0f\-\u2013\u2014\uff0d\u00b7"
 _EDGE: Final = re.compile(rf"^[{_SEPARATORS}]+|[{_SEPARATORS}]+$")
@@ -212,8 +213,12 @@ def _read_title(raw: str) -> tuple[str, str, bool]:
     text = _tidy(_TAG.sub(" ", raw))
     quoted = _QUOTED.search(text)
     if quoted is not None:
-        rest = _ALBUM_WORD.sub(" ", text[: quoted.start()] + " " + text[quoted.end() :])
-        artist = _tidy(_QUOTING_MARKS.sub(" ", rest))
+        # The artist comes before the name, or after it behind a dash or slash: the
+        # words in "「メルト」を歌ってみた" ("I tried singing Melt") are no artist.
+        before, after = text[: quoted.start()], text[quoted.end() :]
+        if not _tidy(_ALBUM_WORD.sub(" ", before)) and _LEADING_SEPARATOR.match(after):
+            before = after
+        artist = _tidy(_QUOTING_MARKS.sub(" ", _ALBUM_WORD.sub(" ", before)))
         return _tidy(quoted.group(1)), artist, album_word
     text = _tidy(_ALBUM_WORD.sub(" ", text))
     artist, title = _split_at(_DASH, text)

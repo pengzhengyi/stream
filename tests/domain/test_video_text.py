@@ -131,6 +131,8 @@ def test_whitespace_in_a_title_collapses() -> None:
         ("【MV】「メルト」", {Field.TITLE: "メルト"}),
         ("ryo - 「メルト」", {Field.TITLE: "メルト", Field.ARTIST: "ryo"}),
         ("《メルト》 / ryo", {Field.TITLE: "メルト", Field.ARTIST: "ryo"}),
+        ("「メルト」を歌ってみた", {Field.TITLE: "メルト"}),
+        ("【洛天依】《霜雪千年》原创", {Field.TITLE: "霜雪千年"}),
     ],
     ids=[
         "corner brackets",
@@ -138,6 +140,8 @@ def test_whitespace_in_a_title_collapses() -> None:
         "alone",
         "after a dash",
         "before a slash",
+        "with words after it",
+        "with a note after it",
     ],
 )
 def test_a_name_in_quoting_marks_is_the_title(title: str, expected: dict[Field, Value]) -> None:
