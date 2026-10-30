@@ -73,6 +73,8 @@ export function useLibrary(onSignedOut: () => void): Library {
   const [error, setError] = useState("");
   const [mode, setMode] = useState<Mode | null>(null);
   const writes = useRef(0);
+  // The latest save of each Track's details, so an older read-back can't land after it.
+  const latestSave = useRef(new Map<number, number>());
 
   const failed = (failure: unknown) => {
     if (failure instanceof ApiError && failure.status === 401) {
@@ -162,9 +164,13 @@ export function useLibrary(onSignedOut: () => void): Library {
         throw failure;
       }
       // Saved; a Track that can't be read back now shows its new details on the next load.
+      const seq = ++writes.current;
+      latestSave.current.set(id, seq);
       api.track(id).then(
         (track) => {
-          dispatch({ type: "details", track });
+          if (latestSave.current.get(id) === seq) {
+            dispatch({ type: "details", track });
+          }
         },
         () => undefined,
       );

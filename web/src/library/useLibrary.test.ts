@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { api } from "../api";
 import { favoritesPlaylistOf, playlistOf, serve, signedIn, trackOf } from "../testing/server";
 import { useLibrary } from "./useLibrary";
 
@@ -47,6 +48,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   FakeEventSource.last = undefined;
 });
@@ -266,6 +268,29 @@ describe("saving a song's details", () => {
     await act(() => result.current.saveDetails(7, { year: 2014 }));
 
     expect(result.current.error).toBe("");
+  });
+
+  it("shows the last save's read-back when an earlier one answers after it", async () => {
+    const result = await libraryOf({ "POST /api/tracks/details": { body: { changed: 1 } } });
+    const answers: ((track: ReturnType<typeof trackOf>) => void)[] = [];
+    vi.spyOn(api, "track").mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          answers.push(resolve);
+        }),
+    );
+
+    await act(() => result.current.saveDetails(7, { title: "Sick Human" }));
+    await act(() => result.current.saveDetails(7, { title: "ケビョウニンゲン" }));
+    act(() => {
+      answers[1]?.(trackOf(7, "ケビョウニンゲン"));
+    });
+    await act(async () => {
+      answers[0]?.(trackOf(7, "Sick Human"));
+      await Promise.resolve();
+    });
+
+    expect(result.current.tracks.get(7)?.title).toBe("ケビョウニンゲン");
   });
 
   it("passes on why the server refused, leaving the Track as it was", async () => {
