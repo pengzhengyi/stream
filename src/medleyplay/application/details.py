@@ -1,13 +1,15 @@
 """Writing a Track's details: each origin's values, and the shown values on the Track's row.
 
-Everything that changes a Track's details writes through `record` or
-`set_household`, in the caller's transaction, and each rewrites the Track's row
-from its values, so the row always holds what `shown` chooses.
+Everything that changes a Track's details writes through `record`,
+`record_video_text`, or `set_household`, in the caller's transaction, and each
+rewrites the Track's row from its values, so the row always holds what `shown`
+chooses.
 """
 
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Literal
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -26,7 +28,8 @@ from medleyplay.domain.details import (
     shown,
 )
 from medleyplay.domain.errors import InvalidInputError, NotFoundError
-from medleyplay.persistence.schema import TrackRow, TrackValueRow
+from medleyplay.domain.video_text import Chapter, Reading, Song, VideoText, read_video
+from medleyplay.persistence.schema import TrackRow, TrackValueRow, VideoTextRow
 
 type OriginValues = dict[Origin, dict[Field, Value]]
 
@@ -39,6 +42,16 @@ class DetailsView:
     shown: dict[Field, Shown]
     found: dict[Field, Shown]
     values: OriginValues
+    video_text: VideoText | None
+    """The video's text the `video` values were read from, if any was."""
+
+
+@dataclass(frozen=True)
+class VideoRead:
+    """A Track's details once its video's text is read, and the songs that text lists."""
+
+    details: DetailsView
+    songs: tuple[Song, ...]
 
 
 def record(
@@ -63,6 +76,40 @@ def record(
     db.add_all(_rows(track_id, origin, kept, now))
     db.flush()
     refresh(db, track_id)
+
+
+def record_video_text(
+    db: Session,
+    track_id: TrackId,
+    text: VideoText,
+    came_from: Literal["household", "file"],
+    now: datetime,
+) -> Reading:
+    """Keep `text` as the Track's video's text, and make what it says the `video` values."""
+    _require(db, track_id)
+    row = db.get(VideoTextRow, track_id) or VideoTextRow(track_id=track_id)
+    row.title = text.title
+    row.description = text.description
+    row.chapters = [
+        {"start_ms": chapter.start_ms, "title": chapter.title} for chapter in text.chapters
+    ]
+    row.came_from = came_from
+    row.recorded_at = now
+    db.add(row)
+    reading = read_video(text)
+    record(db, track_id, Origin.VIDEO, reading.values, now)
+    return reading
+
+
+def video_text_of(db: Session, track_id: TrackId) -> VideoText | None:
+    """Return the Track's video's text, or `None` when none was read."""
+    row = db.get(VideoTextRow, track_id)
+    if row is None:
+        return None
+    chapters = tuple(
+        Chapter(int(chapter["start_ms"]), str(chapter["title"])) for chapter in row.chapters
+    )
+    return VideoText(row.title, row.description, chapters)
 
 
 def set_household(
@@ -108,7 +155,7 @@ def refresh(db: Session, track_id: TrackId) -> dict[Field, Shown]:
 
 
 class DetailsService:
-    """Read a Track's details, and set the household's own."""
+    """Read a Track's details, set the household's own, and read a video's pasted text."""
 
     def __init__(
         self,
@@ -127,10 +174,24 @@ class DetailsService:
             values = values_of(db, track_id)
             if db.get(TrackRow, track_id) is None:
                 raise _no_track(track_id)
+            video_text = video_text_of(db, track_id)
         found = shown(
             {origin: kept for origin, kept in values.items() if origin is not Origin.HOUSEHOLD}
         )
-        return DetailsView(track_id, shown(values), found, values)
+        return DetailsView(track_id, shown(values), found, values, video_text)
+
+    def read_video_text(self, track_id: TrackId, text: VideoText) -> VideoRead:
+        """Read the video's text the household pasted as the Track's `video` values.
+
+        They replace what the video said before; text with no words is refused.
+        """
+        if not (text.title.strip() or text.description.strip()):
+            message = "Paste the video's title or its description."
+            raise InvalidInputError(message)
+        with self._units.begin() as db:
+            reading = record_video_text(db, track_id, text, "household", self._clock())
+        self._changed()
+        return VideoRead(self.details(track_id), reading.songs)
 
     def put_household(self, track_id: TrackId, values: Mapping[str, object]) -> DetailsView:
         """Make `values` the household's values for the Track, replacing its earlier ones."""

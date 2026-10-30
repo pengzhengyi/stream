@@ -11,6 +11,8 @@ import {
   type Mode,
   type Playlist,
   type Track,
+  type VideoRead,
+  type VideoText,
   api,
 } from "../api";
 import { newId } from "../ids";
@@ -38,6 +40,11 @@ export interface Library {
     id: number,
     changes: Partial<Record<Detail, string | number | null>>,
   ) => Promise<void>;
+  /**
+   * Read a video's pasted text as the Track's `video` values; the Track then shows the
+   * server's answer. The promise rejects with why when the server refuses.
+   */
+  readonly readVideoText: (id: number, text: VideoText) => Promise<VideoRead>;
   /**
    * Add `track` to the end of the Playlists `ids`, and to a new Playlist for each
    * of `newNames`. The Playlists the server saves show at once; the promise rejects
@@ -73,7 +80,7 @@ export function useLibrary(onSignedOut: () => void): Library {
   const [error, setError] = useState("");
   const [mode, setMode] = useState<Mode | null>(null);
   const writes = useRef(0);
-  // The latest save of each Track's details, so an older read-back can't land after it.
+  // The latest change of each Track's details, so an older read-back can't land after it.
   const latestSave = useRef(new Map<number, number>());
 
   const failed = (failure: unknown) => {
@@ -125,6 +132,31 @@ export function useLibrary(onSignedOut: () => void): Library {
     };
   }, []);
 
+  /** Send `request`, signing out on a 401; then show the Track as the server now has it. */
+  const changeDetails = async <T>(id: number, request: Promise<T>): Promise<T> => {
+    let answer: T;
+    try {
+      answer = await request;
+    } catch (failure) {
+      if (failure instanceof ApiError && failure.status === 401) {
+        onSignedOut();
+      }
+      throw failure;
+    }
+    // Changed; a Track that can't be read back now shows its new details on the next load.
+    const seq = ++writes.current;
+    latestSave.current.set(id, seq);
+    api.track(id).then(
+      (track) => {
+        if (latestSave.current.get(id) === seq) {
+          dispatch({ type: "details", track });
+        }
+      },
+      () => undefined,
+    );
+    return answer;
+  };
+
   const write = <F extends Field>(id: number, field: F, value: Track[F], send: Promise<Track>) => {
     const seq = ++writes.current;
     dispatch({ type: "write", id, field, value, seq });
@@ -155,26 +187,9 @@ export function useLibrary(onSignedOut: () => void): Library {
       write(id, "rating", rating, api.setRating(id, rating));
     },
     saveDetails: async (id, changes) => {
-      try {
-        await api.setDetails([id], changes);
-      } catch (failure) {
-        if (failure instanceof ApiError && failure.status === 401) {
-          onSignedOut();
-        }
-        throw failure;
-      }
-      // Saved; a Track that can't be read back now shows its new details on the next load.
-      const seq = ++writes.current;
-      latestSave.current.set(id, seq);
-      api.track(id).then(
-        (track) => {
-          if (latestSave.current.get(id) === seq) {
-            dispatch({ type: "details", track });
-          }
-        },
-        () => undefined,
-      );
+      await changeDetails(id, api.setDetails([id], changes));
     },
+    readVideoText: (id, text) => changeDetails(id, api.readVideoText(id, text)),
     addToPlaylists: async (track, ids, newNames) => {
       const puts = [
         ...playlists

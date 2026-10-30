@@ -14,6 +14,7 @@ import type {
   Playlist,
   Preferences,
   Track,
+  VideoText,
 } from "../api";
 import { type Origins, type Values, shownOf } from "../library/details";
 import { type SavedShortcuts, openAccount } from "../shortcuts";
@@ -100,15 +101,23 @@ export const TAGGED_ORIGINS: Origins = {
 
 /**
  * A Track's details from the origins `found`, the album file's by default, with the
- * household's own values `household`, which then show as the server would show them.
+ * household's own values `household`, which then show as the server would show them,
+ * and the video's text `videoText` the `video` values were read from.
  */
 export function detailsOf(
   trackId: number,
   household: Values = {},
   found: Origins = ALBUM_FILE_ORIGINS,
+  videoText: VideoText | null = null,
 ): Details {
   const origins = Object.keys(household).length > 0 ? { household, ...found } : found;
-  return { track_id: trackId, shown: shownOf(origins), found: shownOf(found), origins };
+  return {
+    track_id: trackId,
+    shown: shownOf(origins),
+    found: shownOf(found),
+    origins,
+    video_text: videoText,
+  };
 }
 
 /** A server with no plugins answering any extension point, and one Account. */

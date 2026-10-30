@@ -30,6 +30,8 @@ MIN_SONGS: Final = 2
 MIN_SONG_MS: Final = 1_000
 ALBUM_SONGS: Final = 3
 """A song list this long makes the video an album."""
+MAX_LINE: Final = 2_000
+"""A line longer than this is no song's, however it starts."""
 
 _TAG: Final = re.compile(r"【[^】]*】|\[[^\]]*\]")
 _QUOTED: Final = re.compile(r"[《「『]([^》」』]*)[》」』]")
@@ -122,6 +124,9 @@ def read_song_list(text: str) -> tuple[Song, ...]:
     for number, line in enumerate(text.splitlines(), start=1):
         if not line.strip():
             continue
+        if len(line) > MAX_LINE:
+            message = f"Line {number} is too long for a song."
+            raise InvalidInputError(message)
         timed = _timed(line)
         if timed is None:
             message = f"Line {number} has no time."
@@ -180,8 +185,13 @@ def _songs_of(text: VideoText) -> tuple[Song, ...]:
     return songs if _problem_with(songs) is None else ()
 
 
-def _timed(line: str) -> tuple[int, str] | None:
+def _timed(raw: str) -> tuple[int, str] | None:
     """Return a line's start in milliseconds and the rest of it, or `None` with no time."""
+    if len(raw) > MAX_LINE:
+        return None
+    # One space between words keeps the patterns' optional spaces from trying every
+    # split of a long run of padding.
+    line = " ".join(raw.split())
     first = _TIME_FIRST.match(line)
     if first is not None and (start := _milliseconds(*first.group(1, 2, 3))) is not None:
         return start, first.group(4)

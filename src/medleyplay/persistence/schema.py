@@ -117,6 +117,25 @@ class TrackValueRow(Base):
     recorded_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 
+class VideoTextRow(Base):
+    """The text of a Track's video, as pasted or read beside the file: the `video` values' source.
+
+    `chapters` lists `{"start_ms": int, "title": str}` in order.
+    """
+
+    __tablename__ = "video_text"
+    __table_args__ = (CheckConstraint("came_from IN ('household', 'file')", name="came_from"),)
+
+    track_id: Mapped[int] = mapped_column(
+        ForeignKey("track.id", ondelete="CASCADE"), primary_key=True
+    )
+    title: Mapped[str] = mapped_column(String(1_000))
+    description: Mapped[str] = mapped_column(String(20_000))
+    chapters: Mapped[list[dict[str, str | int]]] = mapped_column(JSON)
+    came_from: Mapped[str] = mapped_column(String(16))
+    recorded_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
 class SourceRow(Base):
     """Where a Track's audio comes from; `(kind, locator)` is its natural key."""
 

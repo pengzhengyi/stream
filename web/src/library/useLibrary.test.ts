@@ -2,7 +2,14 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "../api";
-import { favoritesPlaylistOf, playlistOf, serve, signedIn, trackOf } from "../testing/server";
+import {
+  detailsOf,
+  favoritesPlaylistOf,
+  playlistOf,
+  serve,
+  signedIn,
+  trackOf,
+} from "../testing/server";
 import { useLibrary } from "./useLibrary";
 
 /** A stand-in for the event stream: the test sends the events the server would. */
@@ -291,6 +298,26 @@ describe("saving a song's details", () => {
     });
 
     expect(result.current.tracks.get(7)?.title).toBe("ケビョウニンゲン");
+  });
+
+  it("reads a pasted video's text, then shows the Track as the server now has it", async () => {
+    const sent: unknown[] = [];
+    const result = await libraryOf({
+      "POST /api/tracks/7/video-text": (body: unknown) => {
+        sent.push(body);
+        return { body: { details: detailsOf(7), songs: [] } };
+      },
+      "GET /api/tracks/7": { body: trackOf(7, "ケビョウニンゲン") },
+    });
+
+    await act(() =>
+      result.current.readVideoText(7, { title: "ケビョウニンゲン / wowaka", description: "" }),
+    );
+
+    expect(sent).toEqual([{ title: "ケビョウニンゲン / wowaka", description: "" }]);
+    await waitFor(() => {
+      expect(result.current.tracks.get(7)?.title).toBe("ケビョウニンゲン");
+    });
   });
 
   it("passes on why the server refused, leaving the Track as it was", async () => {

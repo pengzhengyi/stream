@@ -105,7 +105,11 @@ values.
 - ***Paste the video's details*** takes a video's title and description, copied
   from the site in a browser, and reads them as the `video` origin, as if the
   file beside the audio had held them. This works today, for any video, and
-  asks the site nothing.
+  asks the site nothing. What it reads replaces what the video said before,
+  including what adding a site link recorded, since both are the video's own
+  text; the latest text read wins. The text is kept with the Track, so the
+  dialog opens with it to correct and read again, and the songs it lists stay
+  for [Segments](Segments.md). A paste with no words is refused.
 - **Many Tracks at once:** the same values, such as an album and its artist, can
   be set on several Tracks.
 
@@ -178,10 +182,10 @@ harm the core, and each is turned on or off like any plugin.
 
 | Route | Who | Does |
 | --- | --- | --- |
-| `GET /api/tracks/{id}/details` | Signed in | Every field's shown value and origin, and each origin's value |
+| `GET /api/tracks/{id}/details` | Signed in | Every field's shown value and origin, each origin's value, and the video's text read |
 | `PUT /api/tracks/{id}/details` | Signed in | The household's values for the Track, replacing its earlier ones |
 | `POST /api/tracks/details` | Signed in | Sets the given household values on many Tracks |
-| `POST /api/tracks/{id}/video-text` | Signed in | Reads a pasted title and description as the `video` origin |
+| `POST /api/tracks/{id}/video-text` | Signed in | Reads a pasted title and description as the `video` origin; answers the details and the songs listed |
 | `GET /api/covers/{id}` | Signed in | A cover's image |
 | `PUT /api/tracks/{id}/cover` | Signed in | The household's cover, as the request body |
 
