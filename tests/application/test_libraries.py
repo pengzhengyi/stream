@@ -10,10 +10,13 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
 from medleyplay.application.libraries import READER_VERSION
+from medleyplay.application.segments import SongsService
+from medleyplay.domain import video_text
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.errors import ForbiddenError, InvalidInputError
 from medleyplay.domain.jobs import JobState
 from medleyplay.domain.libraries import LibraryKind, LibraryState
+from medleyplay.domain.segments import SongRow
 from medleyplay.persistence.schema import SourceRow
 from tests.support.audio import Song, folder_of, zip_of
 from tests.support.factories import NewAccountFactory
@@ -207,6 +210,28 @@ def test_removing_a_library_removes_its_tracks(
     libraries.service.remove(alice, registered.library.id)
 
     assert libraries.service.list_libraries() == []
+    assert _titles(libraries, alice) == []
+
+
+def test_removing_a_library_removes_the_songs_split_from_its_files(
+    libraries: Libraries, songs: SongsService, household: tuple[Account, Account], tmp_path: Path
+) -> None:
+    alice, _ = household
+    music = folder_of(tmp_path / "Music", {"Bremen.wav": Song("Bremen", seconds=5.0)})
+    registered = libraries.service.register(alice, "Music", LibraryKind.FOLDER, str(music))
+    assert registered.scan is not None
+    libraries.wait_for(registered.scan.id, JobState.SUCCEEDED)
+    (album,) = libraries.catalog.list_tracks(alice.id)
+    songs.save(
+        album.id,
+        [
+            SongRow(None, video_text.Song(0, "アイネクライネ")),
+            SongRow(None, video_text.Song(2_000, "Last")),
+        ],
+    )
+
+    libraries.service.remove(alice, registered.library.id)
+
     assert _titles(libraries, alice) == []
 
 

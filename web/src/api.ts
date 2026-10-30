@@ -28,6 +28,10 @@ export interface Track {
   readonly availability: Availability;
   /** Whether a Source of the Track has a Download kept on the server. */
   readonly downloaded: boolean;
+  /** The album file this Track is a song of, if it is one. */
+  readonly segment_of: number | null;
+  /** Whether this Track's file is split into songs, which then stand for it. */
+  readonly split: boolean;
 }
 
 /** A detail of a Track the household can edit. */
