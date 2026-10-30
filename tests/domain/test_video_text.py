@@ -1,5 +1,6 @@
 """Reading a video's title and description: its details, whether it is an album, its song list."""
 
+import time
 from itertools import accumulate
 
 import pytest
@@ -9,6 +10,7 @@ from hypothesis import strategies as st
 from medleyplay.domain.details import MAX_TEXT, Field, Value, found_value
 from medleyplay.domain.errors import InvalidInputError
 from medleyplay.domain.video_text import (
+    MAX_LINE,
     MAX_SONGS,
     Chapter,
     Song,
@@ -286,6 +288,35 @@ def test_a_line_with_no_title_is_not_a_song() -> None:
     )
 
 
+def test_a_line_padded_with_spaces_reads_as_its_song() -> None:
+    description = "00:00 　  Intro\n03:12" + " " * 40 + "Night Drive\n"
+
+    assert read_video(described(description)).songs == (
+        Song(0, "Intro"),
+        Song(192_000, "Night Drive"),
+    )
+
+
+def test_a_line_of_long_padding_is_read_at_once() -> None:
+    padded = "Intro" + " " * 1_000 + "credits"
+    description = f"00:00 Intro\n{padded}\n03:12 Night Drive\n"
+
+    started = time.perf_counter()
+    songs = read_video(described(description)).songs
+
+    assert time.perf_counter() - started < 1.0
+    assert songs == (Song(0, "Intro"), Song(192_000, "Night Drive"))
+
+
+def test_a_line_too_long_for_a_song_is_not_one() -> None:
+    description = f"00:00 Intro\n03:12 {'x' * MAX_LINE}\n07:40 Blue Room\n"
+
+    assert read_video(described(description)).songs == (
+        Song(0, "Intro"),
+        Song(460_000, "Blue Room"),
+    )
+
+
 def test_two_chapters_make_the_song_list() -> None:
     reading = read_video(VideoText("Mixtape", chapters=TWO_CHAPTERS))
 
@@ -416,6 +447,11 @@ def test_a_pasted_line_with_no_time_is_refused_naming_the_line() -> None:
 
     with pytest.raises(InvalidInputError, match=r"Line 2.*no time"):
         read_song_list(text)
+
+
+def test_a_pasted_line_too_long_for_a_song_is_refused_naming_the_line() -> None:
+    with pytest.raises(InvalidInputError, match=r"Line 2.*too long"):
+        read_song_list(f"00:00 Intro\n03:12 {'x' * MAX_LINE}")
 
 
 def test_a_pasted_line_with_a_time_out_of_range_has_no_time() -> None:
