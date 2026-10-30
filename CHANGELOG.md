@@ -128,6 +128,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   once through `PUT /api/tracks/{id}/details` and `POST /api/tracks/details`. See
   the [Track details](docs/contributing/design-notes/Track%20details.md) note.
 
+- A parser reads a video's title and description for its song's title, artist,
+  album, and song list.
+
 ### Changed
 
 - Renamed the project from stream to medleyplay.
