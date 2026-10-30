@@ -59,14 +59,14 @@ def test_a_song_named_by_its_id_keeps_its_track(
         "songs"
     ]
     rows = [
-        {"id": first["id"], "start_ms": 0, "title": "Eine Kleine", "artist": ""},
+        {"id": first["id"], "start_ms": 0, "title": "Little Night", "artist": ""},
         {"id": second["id"], "start_ms": 252_000, "title": "ゴーゴー幽霊船", "artist": ""},
     ]
 
     songs = client.put(f"/api/tracks/{album}/songs", json={"rows": rows}).json()["songs"]
 
     assert [song["track_id"] for song in songs] == [first["track_id"], second["track_id"]]
-    assert client.get(f"/api/tracks/{first['track_id']}").json()["title"] == "Eine Kleine"
+    assert client.get(f"/api/tracks/{first['track_id']}").json()["title"] == "Little Night"
 
 
 def test_unsplitting_a_file_says_how_many_songs_it_removed(
