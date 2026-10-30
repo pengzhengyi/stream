@@ -46,7 +46,10 @@ export function Modal({
       aria-describedby={describedBy}
       onClose={onClose}
       onCancel={(event) => {
-        event.preventDefault();
+        // A close request that isn't a key, such as Android's Back button.
+        if (locked) {
+          event.preventDefault();
+        }
       }}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
