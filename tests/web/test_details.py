@@ -102,3 +102,52 @@ def test_details_need_a_signed_in_account(client: TestClient, catalog: CatalogSe
     track_id = _one_track(catalog)
 
     assert client.get(f"/api/tracks/{track_id}/details").status_code == 401
+
+
+def test_a_pasted_videos_text_answers_the_details_and_the_songs_found(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    track_id = _one_track(catalog)
+
+    response = client.post(
+        f"/api/tracks/{track_id}/video-text",
+        json={
+            "title": "ハチ 全专《Bremen》",
+            "description": "00:00 アイネクライネ\n04:12 ゴーゴー幽霊船 - ハチ\n",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["details"]["shown"]["album"] == {"value": "Bremen", "origin": "video"}
+    assert body["details"]["video_text"] == {
+        "title": "ハチ 全专《Bremen》",
+        "description": "00:00 アイネクライネ\n04:12 ゴーゴー幽霊船 - ハチ\n",
+    }
+    assert body["songs"] == [
+        {"start_ms": 0, "title": "アイネクライネ", "artist": ""},
+        {"start_ms": 252_000, "title": "ゴーゴー幽霊船", "artist": "ハチ"},
+    ]
+
+
+def test_a_track_shows_no_video_text_until_one_is_read(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    track_id = _one_track(catalog)
+
+    assert client.get(f"/api/tracks/{track_id}/details").json()["video_text"] is None
+
+
+def test_a_description_longer_than_a_site_allows_is_refused(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    track_id = _one_track(catalog)
+
+    response = client.post(
+        f"/api/tracks/{track_id}/video-text", json={"title": "Melt", "description": "x" * 20_001}
+    )
+
+    assert response.status_code == 422

@@ -6,10 +6,11 @@ from typing import Annotated
 from fastapi import APIRouter
 from pydantic import BaseModel, Field, StrictInt, StrictStr
 
-from medleyplay.application.details import DetailsView
+from medleyplay.application.details import DetailsView, VideoRead
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.details import Field as Detail
 from medleyplay.domain.details import Origin, Shown
+from medleyplay.domain.video_text import VideoText
 from medleyplay.web.deps import DetailsDep, SignedInAccount
 from medleyplay.web.ids import RowId
 
@@ -26,17 +27,35 @@ class ShownOut(BaseModel):
     origin: Origin
 
 
+class VideoTextIn(BaseModel):
+    """A video's title and description, as the site shows them."""
+
+    title: Annotated[StrictStr, Field(max_length=1_000)] = Field(examples=["ハチ 全专《Bremen》"])
+    description: Annotated[StrictStr, Field(max_length=20_000)] = Field(
+        default="", examples=["00:00 アイネクライネ\n04:12 ゴーゴー幽霊船 - ハチ"]
+    )
+
+
+class VideoTextOut(BaseModel):
+    """The video's text the `video` values were read from."""
+
+    title: str
+    description: str
+
+
 class DetailsOut(BaseModel):
     """A Track's shown values, what each origin says, and what would show without the household.
 
     A field no origin gives is absent from `shown`; `found` is what would show if the
-    household's values were dropped.
+    household's values were dropped. `video_text` is the video's text the `video`
+    values were read from, if any was.
     """
 
     track_id: int
     shown: dict[str, ShownOut]
     found: dict[str, ShownOut]
     origins: dict[Origin, dict[str, DetailValue]]
+    video_text: VideoTextOut | None
 
     @classmethod
     def of(cls, view: DetailsView) -> "DetailsOut":
@@ -49,6 +68,35 @@ class DetailsOut(BaseModel):
                 origin: {str(field): value for field, value in values.items()}
                 for origin, values in view.values.items()
             },
+            video_text=None
+            if view.video_text is None
+            else VideoTextOut(title=view.video_text.title, description=view.video_text.description),
+        )
+
+
+class SongOut(BaseModel):
+    """A song of a song list: where it starts, its title, and its artist, or ""."""
+
+    start_ms: int
+    title: str
+    artist: str
+
+
+class VideoReadOut(BaseModel):
+    """A Track's details once its video's text is read, and the songs that text lists."""
+
+    details: DetailsOut
+    songs: list[SongOut]
+
+    @classmethod
+    def of(cls, read: VideoRead) -> "VideoReadOut":
+        """Return the API view of `read`."""
+        return cls(
+            details=DetailsOut.of(read.details),
+            songs=[
+                SongOut(start_ms=song.start_ms, title=song.title, artist=song.artist)
+                for song in read.songs
+            ],
         )
 
 
@@ -99,3 +147,12 @@ def put_details(
 def set_on_many(body: ManyIn, _: SignedInAccount, service: DetailsDep) -> ManyOut:
     """Set the given household values on every Track named; either all change or none."""
     return ManyOut(changed=service.set_on_many(map(TrackId, body.track_ids), body.values))
+
+
+@router.post("/{track_id}/video-text")
+def read_video_text(
+    track_id: RowId, body: VideoTextIn, _: SignedInAccount, service: DetailsDep
+) -> VideoReadOut:
+    """Read a video's pasted title and description as the Track's `video` values."""
+    read = service.read_video_text(TrackId(track_id), VideoText(body.title, body.description))
+    return VideoReadOut.of(read)

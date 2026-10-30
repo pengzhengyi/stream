@@ -10,6 +10,7 @@ from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.details import Field, Origin, Shown
 from medleyplay.domain.errors import InvalidInputError, NotFoundError
+from medleyplay.domain.video_text import Song, VideoText
 from tests.support.factories import NewAccountFactory, SourceKeyFactory, TrackDetailsFactory
 from tests.support.fakes import FakeClock
 
@@ -136,3 +137,75 @@ def test_a_change_tells_the_catalogs_listeners(
     service.put_household(track_id, {"genre": "Pop"})
 
     assert told == ["catalog"]
+
+
+# --- The video's text, pasted ------------------------------------------------
+
+_ALBUM_DESCRIPTION = """\
+ハチの1stアルバム
+00:00 アイネクライネ
+04:12 ゴーゴー幽霊船 - ハチ
+1:02:03 Last
+"""
+
+
+def test_a_pasted_videos_title_replaces_what_the_video_said(
+    catalog: CatalogService, details: DetailsService
+) -> None:
+    track_id = _song(catalog)
+
+    read = details.read_video_text(track_id, VideoText("【GUMI】ケビョウニンゲン / wowaka"))
+
+    assert read.details.values[Origin.VIDEO] == {
+        Field.TITLE: "ケビョウニンゲン",
+        Field.ARTIST: "wowaka",
+    }
+    assert read.details.shown[Field.TITLE] == Shown("ケビョウニンゲン", Origin.VIDEO)
+
+
+def test_a_pasted_description_gives_the_song_list_and_makes_an_album(
+    catalog: CatalogService, details: DetailsService
+) -> None:
+    track_id = _song(catalog)
+
+    read = details.read_video_text(track_id, VideoText("ハチ 全专《Bremen》", _ALBUM_DESCRIPTION))
+
+    assert read.songs == (
+        Song(0, "アイネクライネ"),
+        Song(252_000, "ゴーゴー幽霊船", "ハチ"),
+        Song(3_723_000, "Last"),
+    )
+    assert read.details.shown[Field.ALBUM] == Shown("Bremen", Origin.VIDEO)
+
+
+def test_the_households_values_still_win_over_a_pasted_video(
+    catalog: CatalogService, details: DetailsService
+) -> None:
+    track_id = _song(catalog)
+    details.put_household(track_id, {"title": "Sick Human"})
+
+    read = details.read_video_text(track_id, VideoText("ケビョウニンゲン"))
+
+    assert read.details.shown[Field.TITLE] == Shown("Sick Human", Origin.HOUSEHOLD)
+
+
+def test_the_pasted_text_is_kept_with_the_details(
+    catalog: CatalogService, details: DetailsService
+) -> None:
+    track_id = _song(catalog)
+    details.read_video_text(track_id, VideoText("ケビョウニンゲン", "最初の歌"))
+
+    details.read_video_text(track_id, VideoText("ケビョウニンゲン / wowaka", "二番目"))
+
+    assert details.details(track_id).video_text == VideoText("ケビョウニンゲン / wowaka", "二番目")
+
+
+def test_a_track_has_no_video_text_until_one_is_read(
+    catalog: CatalogService, details: DetailsService
+) -> None:
+    assert details.details(_song(catalog)).video_text is None
+
+
+def test_video_text_for_a_missing_track_is_not_found(details: DetailsService) -> None:
+    with pytest.raises(NotFoundError):
+        details.read_video_text(TrackId(999), VideoText("ケビョウニンゲン"))
