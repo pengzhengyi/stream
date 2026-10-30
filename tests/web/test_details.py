@@ -151,3 +151,28 @@ def test_a_description_longer_than_a_site_allows_is_refused(
     )
 
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{"title": "", "description": ""}, {"title": "  ", "description": "\n\t"}, {"title": 3}, {}],
+    ids=["empty", "blank", "not text", "no title"],
+)
+def test_a_paste_with_no_text_is_refused(
+    client: TestClient, catalog: CatalogService, body: dict[str, object]
+) -> None:
+    set_up_as_alice(client)
+    track_id = _one_track(catalog)
+
+    response = client.post(f"/api/tracks/{track_id}/video-text", json=body)
+
+    assert response.status_code == 422
+    assert client.get(f"/api/tracks/{track_id}").json()["title"] == "Intro"
+
+
+def test_a_paste_for_a_missing_track_is_not_found(client: TestClient) -> None:
+    set_up_as_alice(client)
+
+    response = client.post("/api/tracks/999/video-text", json={"title": "Melt"})
+
+    assert response.status_code == 404

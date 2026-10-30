@@ -181,7 +181,13 @@ class DetailsService:
         return DetailsView(track_id, shown(values), found, values, video_text)
 
     def read_video_text(self, track_id: TrackId, text: VideoText) -> VideoRead:
-        """Read the video's text the household pasted as the Track's `video` values."""
+        """Read the video's text the household pasted as the Track's `video` values.
+
+        They replace what the video said before; text with no words is refused.
+        """
+        if not (text.title.strip() or text.description.strip()):
+            message = "Paste the video's title or its description."
+            raise InvalidInputError(message)
         with self._units.begin() as db:
             reading = record_video_text(db, track_id, text, "household", self._clock())
         self._changed()
