@@ -53,7 +53,8 @@ from medleyplay.domain.playback import (
     media_type,
     source_version,
 )
-from medleyplay.persistence.schema import DownloadRow, LibraryRow, SourceRow, TrackRow
+from medleyplay.domain.segments import SEGMENT_SOURCE, parse_segment_locator
+from medleyplay.persistence.schema import DownloadRow, LibraryRow, SegmentRow, SourceRow, TrackRow
 from medleyplay.plugin_api import (
     LIBRARY_BACKEND,
     LOCATE_FILE,
@@ -95,19 +96,29 @@ class AudioFile:
 
 
 @dataclass(frozen=True)
+class Stretch:
+    """Where a song inside a longer file starts and ends in it; `None` ends with the file."""
+
+    start_ms: int
+    end_ms: int | None
+
+
+@dataclass(frozen=True)
 class Ready:
-    """The Track plays from this Source now."""
+    """The Track plays from this Source now; a song, only its `stretch` of it."""
 
     source_id: SourceId
     media_type: str
+    stretch: Stretch | None = None
 
 
 @dataclass(frozen=True)
 class Preparing:
-    """The Track plays once `job` makes its Source's cache copy."""
+    """The Track plays once `job` makes its Source's cache copy; a song, only its `stretch`."""
 
     source_id: SourceId
     job: Job
+    stretch: Stretch | None = None
 
 
 @dataclass(frozen=True)
@@ -210,15 +221,23 @@ class PlaybackService:
         """Answer how the Track can play: ready, preparing, or unplayable.
 
         A Source that is ready wins over one that must be prepared first, and a
-        Library file to copy wins over a Source to download.
+        Library file to copy wins over a Source to download. A song inside a longer
+        file plays as its album file's Source does, answering its stretch of it.
         """
+        stretch: Stretch | None = None
         with self._units() as db:
             if db.get(TrackRow, track_id) is None:
                 message = f"No Track has the id {track_id}."
                 raise NotFoundError(message)
-            sources = db.scalars(
-                select(SourceRow).where(SourceRow.track_id == track_id).order_by(SourceRow.id)
-            ).all()
+            sources = list(
+                db.scalars(
+                    select(SourceRow).where(SourceRow.track_id == track_id).order_by(SourceRow.id)
+                )
+            )
+            song = next((row for row in sources if row.kind == SEGMENT_SOURCE), None)
+            if song is not None:
+                album, stretch = _song_of(db, song)
+                sources = [] if album is None else [album]
             libraries = {row.id: row for row in db.scalars(select(LibraryRow))}
         found: list[Availability] = []
         to_prepare: _NeedsCopy | None = None
@@ -227,14 +246,14 @@ class PlaybackService:
             match self._consider(row, libraries):
                 case AudioFile() as audio:
                     audio.close()
-                    return Ready(SourceId(row.id), audio.media_type)
+                    return Ready(SourceId(row.id), audio.media_type, stretch)
                 case _NeedsCopy() as needed:
                     to_prepare = to_prepare or needed
                 case _NeedsDownload() as needed:
                     to_download = to_download or needed
                 case _Gone(availability=availability):
                     found.append(availability)
-        return self._prepared(caller, to_prepare, to_download, found)
+        return self._prepared(caller, to_prepare, to_download, found, stretch)
 
     def open_audio(self, source_id: SourceId) -> AudioFile:
         """Open a Source's audio for serving; the caller closes it.
@@ -292,9 +311,10 @@ class PlaybackService:
         to_prepare: "_NeedsCopy | None",
         to_download: "_NeedsDownload | None",
         found: list[Availability],
+        stretch: Stretch | None,
     ) -> Playback:
         if to_prepare is not None:
-            return Preparing(to_prepare.source.id, self._prepare(caller, to_prepare))
+            return Preparing(to_prepare.source.id, self._prepare(caller, to_prepare), stretch)
         if to_download is not None:
             job = self._downloads.start(caller, to_download.source_id)
             if job is None:
@@ -302,7 +322,7 @@ class PlaybackService:
             elif not self._online() and job.state in {JobState.QUEUED, JobState.WAITING}:
                 found.append(Availability.WAITING_ONLINE)
             else:
-                return Preparing(to_download.source_id, job)
+                return Preparing(to_download.source_id, job, stretch)
         return Unplayable(track_availability(found))
 
     def _downloaded_audio(self, source_id: SourceId, state: SourceState) -> AudioFile:
@@ -493,3 +513,29 @@ def _closing_on_error(descriptor: int) -> Iterator[None]:
 
 def _refused(path: str, why: str) -> PluginCallError:
     return PluginCallError("plugin", f"The plugin located {path!r}, which {why}.")
+
+
+def _song_of(db: Session, song: SourceRow) -> tuple[SourceRow | None, Stretch | None]:
+    # A song's album file's Source, and where the song starts and ends in it: at the
+    # next song's start, or at the file's end.
+    album_id, segment_id = parse_segment_locator(song.locator)
+    album = db.get(SourceRow, album_id)
+    segment = db.get(SegmentRow, segment_id)
+    if album is None or segment is None:
+        return None, None
+    next_start = db.scalar(
+        select(SegmentRow.start_ms)
+        .where(
+            SegmentRow.album_source_id == segment.album_source_id,
+            SegmentRow.start_ms > segment.start_ms,
+        )
+        .order_by(SegmentRow.start_ms)
+        .limit(1)
+    )
+    end = next_start if next_start is not None else _length_of(db, album)
+    return album, Stretch(segment.start_ms, end)
+
+
+def _length_of(db: Session, source: SourceRow) -> int | None:
+    track = db.get(TrackRow, source.track_id)
+    return None if track is None else track.duration_ms

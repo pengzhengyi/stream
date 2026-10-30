@@ -18,6 +18,7 @@ from medleyplay.application.builtin_playlists import ensure_builtin_playlists
 from medleyplay.application.changes import OnChange
 from medleyplay.application.details import record as record_details
 from medleyplay.application.rule_schema import read_rules, rules_document
+from medleyplay.application.segments import album_file_of
 from medleyplay.application.track_facts import track_facts
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.catalog import (
@@ -48,7 +49,6 @@ from medleyplay.persistence.schema import (
     PlaylistEntryRow,
     PlaylistRow,
     PlayRow,
-    SegmentRow,
     SourceRow,
     TrackRow,
     TrackStateRow,
@@ -133,7 +133,7 @@ class CatalogService:
             rows = db.execute(_tracks_for(account_id).order_by(TrackRow.id)).all()
             available = _availability(db, select(SourceRow), online=self._online())
             downloaded = _downloaded(db, select(SourceRow.track_id))
-            segment_of = _segment_of(db)
+            segment_of = album_file_of(db)
             split = set(segment_of.values())
             return [
                 _to_track(
@@ -159,7 +159,7 @@ class CatalogService:
             downloaded = _downloaded(
                 db, select(SourceRow.track_id).where(SourceRow.track_id == track_id)
             )
-            segment_of = _segment_of(db)
+            segment_of = album_file_of(db)
         return _to_track(
             *found,
             available[track_id],
@@ -428,16 +428,6 @@ def _availability(
     found: defaultdict[int, Availability] = defaultdict(lambda: Availability.MISSING)
     found.update({track: track_availability(each) for track, each in per_track.items()})
     return found
-
-
-def _segment_of(db: Session) -> dict[int, int]:
-    # Each song's album file Track.
-    rows = db.execute(
-        select(SegmentRow.track_id, SourceRow.track_id).join(
-            SourceRow, SourceRow.id == SegmentRow.album_source_id
-        )
-    )
-    return dict(rows.all())
 
 
 def _downloaded(db: Session, track_ids: Select[int]) -> set[int]:

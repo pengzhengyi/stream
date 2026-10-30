@@ -152,6 +152,16 @@ class SongsService:
             self._on_change("catalog")
 
 
+def album_file_of(db: Session) -> dict[TrackId, TrackId]:
+    """Return the album file of every song, each song's Track to its file's."""
+    rows = db.execute(
+        select(SegmentRow.track_id, SourceRow.track_id).join(
+            SourceRow, SourceRow.id == SegmentRow.album_source_id
+        )
+    )
+    return {TrackId(song): TrackId(album) for song, album in rows.all()}
+
+
 def drop_songs(db: Session, source_ids: Collection[int]) -> None:
     """Remove the songs split from the Sources `source_ids`, with their Tracks."""
     songs = select(SegmentRow.track_id).where(SegmentRow.album_source_id.in_(source_ids))

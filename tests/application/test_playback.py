@@ -16,14 +16,18 @@ from medleyplay.application.playback import (
     PlaybackService,
     Preparing,
     Ready,
+    Stretch,
     Unplayable,
     cache_source_kind,
 )
+from medleyplay.application.segments import SongsService
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import Availability, SourceId, SourceState, TrackId
 from medleyplay.domain.errors import ConflictError, NotFoundError, PluginCallError
 from medleyplay.domain.jobs import JobState
 from medleyplay.domain.libraries import LibraryId, LibraryKind, library_locator
+from medleyplay.domain.segments import SongRow
+from medleyplay.domain.video_text import Song as ListedSong
 from medleyplay.persistence.schema import LibraryRow, SourceRow, TrackRow
 from tests.support.audio import Song, folder_of, wav_bytes, zip_of
 from tests.support.factories import NewAccountFactory, SourceKeyFactory, TrackDetailsFactory
@@ -84,6 +88,64 @@ def test_a_folder_file_is_ready_and_opens_whole(
 
     assert answer == Ready(source_id, "audio/wav")
     assert _read(running.playback.open_audio(source_id)) == wav_bytes(Song("A"))
+
+
+def _split_bremen(
+    running: Libraries,
+    alice: Account,
+    songs: SongsService,
+    units: sessionmaker[Session],
+    tmp_path: Path,
+) -> tuple[SourceId, list[TrackId]]:
+    """Scan *Bremen.wav*, five seconds long, and split it into songs at 0 s and 2 s.
+
+    Return the file's Source and its songs' Tracks.
+    """
+    _scanned(
+        running,
+        alice,
+        LibraryKind.FOLDER,
+        folder_of(tmp_path / "M", {"Bremen.wav": Song("Bremen", seconds=5.0)}),
+    )
+    album, source_id = _sources(units)["Bremen.wav"]
+    view = songs.save(
+        album,
+        [SongRow(None, ListedSong(0, "アイネクライネ")), SongRow(None, ListedSong(2_000, "Last"))],
+    )
+    return source_id, [song.track_id for song in view.songs]
+
+
+def test_a_song_plays_its_stretch_of_its_album_files_audio(
+    running: Libraries,
+    alice: Account,
+    songs: SongsService,
+    units: sessionmaker[Session],
+    tmp_path: Path,
+) -> None:
+    album_source, (first, last) = _split_bremen(running, alice, songs, units, tmp_path)
+
+    answers = [running.playback.play(alice, song) for song in (first, last)]
+
+    assert answers == [
+        Ready(album_source, "audio/wav", Stretch(0, 2_000)),
+        Ready(album_source, "audio/wav", Stretch(2_000, 5_000)),
+    ]
+
+
+def test_a_song_of_a_file_that_cant_play_is_unplayable(
+    running: Libraries,
+    alice: Account,
+    songs: SongsService,
+    units: sessionmaker[Session],
+    tmp_path: Path,
+) -> None:
+    album_source, (first, _) = _split_bremen(running, alice, songs, units, tmp_path)
+    with units.begin() as db:
+        row = db.get(SourceRow, album_source)
+        assert row is not None
+        row.state = SourceState.MISSING
+
+    assert running.playback.play(alice, first) == Unplayable(Availability.MISSING)
 
 
 def test_a_stored_zip_member_opens_as_its_slice_of_the_archive(

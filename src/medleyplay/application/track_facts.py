@@ -1,10 +1,14 @@
-"""What smart-playlist rules may ask of each Track, read from the catalog for one Account."""
+"""What smart-playlist rules may ask of each Track, read from the catalog for one Account.
+
+A file split into songs gives way to its songs, which each take its Sources' kinds.
+"""
 
 from collections import defaultdict
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from medleyplay.application.segments import album_file_of
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.catalog import TrackId
 from medleyplay.domain.rules import TrackFacts
@@ -16,6 +20,10 @@ def track_facts(db: Session, account_id: AccountId) -> dict[TrackId, TrackFacts]
     kinds: defaultdict[int, set[str]] = defaultdict(set)
     for track_id, kind in db.execute(select(SourceRow.track_id, SourceRow.kind)):
         kinds[track_id].add(kind)
+    album_of = album_file_of(db)
+    for song, album in album_of.items():
+        kinds[song] = kinds[album]
+    split = set(album_of.values())
     rows = db.execute(
         select(TrackRow, TrackStateRow).outerjoin(
             TrackStateRow,
@@ -23,7 +31,9 @@ def track_facts(db: Session, account_id: AccountId) -> dict[TrackId, TrackFacts]
         )
     )
     return {
-        TrackId(track.id): _facts(track, state, frozenset(kinds[track.id])) for track, state in rows
+        TrackId(track.id): _facts(track, state, frozenset(kinds[track.id]))
+        for track, state in rows
+        if track.id not in split
     }
 
 

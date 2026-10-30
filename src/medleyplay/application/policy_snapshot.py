@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from medleyplay.application.downloads import DOWNLOAD_KIND, QUALITY_DETAIL
 from medleyplay.application.rule_schema import read_rules
+from medleyplay.application.segments import album_file_of
 from medleyplay.application.track_facts import track_facts
 from medleyplay.domain.accounts import AccountId
 from medleyplay.domain.catalog import SourceId, SourceState, TrackId
@@ -214,6 +215,10 @@ def _wanted_by(db: Session, now: datetime) -> dict[TrackId, set[AccountId]]:
         for track_id, each in seen.items():
             if matches(rules, each, now):
                 wanted[track_id].add(owner)
+    # A song is kept by keeping the file it is inside.
+    for song, album in album_file_of(db).items():
+        if song in wanted:
+            wanted[album] |= wanted.pop(song)
     return dict(wanted)
 
 
