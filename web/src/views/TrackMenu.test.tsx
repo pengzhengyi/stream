@@ -14,6 +14,7 @@ function renderMenu(queueing = true) {
     onPlayNext: vi.fn(),
     onAdd: vi.fn(),
     onAddToPlaylist: vi.fn(),
+    onEditDetails: vi.fn(),
   };
   render(<TrackMenu track={MELT} actions={actions} queueing={queueing} />);
   return actions;
@@ -40,6 +41,7 @@ describe("a song's menu", () => {
       "Go to artist",
       "Go to album",
       "Add to playlist…",
+      "Edit details…",
     ]);
   });
 
@@ -74,6 +76,7 @@ describe("a song's menu", () => {
     ["Play next", "onPlayNext"],
     ["Add to queue", "onAdd"],
     ["Add to playlist…", "onAddToPlaylist"],
+    ["Edit details…", "onEditDetails"],
   ] as const)("%s acts on the song, and closes the menu", async (item, action) => {
     const actions = renderMenu();
     await open();

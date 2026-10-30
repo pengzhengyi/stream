@@ -14,6 +14,7 @@ import { stepVolume } from "../player/volume";
 import { hrefOf, useRoute } from "../routes";
 import { hintOf, learnLayout, openAccount, useBindings } from "../shortcuts";
 import { AddToPlaylist } from "./AddToPlaylist";
+import { EditDetails } from "./EditDetails";
 import { Nav } from "./Nav";
 import { PlayerBar } from "./PlayerBar";
 import { QueuePanel } from "./QueuePanel";
@@ -52,6 +53,8 @@ export function Library({
   const playing = playingId === undefined ? undefined : byId.get(playingId);
   // The song being added to Playlists, while its dialog is open, and what was last done.
   const [adding, setAdding] = useState<Track | undefined>(undefined);
+  // The song whose details are being edited, while its dialog is open.
+  const [editing, setEditing] = useState<Track | undefined>(undefined);
   const [notice, setNotice] = useState("");
   const [listingShortcuts, setListingShortcuts] = useState(false);
   // The header stays at the top, so what else stays there sits under it, however tall it is.
@@ -116,6 +119,7 @@ export function Library({
       library.setRating(track.id, rating);
     },
     onAddToPlaylist: setAdding,
+    onEditDetails: setEditing,
   };
   const addTo = async (track: Track, ids: readonly string[], newNames: readonly string[]) => {
     await library.addToPlaylists(track, ids, newNames);
@@ -275,6 +279,19 @@ export function Library({
           onSave={(ids, newNames) => addTo(adding, ids, newNames)}
           onClose={() => {
             setAdding(undefined);
+          }}
+        />
+      )}
+      {editing !== undefined && (
+        <EditDetails
+          track={editing}
+          load={api.details}
+          onSave={async (values) => {
+            await library.saveDetails(editing.id, values);
+            setNotice(`Saved the details of “${editing.title}”.`);
+          }}
+          onClose={() => {
+            setEditing(undefined);
           }}
         />
       )}

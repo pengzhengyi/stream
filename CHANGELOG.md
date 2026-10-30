@@ -124,9 +124,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Track details with their origins** — each of a Track's details (title,
   artist, album, album artist, track and disc numbers, year, and genre) is kept
   with where it came from, and the household's own values win over the file's
-  tags, the video's text, and the file's name. Edit them on one Track or many at
-  once through `PUT /api/tracks/{id}/details` and `POST /api/tracks/details`. See
-  the [Track details](docs/contributing/design-notes/Track%20details.md) note.
+  tags, the video's text, and the file's name. *Edit details…* in a song's menu
+  shows where each came from and offers what the others say; many Tracks are
+  edited at once through `POST /api/tracks/details`. See the
+  [Track details](docs/contributing/design-notes/Track%20details.md) note.
 
 ### Changed
 

@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { api } from "../api";
 import { favoritesPlaylistOf, playlistOf, serve, signedIn, trackOf } from "../testing/server";
 import { useLibrary } from "./useLibrary";
 
@@ -47,6 +48,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   FakeEventSource.last = undefined;
 });
@@ -226,5 +228,84 @@ describe("adding a song to Playlists", () => {
     expect(result.current.playlists.find((playlist) => playlist.id === "p1")?.track_ids).toEqual([
       1, 2,
     ]);
+  });
+});
+
+describe("saving a song's details", () => {
+  async function libraryOf(routes: Parameters<typeof serve>[0]) {
+    serve({ ...signedIn([trackOf(7, "BV1dm4y1s7ak")]), ...routes });
+    const { result } = renderHook(() => useLibrary(vi.fn()));
+    await waitFor(() => {
+      expect(result.current.loaded).toBe(true);
+    });
+    return result;
+  }
+
+  it("sends only the changes, then shows the Track as the server now has it", async () => {
+    const sent: unknown[] = [];
+    const result = await libraryOf({
+      "POST /api/tracks/details": (body: unknown) => {
+        sent.push(body);
+        return { body: { changed: 1 } };
+      },
+      "GET /api/tracks/7": { body: trackOf(7, "ケビョウニンゲン", { year: 2014 }) },
+    });
+
+    await act(() => result.current.saveDetails(7, { title: "ケビョウニンゲン", genre: null }));
+
+    expect(sent).toEqual([{ track_ids: [7], values: { title: "ケビョウニンゲン", genre: null } }]);
+    await waitFor(() => {
+      expect(result.current.tracks.get(7)).toMatchObject({ title: "ケビョウニンゲン", year: 2014 });
+    });
+  });
+
+  it("counts the changes saved when the Track can't be read back at once", async () => {
+    const result = await libraryOf({
+      "POST /api/tracks/details": { body: { changed: 1 } },
+      "GET /api/tracks/7": { status: 503, body: { detail: "Busy." } },
+    });
+
+    await act(() => result.current.saveDetails(7, { year: 2014 }));
+
+    expect(result.current.error).toBe("");
+  });
+
+  it("shows the last save's read-back when an earlier one answers after it", async () => {
+    const result = await libraryOf({ "POST /api/tracks/details": { body: { changed: 1 } } });
+    const answers: ((track: ReturnType<typeof trackOf>) => void)[] = [];
+    vi.spyOn(api, "track").mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          answers.push(resolve);
+        }),
+    );
+
+    await act(() => result.current.saveDetails(7, { title: "Sick Human" }));
+    await act(() => result.current.saveDetails(7, { title: "ケビョウニンゲン" }));
+    act(() => {
+      answers[1]?.(trackOf(7, "ケビョウニンゲン"));
+    });
+    await act(async () => {
+      answers[0]?.(trackOf(7, "Sick Human"));
+      await Promise.resolve();
+    });
+
+    expect(result.current.tracks.get(7)?.title).toBe("ケビョウニンゲン");
+  });
+
+  it("passes on why the server refused, leaving the Track as it was", async () => {
+    const result = await libraryOf({
+      "POST /api/tracks/details": { status: 422, body: { detail: "year is from 1000 to 2999." } },
+    });
+
+    let refused: unknown;
+    await act(async () => {
+      await result.current.saveDetails(7, { year: 14 }).catch((failure: unknown) => {
+        refused = failure;
+      });
+    });
+
+    expect(String(refused)).toContain("year is from 1000 to 2999.");
+    expect(result.current.tracks.get(7)?.title).toBe("BV1dm4y1s7ak");
   });
 });
