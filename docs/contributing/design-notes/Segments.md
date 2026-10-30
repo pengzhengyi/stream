@@ -1,10 +1,9 @@
 # Segments
 
 > [!NOTE]
-> **Status: in progress.** Splitting a file into songs, the songs API, and the
-> server's side of playing a song (its stretch, availability, smart playlists,
-> and the download policy) are built; the player, the editor, and the album view
-> follow. This note
+> **Status: in progress.** Splitting a file into songs, the songs API, and
+> playing a song (its stretch, availability, smart playlists, the download
+> policy, and the player) are built; the editor and the album view follow. This note
 > describes splitting one long file, such as a whole album uploaded as one video,
 > into its songs, and playing them as Tracks. Where a song list comes from is in
 > [Track details](Track%20details.md).
