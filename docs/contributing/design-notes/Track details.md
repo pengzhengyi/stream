@@ -98,7 +98,10 @@ values.
   for this; the server and the client are checked against one table of cases
   (`tests/support/shown_details.json`), so the two can't drift.
 - **Saving sends only what changed,** each value set or dropped, so an edit of
-  one field never overwrites another made meanwhile on another device.
+  one field never overwrites another made meanwhile on another device. A value
+  the household types or chooses that reads as what would show anyway, such as
+  `03` over the file's track 3, is dropped rather than saved, so the found value
+  still follows the file.
 - ***Paste the video's details*** takes a video's title and description, copied
   from the site in a browser, and reads them as the `video` origin, as if the
   file beside the audio had held them. This works today, for any video, and

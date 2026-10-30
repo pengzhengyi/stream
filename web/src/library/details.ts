@@ -129,23 +129,38 @@ export function foundOf(details: Details): Origins {
   return without(details.origins, "household");
 }
 
+/**
+ * Return `own` without each value the household changed to what would show anyway,
+ * read as saving reads it: so " Melt" over the file's "Melt", "03" over its 3, or an
+ * emptied box where nothing is found. Saving those would only pin the found value. A
+ * value the household already had stays.
+ */
+export function settle(details: Details, own: Own): Own {
+  const had = valuesOf(ownOf(details));
+  let settled = own;
+  for (const { name, kind } of DETAIL_FIELDS) {
+    const typed = settled[name];
+    const value = typed === undefined ? undefined : valuesOf({ [name]: typed })[name];
+    if (typed === undefined || value === had[name]) {
+      continue;
+    }
+    const others = without(settled, name);
+    const shows = shownWith(details, others)[name]?.value;
+    if (kind === "text" ? (value ?? "") === (shows ?? "") : value === shows) {
+      settled = others;
+    }
+  }
+  return settled;
+}
+
 /** Return what each field would show with the household's values `own`. */
 export function previewOf(details: Details, own: Own): Shown {
-  return shownOf({ ...foundOf(details), household: valuesOf(own) });
+  return shownWith(details, settle(details, own));
 }
 
 /** Return the text of `name`'s box: the household's own, or what would show. */
 export function boxText(details: Details, own: Own, name: Detail): string {
   return own[name] ?? String(previewOf(details, own)[name]?.value ?? "");
-}
-
-/** Return `own` with `name` set to `value`, or dropped when `value` would show without it. */
-export function choose(details: Details, own: Own, name: Detail, value: string): Own {
-  const others = without(own, name);
-  const shows = previewOf(details, others)[name];
-  return shows !== undefined && String(shows.value) === value
-    ? others
-    : { ...others, [name]: value };
 }
 
 /**
@@ -157,7 +172,7 @@ export function changesOf(
   own: Own,
 ): Partial<Record<Detail, string | number | null>> {
   const before = valuesOf(ownOf(details));
-  const after = valuesOf(own);
+  const after = valuesOf(settle(details, own));
   const changes: Partial<Record<Detail, string | number | null>> = {};
   for (const { name } of DETAIL_FIELDS) {
     if (before[name] !== after[name]) {
@@ -186,6 +201,10 @@ export function alternativesOf(details: Details, name: Detail, typed: string): A
     found.push({ value: String(value), origin });
   }
   return found;
+}
+
+function shownWith(details: Details, own: Own): Shown {
+  return shownOf({ ...foundOf(details), household: valuesOf(own) });
 }
 
 function without<T extends object, K extends keyof T & string>(record: T, key: K): Omit<T, K> {

@@ -2,9 +2,9 @@
  * @file Editing a song's details: what each says now and where it came from, and the household's own.
  *
  * A box typed in, or a value chosen from another origin, becomes the household's
- * value, which wins; every other box shows what would show with them. Choosing
- * what would show anyway drops the household's value. Saving sends only what
- * changed. Escape, Cancel, or a click outside it close it without saving, except
+ * value, which wins; every other box shows what would show with them. Typing or
+ * choosing what would show anyway drops the household's value. Saving sends only
+ * what changed. Escape, Cancel, or a click outside it close it without saving, except
  * while a save is under way.
  */
 
@@ -19,10 +19,10 @@ import {
   alternativesOf,
   boxText,
   changesOf,
-  choose,
   foundOf,
   ownOf,
   previewOf,
+  settle,
   shownOf,
 } from "../library/details";
 import { Modal } from "./Modal";
@@ -182,6 +182,7 @@ function DetailBox({
   const { name, label, kind } = field;
   const id = `detail-${name}`;
   const typed = boxText(details, own, name);
+  const yours = name in settle(details, own);
   const origin = originOf(details, own, field);
   const range = RANGES[name];
   return (
@@ -204,10 +205,7 @@ function DetailBox({
         }}
       />
       {origin !== "" && (
-        <small
-          id={`${id}-origin`}
-          className={name in own ? "detail-origin yours" : "detail-origin"}
-        >
+        <small id={`${id}-origin`} className={yours ? "detail-origin yours" : "detail-origin"}>
           {origin}
         </small>
       )}
@@ -219,7 +217,7 @@ function DetailBox({
             className="detail-alternative"
             aria-label={`Use “${value}”, from ${ORIGIN_LABELS[from]}`}
             onClick={() => {
-              onChange(choose(details, own, name, value));
+              onChange({ ...own, [name]: value });
             }}
           >
             {value}
@@ -234,7 +232,7 @@ function DetailBox({
 function originOf(details: Details, own: Own, field: DetailField): string {
   const { name, kind } = field;
   const shows = previewOf(details, own)[name];
-  if (name in own) {
+  if (name in settle(details, own)) {
     if (kind === "number" && own[name]?.trim() === "") {
       return shows === undefined
         ? "Left empty"

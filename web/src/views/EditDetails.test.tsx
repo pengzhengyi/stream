@@ -79,6 +79,37 @@ describe("editing a song's details", () => {
     expect(onSave).toHaveBeenCalledExactlyOnceWith({ title: null });
   });
 
+  it("drops a value typed back to what would show anyway", async () => {
+    const { dialog, onSave } = await renderDialog();
+
+    await userEvent.type(box(dialog, "Title"), "!{Backspace}");
+
+    expect(box(dialog, "Title")).toHaveAccessibleDescription("From the video");
+    await save(dialog);
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("drops a value that reads as what would show anyway, so '03' is track 3", async () => {
+    const { dialog, onSave } = await renderDialog(detailsOf(3, {}, TAGGED_ORIGINS));
+
+    await userEvent.clear(box(dialog, "Track"));
+    await userEvent.type(box(dialog, "Track"), "03");
+    await userEvent.type(box(dialog, "Title"), " ");
+    await save(dialog);
+
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("saves nothing for a box emptied where nothing is found", async () => {
+    const { dialog, onSave } = await renderDialog();
+
+    await userEvent.type(box(dialog, "Genre"), "a{Backspace}");
+
+    expect(box(dialog, "Genre")).not.toHaveAccessibleDescription("Yours");
+    await save(dialog);
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   it("closes without a request when nothing changed, keeping the household's empty text", async () => {
     const { dialog, onSave, onClose } = await renderDialog(detailsOf(7, { genre: "" }));
 
