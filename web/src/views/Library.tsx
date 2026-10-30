@@ -290,6 +290,7 @@ export function Library({
             await library.saveDetails(editing.id, values);
             setNotice(`Saved the details of “${editing.title}”.`);
           }}
+          onReadVideo={(text) => library.readVideoText(editing.id, text)}
           onClose={() => {
             setEditing(undefined);
           }}

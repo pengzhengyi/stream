@@ -2,8 +2,8 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { ApiError, type Details } from "../api";
-import { TAGGED_ORIGINS, detailsOf, trackOf } from "../testing/server";
+import { ApiError, type Details, type VideoRead, type VideoText } from "../api";
+import { ALBUM_FILE_ORIGINS, TAGGED_ORIGINS, detailsOf, trackOf } from "../testing/server";
 import { EditDetails } from "./EditDetails";
 
 const ALBUM_FILE = trackOf(7, "ケビョウニンゲン");
@@ -11,6 +11,9 @@ const ALBUM_FILE = trackOf(7, "ケビョウニンゲン");
 async function renderDialog(
   details: Details = detailsOf(7),
   onSave = vi.fn<(changes: object) => Promise<void>>(() => Promise.resolve()),
+  onReadVideo = vi.fn<(text: VideoText) => Promise<VideoRead>>(() =>
+    Promise.reject(new Error("No video read in this test.")),
+  ),
 ) {
   const onClose = vi.fn();
   render(
@@ -18,6 +21,7 @@ async function renderDialog(
       track={ALBUM_FILE}
       load={() => Promise.resolve(details)}
       onSave={onSave}
+      onReadVideo={onReadVideo}
       onClose={onClose}
     />,
   );
@@ -208,6 +212,7 @@ describe("editing a song's details", () => {
         track={ALBUM_FILE}
         load={() => Promise.reject(new ApiError(404, "There is no Track 7."))}
         onSave={vi.fn()}
+        onReadVideo={vi.fn()}
         onClose={vi.fn()}
       />,
     );
@@ -215,5 +220,115 @@ describe("editing a song's details", () => {
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("There is no Track 7.");
     expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
+  describe("pasting the video's details", () => {
+    /** An album video's title and description, as Bilibili shows them. */
+    const BREMEN: VideoText = {
+      title: "ハチ 全专《Bremen》",
+      description: `ハチの1stアルバム
+00:00 アイネクライネ
+04:12 ゴーゴー幽霊船 - ハチ`,
+    };
+
+    /** What the server reads from `BREMEN`: the album, by ハチ, and its two songs. */
+    const BREMEN_READ: VideoRead = {
+      details: detailsOf(
+        7,
+        {},
+        {
+          video: { title: "Bremen", artist: "ハチ", album: "Bremen", album_artist: "ハチ" },
+          file_name: { title: "BV1dm4y1s7ak" },
+        },
+        BREMEN,
+      ),
+      songs: [
+        { start_ms: 0, title: "アイネクライネ", artist: "" },
+        { start_ms: 252_000, title: "ゴーゴー幽霊船", artist: "ハチ" },
+      ],
+    };
+
+    const paste = async (dialog: HTMLElement, text: VideoText) => {
+      await userEvent.click(within(dialog).getByText("Paste the video's details"));
+      await userEvent.click(within(dialog).getByRole("textbox", { name: "Video title" }));
+      await userEvent.paste(text.title);
+      await userEvent.click(within(dialog).getByRole("textbox", { name: "Description" }));
+      await userEvent.paste(text.description);
+    };
+
+    const read = (dialog: HTMLElement) =>
+      userEvent.click(within(dialog).getByRole("button", { name: "Read the video's details" }));
+
+    it("reads a pasted title and description, and shows what they say", async () => {
+      const onReadVideo = vi.fn(() => Promise.resolve(BREMEN_READ));
+      const { dialog } = await renderDialog(detailsOf(7), undefined, onReadVideo);
+
+      await paste(dialog, BREMEN);
+      await read(dialog);
+
+      expect(onReadVideo).toHaveBeenCalledExactlyOnceWith(BREMEN);
+      expect(box(dialog, "Album")).toHaveValue("Bremen");
+      expect(box(dialog, "Album")).toHaveAccessibleDescription("From the video");
+      expect(within(dialog).getByRole("status")).toHaveTextContent(
+        "Read the video's details. It lists 2 songs.",
+      );
+    });
+
+    it("keeps what the household typed when the video's details are read", async () => {
+      const { dialog } = await renderDialog(
+        detailsOf(7),
+        undefined,
+        vi.fn(() => Promise.resolve(BREMEN_READ)),
+      );
+
+      await userEvent.clear(box(dialog, "Title"));
+      await userEvent.type(box(dialog, "Title"), "Sick Human");
+      await paste(dialog, BREMEN);
+      await read(dialog);
+
+      expect(box(dialog, "Title")).toHaveValue("Sick Human");
+      expect(box(dialog, "Title")).toHaveAccessibleDescription("Yours");
+    });
+
+    it("opens with the video's text read before", async () => {
+      const { dialog } = await renderDialog(detailsOf(7, {}, ALBUM_FILE_ORIGINS, BREMEN));
+
+      await userEvent.click(within(dialog).getByText("Paste the video's details"));
+
+      expect(within(dialog).getByRole("textbox", { name: "Video title" })).toHaveValue(
+        BREMEN.title,
+      );
+      expect(within(dialog).getByRole("textbox", { name: "Description" })).toHaveValue(
+        BREMEN.description,
+      );
+    });
+
+    it("reads rather than saves on Enter in the video's title", async () => {
+      const onSave = vi.fn(() => Promise.resolve());
+      const onReadVideo = vi.fn(() => Promise.resolve(BREMEN_READ));
+      const { dialog } = await renderDialog(detailsOf(7), onSave, onReadVideo);
+
+      await paste(dialog, { title: BREMEN.title, description: "" });
+      await userEvent.type(within(dialog).getByRole("textbox", { name: "Video title" }), "{Enter}");
+
+      expect(onReadVideo).toHaveBeenCalledOnce();
+      expect(onSave).not.toHaveBeenCalled();
+    });
+
+    it("says why the video's details couldn't be read", async () => {
+      const { dialog } = await renderDialog(
+        detailsOf(7),
+        undefined,
+        vi.fn(() => Promise.reject(new ApiError(422, "The description is too long."))),
+      );
+
+      await paste(dialog, BREMEN);
+      await read(dialog);
+
+      expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+        "The description is too long.",
+      );
+      expect(box(dialog, "Album")).toHaveValue("");
+    });
   });
 });

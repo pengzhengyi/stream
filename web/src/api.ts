@@ -51,6 +51,27 @@ export interface Details {
   readonly origins: Partial<
     Readonly<Record<Origin, Partial<Readonly<Record<Detail, string | number>>>>>
   >;
+  /** The video's text the `video` values were read from, if any was. */
+  readonly video_text: VideoText | null;
+}
+
+/** A video's title and description, as the site shows them. */
+export interface VideoText {
+  readonly title: string;
+  readonly description: string;
+}
+
+/** A song of a song list: where it starts, its title, and its artist, or "". */
+export interface Song {
+  readonly start_ms: number;
+  readonly title: string;
+  readonly artist: string;
+}
+
+/** A Track's details once its video's text is read, and the songs that text lists. */
+export interface VideoRead {
+  readonly details: Details;
+  readonly songs: readonly Song[];
 }
 
 /** A Playlist; a smart one's Tracks are the ones its rules match now. */
@@ -253,6 +274,9 @@ export const api = {
     trackIds: readonly number[],
     values: Partial<Record<Detail, string | number | null>>,
   ) => call<{ changed: number }>("POST", "/api/tracks/details", { track_ids: trackIds, values }),
+  /** Read a video's pasted title and description as the Track's `video` values. */
+  readVideoText: (trackId: number, text: VideoText) =>
+    call<VideoRead>("POST", `/api/tracks/${String(trackId)}/video-text`, text),
   playlists: () => call<Playlist[]>("GET", "/api/playlists"),
   /** Create or replace a plain Playlist under an id the client chose. */
   putPlaylist: (id: string, playlist: PlainPlaylist) =>

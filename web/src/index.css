@@ -2090,6 +2090,53 @@ dialog.modal::backdrop {
   padding-block: 0;
 }
 
+.edit-details textarea.detail-input {
+  height: auto;
+  padding-block: 0.4rem;
+  resize: vertical;
+}
+
+/* Pasting a video's title and description, folded away until wanted. */
+
+.paste-video {
+  margin: 0 0 1rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+}
+
+/* On the body, not the details: a flex details shows its body even when closed in WebKit. */
+.paste-video-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.paste-video-summary {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.paste-video[open] .paste-video-summary {
+  margin-bottom: 0.4rem;
+}
+
+.edit-details .paste-video-read {
+  width: auto;
+  height: 2.4rem;
+  margin: 0.4rem 0 0;
+  padding: 0 1rem;
+  align-self: flex-start;
+}
+
+.paste-video-note {
+  margin: 0.3rem 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
 .detail-origin {
   margin: 0;
   color: var(--muted);

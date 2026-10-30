@@ -126,11 +126,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with where it came from, and the household's own values win over the file's
   tags, the video's text, and the file's name. *Edit details…* in a song's menu
   shows where each came from and offers what the others say; many Tracks are
-  edited at once through `POST /api/tracks/details`. See the
+  edited at once through `POST /api/tracks/details`. *Paste the video's details*
+  there reads a video's title and description, copied from the site, for the
+  song's title, artist, and album, and the songs it lists. See the
   [Track details](docs/contributing/design-notes/Track%20details.md) note.
-
-- A parser reads a video's title and description for its song's title, artist,
-  album, and song list.
 
 ### Changed
 
