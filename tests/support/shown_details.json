@@ -4,81 +4,370 @@
     {
       "name": "a field shows the first origin's value",
       "origins": {
-        "video": { "title": "ケビョウニンゲン" },
-        "file_name": { "title": "BV1dm4y1s7ak" }
+        "video": {
+          "title": "ケビョウニンゲン"
+        },
+        "file_name": {
+          "title": "BV1dm4y1s7ak"
+        }
       },
-      "shown": { "title": { "value": "ケビョウニンゲン", "origin": "video" } }
+      "shown": {
+        "title": {
+          "value": "ケビョウニンゲン",
+          "origin": "video"
+        }
+      }
     },
     {
       "name": "the household's value wins over every other",
       "origins": {
-        "household": { "artist": "GUMI" },
-        "files": { "artist": "MAYU" },
-        "video": { "artist": "GUMI/MAYU" }
+        "household": {
+          "artist": "GUMI"
+        },
+        "files": {
+          "artist": "MAYU"
+        },
+        "video": {
+          "artist": "GUMI/MAYU"
+        }
       },
-      "shown": { "artist": { "value": "GUMI", "origin": "household" } }
+      "shown": {
+        "artist": {
+          "value": "GUMI",
+          "origin": "household"
+        }
+      }
     },
     {
       "name": "empty text from the household shows nothing",
       "origins": {
-        "household": { "genre": "" },
-        "files": { "genre": "Vocaloid" }
+        "household": {
+          "genre": ""
+        },
+        "files": {
+          "genre": "Vocaloid"
+        }
       },
-      "shown": { "genre": { "value": "", "origin": "household" } }
+      "shown": {
+        "genre": {
+          "value": "",
+          "origin": "household"
+        }
+      }
     },
     {
       "name": "the album fields come from the first origin naming an album",
       "origins": {
-        "files": { "track_number": 3 },
-        "video": { "album": "Re:Start", "album_artist": "wowaka", "year": 2014 }
+        "files": {
+          "track_number": 3
+        },
+        "video": {
+          "album": "Re:Start",
+          "album_artist": "wowaka",
+          "year": 2014
+        }
       },
       "shown": {
-        "album": { "value": "Re:Start", "origin": "video" },
-        "album_artist": { "value": "wowaka", "origin": "video" },
-        "year": { "value": 2014, "origin": "video" }
+        "album": {
+          "value": "Re:Start",
+          "origin": "video"
+        },
+        "album_artist": {
+          "value": "wowaka",
+          "origin": "video"
+        },
+        "year": {
+          "value": 2014,
+          "origin": "video"
+        }
       }
     },
     {
       "name": "the household's album hides another origin's album fields",
       "origins": {
-        "household": { "album": "Other" },
-        "files": { "album": "Re:Start", "album_artist": "MAYU", "track_number": 3, "year": 2014 }
+        "household": {
+          "album": "Other"
+        },
+        "files": {
+          "album": "Re:Start",
+          "album_artist": "MAYU",
+          "track_number": 3,
+          "year": 2014
+        }
       },
-      "shown": { "album": { "value": "Other", "origin": "household" } }
+      "shown": {
+        "album": {
+          "value": "Other",
+          "origin": "household"
+        }
+      }
     },
     {
       "name": "the household's album field still wins on its own",
       "origins": {
-        "household": { "year": 2016 },
-        "files": { "album": "Re:Start", "track_number": 3, "year": 2014 }
+        "household": {
+          "year": 2016
+        },
+        "files": {
+          "album": "Re:Start",
+          "track_number": 3,
+          "year": 2014
+        }
       },
       "shown": {
-        "album": { "value": "Re:Start", "origin": "files" },
-        "track_number": { "value": 3, "origin": "files" },
-        "year": { "value": 2016, "origin": "household" }
+        "album": {
+          "value": "Re:Start",
+          "origin": "files"
+        },
+        "track_number": {
+          "value": 3,
+          "origin": "files"
+        },
+        "year": {
+          "value": 2016,
+          "origin": "household"
+        }
       }
     },
     {
       "name": "an empty album from the household names none, so the rest come from the next origin naming one",
       "origins": {
-        "household": { "album": "" },
-        "files": { "album_artist": "MAYU" },
-        "video": { "album": "Re:Start", "year": 2014 }
+        "household": {
+          "album": ""
+        },
+        "files": {
+          "album_artist": "MAYU"
+        },
+        "video": {
+          "album": "Re:Start",
+          "year": 2014
+        }
       },
       "shown": {
-        "album": { "value": "", "origin": "household" },
-        "year": { "value": 2014, "origin": "video" }
+        "album": {
+          "value": "",
+          "origin": "household"
+        },
+        "year": {
+          "value": 2014,
+          "origin": "video"
+        }
       }
     },
     {
       "name": "without a named album each album field falls back on its own",
       "origins": {
-        "files": { "track_number": 3 },
-        "video": { "year": 2014 }
+        "files": {
+          "track_number": 3
+        },
+        "video": {
+          "year": 2014
+        }
       },
       "shown": {
-        "track_number": { "value": 3, "origin": "files" },
-        "year": { "value": 2014, "origin": "video" }
+        "track_number": {
+          "value": 3,
+          "origin": "files"
+        },
+        "year": {
+          "value": 2014,
+          "origin": "video"
+        }
+      }
+    },
+    {
+      "name": "only the first origin naming an album gives the album fields",
+      "origins": {
+        "files": {
+          "album": "Re:Start"
+        },
+        "video": {
+          "album": "Other",
+          "year": 2014
+        }
+      },
+      "shown": {
+        "album": {
+          "value": "Re:Start",
+          "origin": "files"
+        }
+      }
+    },
+    {
+      "name": "the household's empty album artist wins over a named album",
+      "origins": {
+        "household": {
+          "album_artist": ""
+        },
+        "files": {
+          "album": "Re:Start",
+          "album_artist": "MAYU"
+        }
+      },
+      "shown": {
+        "album": {
+          "value": "Re:Start",
+          "origin": "files"
+        },
+        "album_artist": {
+          "value": "",
+          "origin": "household"
+        }
+      }
+    },
+    {
+      "name": "an empty album from the household with no other album leaves each field to fall back on its own",
+      "origins": {
+        "household": {
+          "album": ""
+        },
+        "files": {
+          "track_number": 3
+        },
+        "video": {
+          "year": 2014
+        }
+      },
+      "shown": {
+        "album": {
+          "value": "",
+          "origin": "household"
+        },
+        "track_number": {
+          "value": 3,
+          "origin": "files"
+        },
+        "year": {
+          "value": 2014,
+          "origin": "video"
+        }
+      }
+    },
+    {
+      "name": "MusicBrainz comes before the video",
+      "origins": {
+        "musicbrainz": {
+          "album": "Re:Start",
+          "year": 2014
+        },
+        "video": {
+          "album": "Other",
+          "track_number": 2
+        }
+      },
+      "shown": {
+        "album": {
+          "value": "Re:Start",
+          "origin": "musicbrainz"
+        },
+        "year": {
+          "value": 2014,
+          "origin": "musicbrainz"
+        }
+      }
+    },
+    {
+      "name": "the album file comes before the file's name",
+      "origins": {
+        "album_file": {
+          "album": "Re:Start",
+          "track_number": 3
+        },
+        "file_name": {
+          "album": "Other",
+          "year": 2014
+        }
+      },
+      "shown": {
+        "album": {
+          "value": "Re:Start",
+          "origin": "album_file"
+        },
+        "track_number": {
+          "value": 3,
+          "origin": "album_file"
+        }
+      }
+    },
+    {
+      "name": "the file's name can name the album too, hiding another origin's album fields",
+      "origins": {
+        "video": {
+          "title": "Melt",
+          "year": 2014
+        },
+        "file_name": {
+          "album": "Re:Start",
+          "track_number": 3
+        }
+      },
+      "shown": {
+        "title": {
+          "value": "Melt",
+          "origin": "video"
+        },
+        "album": {
+          "value": "Re:Start",
+          "origin": "file_name"
+        },
+        "track_number": {
+          "value": 3,
+          "origin": "file_name"
+        }
+      }
+    },
+    {
+      "name": "the household's track wins over a named album's",
+      "origins": {
+        "household": {
+          "track_number": 9
+        },
+        "video": {
+          "album": "Re:Start",
+          "track_number": 2
+        }
+      },
+      "shown": {
+        "album": {
+          "value": "Re:Start",
+          "origin": "video"
+        },
+        "track_number": {
+          "value": 9,
+          "origin": "household"
+        }
+      }
+    },
+    {
+      "name": "an origin that says nothing is passed over",
+      "origins": {
+        "files": {},
+        "video": {
+          "album": "Re:Start"
+        }
+      },
+      "shown": {
+        "album": {
+          "value": "Re:Start",
+          "origin": "video"
+        }
+      }
+    },
+    {
+      "name": "the household's year wins without an album named",
+      "origins": {
+        "household": {
+          "year": 2016
+        },
+        "files": {
+          "year": 2014
+        }
+      },
+      "shown": {
+        "year": {
+          "value": 2016,
+          "origin": "household"
+        }
       }
     }
   ]
