@@ -19,6 +19,32 @@ describe("the Track store", () => {
     expect(EMPTY.loaded).toBe(false);
   });
 
+  it("takes a Track's details from the server's answer, and ignores a Track it never listed", () => {
+    const edited = reduce(LOADED, {
+      type: "details",
+      track: trackOf(1, "Night Drive", { year: 2016 }),
+    });
+    const unknown = reduce(LOADED, { type: "details", track: trackOf(9, "Nowhere") });
+
+    expect(tracksOf(edited).get(1)).toMatchObject({ title: "Night Drive", year: 2016 });
+    expect(tracksOf(edited).get(2)?.title).toBe("Outro");
+    expect(unknown).toBe(LOADED);
+  });
+
+  it("keeps a favorite confirmed since the details were read", () => {
+    const favored = reduce(LOADED, {
+      type: "answered",
+      id: 1,
+      field: "favorite",
+      value: true,
+      seq: 1,
+    });
+
+    const edited = reduce(favored, { type: "details", track: trackOf(1, "Night Drive") });
+
+    expect(tracksOf(edited).get(1)).toMatchObject({ title: "Night Drive", favorite: true });
+  });
+
   it("shows a write at once, and keeps it once the server confirms it", () => {
     const writing = reduce(LOADED, {
       type: "write",

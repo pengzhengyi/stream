@@ -1,5 +1,9 @@
 """A Track's details: checking values, and choosing the value each field shows."""
 
+import json
+from pathlib import Path
+from typing import Any
+
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
@@ -207,3 +211,23 @@ def test_the_album_fields_never_mix_two_origins_besides_the_household(
         }
 
         assert len(others) <= 1
+
+
+_SHOWN_CASES = json.loads(
+    (Path(__file__).parents[1] / "support" / "shown_details.json").read_text(encoding="utf-8")
+)["cases"]
+
+
+@pytest.mark.parametrize("case", _SHOWN_CASES, ids=[case["name"] for case in _SHOWN_CASES])
+def test_each_shared_case_shows_what_the_web_client_previews(case: dict[str, Any]) -> None:
+    values = {
+        Origin(origin): {Field(field): value for field, value in given.items()}
+        for origin, given in case["origins"].items()
+    }
+
+    found = shown(values)
+
+    assert {
+        str(field): {"value": each.value, "origin": str(each.origin)}
+        for field, each in found.items()
+    } == case["shown"]

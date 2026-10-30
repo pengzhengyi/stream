@@ -4,7 +4,15 @@
 
 import { useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
 
-import { ApiError, type JobEvent, type Mode, type Playlist, type Track, api } from "../api";
+import {
+  ApiError,
+  type Detail,
+  type JobEvent,
+  type Mode,
+  type Playlist,
+  type Track,
+  api,
+} from "../api";
 import { newId } from "../ids";
 import { EMPTY, type Field, reduce, tracksOf } from "./store";
 
@@ -22,6 +30,14 @@ export interface Library {
   readonly mode: Mode | null;
   readonly setFavorite: (id: number, favorite: boolean) => void;
   readonly setRating: (id: number, rating: number | null) => void;
+  /**
+   * Change the household's values for the Track, `null` dropping one; the Track then
+   * shows the server's answer. The promise rejects with why when the server refuses.
+   */
+  readonly saveDetails: (
+    id: number,
+    changes: Partial<Record<Detail, string | number | null>>,
+  ) => Promise<void>;
   /**
    * Add `track` to the end of the Playlists `ids`, and to a new Playlist for each
    * of `newNames`. The Playlists the server saves show at once; the promise rejects
@@ -57,6 +73,8 @@ export function useLibrary(onSignedOut: () => void): Library {
   const [error, setError] = useState("");
   const [mode, setMode] = useState<Mode | null>(null);
   const writes = useRef(0);
+  // The latest save of each Track's details, so an older read-back can't land after it.
+  const latestSave = useRef(new Map<number, number>());
 
   const failed = (failure: unknown) => {
     if (failure instanceof ApiError && failure.status === 401) {
@@ -135,6 +153,27 @@ export function useLibrary(onSignedOut: () => void): Library {
     setRating: (id, rating) => {
       setError("");
       write(id, "rating", rating, api.setRating(id, rating));
+    },
+    saveDetails: async (id, changes) => {
+      try {
+        await api.setDetails([id], changes);
+      } catch (failure) {
+        if (failure instanceof ApiError && failure.status === 401) {
+          onSignedOut();
+        }
+        throw failure;
+      }
+      // Saved; a Track that can't be read back now shows its new details on the next load.
+      const seq = ++writes.current;
+      latestSave.current.set(id, seq);
+      api.track(id).then(
+        (track) => {
+          if (latestSave.current.get(id) === seq) {
+            dispatch({ type: "details", track });
+          }
+        },
+        () => undefined,
+      );
     },
     addToPlaylists: async (track, ids, newNames) => {
       const puts = [

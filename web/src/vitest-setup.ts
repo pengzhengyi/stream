@@ -3,10 +3,14 @@
  * capture, and dialogs, and unmounts between tests.
  */
 import "@testing-library/jest-dom/vitest";
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
 import { afterEach } from "vitest";
 
 import { forgetBindings } from "./shortcuts";
+
+// The first render of a file loads its modules; in a full run, beside every other
+// file, that can take longer than the default second the `find` queries wait.
+configure({ asyncUtilTimeout: 5000 });
 
 // jsdom has media elements but can't play them; Playwright tests real playback.
 HTMLMediaElement.prototype.load = () => undefined;

@@ -92,7 +92,16 @@ values.
   the catalog is the household's.
 - ***Edit details*** shows each field's value, where it came from, and what each
   other origin says, so the household can take a found value with one click or
-  type its own.
+  type its own. Its boxes show what saving would show, as the album fields
+  change together: naming an album of the household's own empties the file's
+  track number at once. The client keeps its own copy of the shown-value rule
+  for this; the server and the client are checked against one table of cases
+  (`tests/support/shown_details.json`), so the two can't drift.
+- **Saving sends only what changed,** each value set or dropped, so an edit of
+  one field never overwrites another made meanwhile on another device. A value
+  the household types or chooses that reads as what would show anyway, such as
+  `03` over the file's track 3, is dropped rather than saved, so the found value
+  still follows the file.
 - ***Paste the video's details*** takes a video's title and description, copied
   from the site in a browser, and reads them as the `video` origin, as if the
   file beside the audio had held them. This works today, for any video, and
