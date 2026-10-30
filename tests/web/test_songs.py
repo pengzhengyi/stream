@@ -1,5 +1,6 @@
 """The songs API: splitting an album file into songs, editing them by id, and unsplitting."""
 
+import pytest
 from fastapi.testclient import TestClient
 
 from medleyplay.application.catalog import CatalogService
@@ -114,3 +115,31 @@ def test_songs_need_a_signed_in_account(client: TestClient, catalog: CatalogServ
     album = _album(catalog)
 
     assert client.get(f"/api/tracks/{album}/songs").status_code == 401
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        {"id": "1", "start_ms": 0, "title": "A"},
+        {"id": True, "start_ms": 0, "title": "A"},
+        {"id": None, "start_ms": 0, "title": "A", "end_ms": 5_000},
+    ],
+    ids=["id as text", "id as true", "an unknown field"],
+)
+def test_a_row_of_the_wrong_shape_is_refused(
+    client: TestClient, catalog: CatalogService, row: dict[str, object]
+) -> None:
+    set_up_as_alice(client)
+    album = _album(catalog)
+
+    response = client.put(f"/api/tracks/{album}/songs", json={"rows": [row, TWO_SONGS[1]]})
+
+    assert response.status_code == 422
+
+
+def test_the_songs_of_a_song_conflict(client: TestClient, catalog: CatalogService) -> None:
+    set_up_as_alice(client)
+    album = _album(catalog)
+    song = client.put(f"/api/tracks/{album}/songs", json={"rows": TWO_SONGS}).json()["songs"][0]
+
+    assert client.get(f"/api/tracks/{song['track_id']}/songs").status_code == 409

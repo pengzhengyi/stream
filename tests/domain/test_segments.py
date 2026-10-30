@@ -40,6 +40,10 @@ def test_a_file_with_no_songs_has_no_ends() -> None:
     assert ends_of([], ALBUM_MS) == []
 
 
+def test_a_file_now_shorter_than_its_last_songs_start_ends_that_song_where_it_starts() -> None:
+    assert ends_of([0, 5_000], 3_000) == [5_000, 5_000]
+
+
 def test_the_last_song_of_a_file_of_unknown_length_has_no_end() -> None:
     assert ends_of([0, 192_000], None) == [192_000, None]
 

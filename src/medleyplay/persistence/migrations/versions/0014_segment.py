@@ -32,7 +32,7 @@ def upgrade() -> None:
             ["album_source_id"],
             ["source.id"],
             name=op.f("fk_segment_album_source_id_source"),
-            ondelete="CASCADE",
+            ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(
             ["track_id"],
@@ -42,6 +42,7 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_segment")),
         sa.UniqueConstraint("track_id", name=op.f("uq_segment_track_id")),
+        sqlite_autoincrement=True,
     )
     with op.batch_alter_table("segment") as batch:
         batch.create_index(batch.f("ix_segment_album_source_id"), ["album_source_id"], unique=False)

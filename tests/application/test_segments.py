@@ -1,7 +1,9 @@
 """Splitting one long file into its songs: each a Track, kept across edits, until unsplit."""
 
+from datetime import timedelta
+
 import pytest
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application.accounts import AccountService
@@ -11,11 +13,12 @@ from medleyplay.application.segments import SongsService, SongView
 from medleyplay.domain.accounts import Account
 from medleyplay.domain.catalog import Availability, SourceState, TrackId
 from medleyplay.domain.details import Field, Origin, Shown
-from medleyplay.domain.errors import InvalidInputError, NotFoundError
+from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
 from medleyplay.domain.segments import SongRow
 from medleyplay.domain.video_text import Song, VideoText
-from medleyplay.persistence.schema import SourceRow, TrackRow
+from medleyplay.persistence.schema import DownloadRow, SourceRow, TrackRow, TrackValueRow
 from tests.support.factories import NewAccountFactory, SourceKeyFactory, TrackDetailsFactory
+from tests.support.fakes import FakeClock
 
 THREE_SONGS = (
     SongRow(None, Song(0, "アイネクライネ")),
@@ -228,10 +231,74 @@ def test_rows_naming_a_song_of_another_file_are_refused(
 def test_a_song_is_not_split_itself(songs: SongsService, album: TrackId) -> None:
     first = songs.save(album, THREE_SONGS).songs[0]
 
-    with pytest.raises(InvalidInputError, match="song of"):
+    with pytest.raises(ConflictError, match="song of"):
         songs.save(first.track_id, [SongRow(None, Song(0, "A")), SongRow(None, Song(5_000, "B"))])
 
 
 def test_the_songs_of_a_missing_track_are_not_found(songs: SongsService) -> None:
     with pytest.raises(NotFoundError):
         songs.songs(TrackId(999))
+
+
+def test_a_song_added_as_the_last_is_removed_gets_an_id_of_its_own(
+    songs: SongsService, album: TrackId
+) -> None:
+    before = songs.save(album, THREE_SONGS).songs
+    rows = [
+        *_kept(before, "アイネクライネ", "ゴーゴー幽霊船"),
+        SongRow(None, Song(600_000, "Encore")),
+    ]
+
+    added = songs.save(album, rows).songs[2]
+
+    assert added.id not in {song.id for song in before}
+
+
+def test_an_album_file_change_its_songs_dont_take_leaves_their_values_as_they_were(
+    songs: SongsService,
+    details: DetailsService,
+    album: TrackId,
+    clock: FakeClock,
+    units: sessionmaker[Session],
+) -> None:
+    first = songs.save(album, THREE_SONGS).songs[0]
+    clock.advance(timedelta(days=1))
+
+    details.put_household(album, {"title": "Bremen (Live)"})
+
+    with units() as db:
+        recorded = set(
+            db.scalars(
+                select(TrackValueRow.recorded_at).where(TrackValueRow.track_id == first.track_id)
+            )
+        )
+    assert recorded == {clock() - timedelta(days=1)}
+
+
+def test_a_song_is_downloaded_while_its_album_file_is(
+    songs: SongsService,
+    catalog: CatalogService,
+    album: TrackId,
+    alice: Account,
+    units: sessionmaker[Session],
+    clock: FakeClock,
+) -> None:
+    first = songs.save(album, THREE_SONGS).songs[0]
+    with units.begin() as db:
+        source = db.scalars(select(SourceRow.id).where(SourceRow.track_id == album)).one()
+        db.add(
+            DownloadRow(
+                source_id=source,
+                file_name=f"{source}.m4a",
+                quality="best",
+                backend="yt-dlp",
+                size=1_000,
+                downloaded_at=clock(),
+            )
+        )
+
+    assert catalog.get_track(alice.id, first.track_id).downloaded
+    assert {track.id for track in catalog.list_tracks(alice.id) if track.downloaded} == {
+        album,
+        *(song.track_id for song in songs.songs(album).songs),
+    }

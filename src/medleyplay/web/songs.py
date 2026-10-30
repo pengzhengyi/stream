@@ -3,7 +3,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter
-from pydantic import BaseModel, Field, StrictInt, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
 
 from medleyplay.application.segments import SongsView
 from medleyplay.domain.catalog import TrackId
@@ -18,7 +18,9 @@ router = APIRouter(prefix="/api/tracks", tags=["songs"])
 class SongIn(BaseModel):
     """A row of the songs editor: the song it keeps by id, or `null` for a new one."""
 
-    id: RowId | None = None
+    model_config = ConfigDict(extra="forbid")
+
+    id: Annotated[StrictInt, Field(ge=1, le=2**63 - 1)] | None = None
     start_ms: Annotated[StrictInt, Field(ge=0, le=2**63 - 1)]
     title: StrictStr
     artist: StrictStr = ""
@@ -26,6 +28,8 @@ class SongIn(BaseModel):
 
 class RowsIn(BaseModel):
     """The file's songs, in order; a song left out is removed with its Track."""
+
+    model_config = ConfigDict(extra="forbid")
 
     rows: Annotated[list[SongIn], Field(max_length=MAX_SONGS)] = Field(
         examples=[

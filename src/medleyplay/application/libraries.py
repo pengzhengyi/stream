@@ -161,7 +161,7 @@ class LibraryService:
                 return
             sources = list(db.scalars(_sources_of(library_id)))
             track_ids = {source.track_id for source in sources}
-            drop_songs(db, [source.id for source in sources])
+            drop_songs(db, _sources_of(library_id).with_only_columns(SourceRow.id))
             for source in sources:
                 db.delete(source)
             db.flush()
@@ -291,10 +291,11 @@ def _set_details(db: Session, track_id: TrackId, file: ScannedFile, now: datetim
         }
         if tags.track_number is not None:
             values[Field.TRACK_NUMBER] = tags.track_number
-    details.record(db, track_id, Origin.FILES, values, now)
+    # The length first, so recording the values settles a split file's songs to it.
     track = db.get(TrackRow, track_id)
     if track is not None:
         track.duration_ms = tags.duration_ms if tags else None
+    details.record(db, track_id, Origin.FILES, values, now)
 
 
 def _record_name(db: Session, track_id: TrackId, file: ScannedFile, now: datetime) -> None:

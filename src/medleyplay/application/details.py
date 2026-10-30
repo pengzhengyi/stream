@@ -29,6 +29,7 @@ from medleyplay.domain.details import (
     shown,
 )
 from medleyplay.domain.errors import InvalidInputError, NotFoundError
+from medleyplay.domain.segments import ends_of
 from medleyplay.domain.video_text import Chapter, Reading, Song, VideoText, read_video
 from medleyplay.persistence.schema import (
     SegmentRow,
@@ -158,9 +159,24 @@ def refresh(db: Session, track_id: TrackId, now: datetime) -> dict[Field, Shown]
     for field in Field:
         value = found[field].value if field in found else None
         setattr(track, field.value, "" if value is None and field in TEXT_FIELDS else value)
-    for song in songs_of(db, track_id):
-        record(db, TrackId(song.track_id), Origin.ALBUM_FILE, album_file_values(song, found), now)
+    _refresh_songs(db, track, found, now)
     return found
+
+
+def _refresh_songs(
+    db: Session, album: TrackRow, album_shown: Mapping[Field, Shown], now: datetime
+) -> None:
+    # Each song's length from the file's, and its values from the file's, when they changed.
+    songs = songs_of(db, TrackId(album.id))
+    ends = ends_of([song.start_ms for song in songs], album.duration_ms)
+    for song, end in zip(songs, ends, strict=True):
+        track = db.get(TrackRow, song.track_id)
+        if track is not None:
+            track.duration_ms = None if end is None else end - song.start_ms
+        values = album_file_values(song, album_shown)
+        song_id = TrackId(song.track_id)
+        if values_of(db, song_id).get(Origin.ALBUM_FILE, {}) != values:
+            record(db, song_id, Origin.ALBUM_FILE, values, now)
 
 
 def songs_of(db: Session, track_id: TrackId) -> list[SegmentRow]:

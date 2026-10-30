@@ -1,8 +1,10 @@
 # Segments
 
 > [!NOTE]
-> **Status: in progress.** Splitting a file into songs and the songs API are
-> built; playing a song, the editor, and the album view follow. This note
+> **Status: in progress.** Splitting a file into songs, the songs API, and the
+> server's side of playing a song (its stretch, availability, smart playlists,
+> and the download policy) are built; the player, the editor, and the album view
+> follow. This note
 > describes splitting one long file, such as a whole album uploaded as one video,
 > into its songs, and playing them as Tracks. Where a song list comes from is in
 > [Track details](Track%20details.md).
@@ -80,9 +82,13 @@ both read its full length.
   artist; a song with no artist of its own is the album artist's. A change to the
   album file's details reaches its songs at once. The household can edit any of
   them.
-- **A rescan that changes the file** keeps its songs. Each split remembers the
-  file's length; once the length differs by a second or more, the songs are
-  marked to check, and the album view says so.
+- **A rescan that changes the file** keeps its songs, and the last song's length
+  follows the file's. Each split remembers the file's length; once the length
+  differs by a second or more, the songs are marked to check, and the album view
+  says so.
+- **A removed song's id is never reused,** so an editor left open can't give its
+  ratings to a new song, and an album file's Source can't be removed while its
+  songs remain.
 - **Removing a Library** removes the songs split from its files, with their
   Tracks.
 - **Unsplitting** removes every segment, after asking.

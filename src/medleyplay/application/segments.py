@@ -6,23 +6,16 @@ out removes its song's Track. A song's Source has the kind `segment` and names i
 album file's Source, so a song plays, and is available, as its file is.
 """
 
-from collections.abc import Callable, Collection, Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from sqlalchemy import delete, select
+from sqlalchemy import Select, delete, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from medleyplay.application import Clock
-from medleyplay.application.details import (
-    album_file_values,
-    record,
-    songs_of,
-    values_of,
-    video_text_of,
-)
+from medleyplay.application.details import refresh, songs_of, video_text_of
 from medleyplay.domain.catalog import SourceId, TrackId
-from medleyplay.domain.details import Origin, shown
-from medleyplay.domain.errors import InvalidInputError, NotFoundError
+from medleyplay.domain.errors import ConflictError, InvalidInputError, NotFoundError
 from medleyplay.domain.segments import (
     SEGMENT_SOURCE,
     SegmentId,
@@ -107,7 +100,10 @@ class SongsService:
             existing = {SegmentId(song.id): song for song in songs_of(db, track_id)}
             plan = plan_split(existing, rows, album.duration_ms)
             if plan.removed:
-                removed = [existing[song].track_id for song in plan.removed]
+                removed = [existing[gone].track_id for gone in plan.removed]
+                for gone in plan.removed:
+                    # Gone from the session too, so a new song can't meet its stale row.
+                    db.expunge(existing[gone])
                 db.execute(delete(TrackRow).where(TrackRow.id.in_(removed)))
             for song_id, place, song in plan.kept:
                 _set_row(existing[song_id], place, song)
@@ -134,18 +130,10 @@ class SongsService:
         return len(removed)
 
     def _settle(self, db: Session, album: TrackRow) -> None:
-        # Each song's length, its file's length now, and its details from its row and place.
-        now = self._clock()
-        current = songs_of(db, TrackId(album.id))
-        ends = ends_of([song.start_ms for song in current], album.duration_ms)
-        album_shown = shown(values_of(db, TrackId(album.id)))
-        for song, end in zip(current, ends, strict=True):
+        # The file's length now, and each song's length and details from its row and place.
+        for song in songs_of(db, TrackId(album.id)):
             song.split_length_ms = album.duration_ms
-            track = db.get(TrackRow, song.track_id)
-            if track is not None:
-                track.duration_ms = None if end is None else end - song.start_ms
-            values = album_file_values(song, album_shown)
-            record(db, TrackId(song.track_id), Origin.ALBUM_FILE, values, now)
+        refresh(db, TrackId(album.id), self._clock())
 
     def _changed(self) -> None:
         if self._on_change is not None:
@@ -162,8 +150,8 @@ def album_file_of(db: Session) -> dict[TrackId, TrackId]:
     return {TrackId(song): TrackId(album) for song, album in rows.all()}
 
 
-def drop_songs(db: Session, source_ids: Collection[int]) -> None:
-    """Remove the songs split from the Sources `source_ids`, with their Tracks."""
+def drop_songs(db: Session, source_ids: Select[tuple[int]]) -> None:
+    """Remove the songs split from the Sources `source_ids` selects, with their Tracks."""
     songs = select(SegmentRow.track_id).where(SegmentRow.album_source_id.in_(source_ids))
     db.execute(delete(TrackRow).where(TrackRow.id.in_(songs)))
 
@@ -175,7 +163,7 @@ def _album_file(db: Session, track_id: TrackId) -> TrackRow:
         raise NotFoundError(message)
     if db.scalar(select(SegmentRow.id).where(SegmentRow.track_id == track_id)) is not None:
         message = f"Track {track_id} is a song of another file; split that file instead."
-        raise InvalidInputError(message)
+        raise ConflictError(message)
     return track
 
 

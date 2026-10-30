@@ -69,8 +69,14 @@ def plan_split(
 
 
 def ends_of(starts: Sequence[int], length_ms: int | None) -> list[int | None]:
-    """Return where each song starting at `starts` ends: the next start, or the file's end."""
-    return [*starts[1:], length_ms] if starts else []
+    """Return where each song starting at `starts` ends: the next start, or the file's end.
+
+    A file now shorter than its last song's start ends that song where it starts.
+    """
+    if not starts:
+        return []
+    last = length_ms if length_ms is None else max(length_ms, starts[-1])
+    return [*starts[1:], last]
 
 
 def segment_locator(album_source: SourceId, segment: SegmentId) -> str:

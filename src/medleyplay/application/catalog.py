@@ -135,13 +135,15 @@ class CatalogService:
             downloaded = _downloaded(db, select(SourceRow.track_id))
             segment_of = album_file_of(db)
             split = set(segment_of.values())
+            # A song is downloaded while its album file is.
+            downloaded |= {song for song, album in segment_of.items() if album in downloaded}
             return [
                 _to_track(
                     track,
                     state,
                     available[track.id],
                     downloaded=track.id in downloaded,
-                    segment_of=segment_of.get(track.id),
+                    segment_of=segment_of.get(TrackId(track.id)),
                     split=track.id in split,
                 )
                 for track, state in rows
@@ -156,14 +158,15 @@ class CatalogService:
             available = _availability(
                 db, select(SourceRow).where(SourceRow.track_id == track_id), online=self._online()
             )
-            downloaded = _downloaded(
-                db, select(SourceRow.track_id).where(SourceRow.track_id == track_id)
-            )
             segment_of = album_file_of(db)
+            looked_at = segment_of.get(track_id, track_id)
+            downloaded = _downloaded(
+                db, select(SourceRow.track_id).where(SourceRow.track_id == looked_at)
+            )
         return _to_track(
             *found,
             available[track_id],
-            downloaded=track_id in downloaded,
+            downloaded=looked_at in downloaded,
             segment_of=segment_of.get(track_id),
             split=track_id in segment_of.values(),
         )

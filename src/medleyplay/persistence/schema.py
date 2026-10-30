@@ -125,10 +125,13 @@ class SegmentRow(Base):
     """
 
     __tablename__ = "segment"
+    # A removed song's id is never given to another, so an editor left open can't adopt it;
+    # and an album file's Source can't go while its songs remain.
+    __table_args__ = ({"sqlite_autoincrement": True},)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     album_source_id: Mapped[int] = mapped_column(
-        ForeignKey("source.id", ondelete="CASCADE"), index=True
+        ForeignKey("source.id", ondelete="RESTRICT"), index=True
     )
     track_id: Mapped[int] = mapped_column(ForeignKey("track.id", ondelete="CASCADE"), unique=True)
     position: Mapped[int]
