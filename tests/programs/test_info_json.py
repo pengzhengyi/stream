@@ -122,7 +122,7 @@ def test_any_object_reads_to_text_within_the_limits_and_never_raises(document: o
     assert all(chapter.start_ms >= 0 for chapter in text.chapters)
 
 
-def test_text_that_isnt_valid_unicode_keeps_a_replacement_character() -> None:
+def test_invalid_unicode_text_keeps_a_replacement_character() -> None:
     text = parse_info_json(
         rb"""
         {
