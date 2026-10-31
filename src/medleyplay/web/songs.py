@@ -88,6 +88,20 @@ class SongsOut(BaseModel):
         )
 
 
+class ListIn(BaseModel):
+    """A pasted song list: one song a line, its time first or last."""
+
+    text: Annotated[StrictStr, Field(max_length=100_000)] = Field(
+        examples=["00:00 Intro\n1. 03:12 Night Drive - Blue Room\nBlue Room 1:07:40"]
+    )
+
+
+class ListOut(BaseModel):
+    """The songs a pasted list names."""
+
+    songs: list[ListedSongOut]
+
+
 class RemovedOut(BaseModel):
     """How many songs were removed."""
 
@@ -115,6 +129,14 @@ def save_songs(track_id: RowId, body: RowsIn, _: SignedInAccount, service: Songs
         for row in body.rows
     ]
     return SongsOut.of(service.save(TrackId(track_id), rows))
+
+
+@router.post("/{track_id}/songs/read")
+def read_list(track_id: RowId, body: ListIn, _: SignedInAccount, service: SongsDep) -> ListOut:
+    """Read a song list pasted for the file; 422 names the first line that isn't a song."""
+    return ListOut(
+        songs=[_listed(song) for song in service.read_list(TrackId(track_id), body.text)]
+    )
 
 
 @router.delete("/{track_id}/songs")

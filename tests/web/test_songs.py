@@ -143,3 +143,32 @@ def test_the_songs_of_a_song_conflict(client: TestClient, catalog: CatalogServic
     song = client.put(f"/api/tracks/{album}/songs", json={"rows": TWO_SONGS}).json()["songs"][0]
 
     assert client.get(f"/api/tracks/{song['track_id']}/songs").status_code == 409
+
+
+def test_a_pasted_list_answers_its_songs(client: TestClient, catalog: CatalogService) -> None:
+    set_up_as_alice(client)
+    album = _album(catalog)
+
+    response = client.post(
+        f"/api/tracks/{album}/songs/read",
+        json={"text": "00:00 Intro\n03:12 Night Drive - Blue Room"},
+    )
+
+    assert response.json() == {
+        "songs": [
+            {"start_ms": 0, "title": "Intro", "artist": ""},
+            {"start_ms": 192_000, "title": "Night Drive", "artist": "Blue Room"},
+        ]
+    }
+
+
+def test_a_pasted_list_that_isnt_one_answers_why(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    album = _album(catalog)
+
+    response = client.post(f"/api/tracks/{album}/songs/read", json={"text": "Intro\n03:12 B"})
+
+    assert response.status_code == 422
+    assert "Line 1" in response.text

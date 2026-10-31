@@ -25,7 +25,7 @@ from medleyplay.domain.segments import (
     plan_split,
     segment_locator,
 )
-from medleyplay.domain.video_text import Song, read_video
+from medleyplay.domain.video_text import Song, read_song_list, read_video
 from medleyplay.persistence.schema import SegmentRow, SourceRow, TrackRow
 
 
@@ -118,6 +118,16 @@ class SongsService:
             self._settle(db, album)
         self._changed()
         return self.songs(track_id)
+
+    def read_list(self, track_id: TrackId, text: str) -> tuple[Song, ...]:
+        """Return the songs a list pasted for the file names, one a line, or raise.
+
+        The `InvalidInputError` names the first line that isn't a song, or the check
+        the list fails.
+        """
+        with self._units() as db:
+            _album_file(db, track_id)
+        return read_song_list(text)
 
     def unsplit(self, track_id: TrackId) -> int:
         """Remove every song of the file, with its Track; return how many there were."""
