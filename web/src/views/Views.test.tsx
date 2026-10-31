@@ -181,3 +181,29 @@ describe("search", () => {
     expect(screen.queryByRole("radiogroup", { name: "Search in" })).toBeNull();
   });
 });
+
+describe("a file split into songs", () => {
+  /** *Bremen*, split into one song so far, and Melt; a Playlist holds the file whole. */
+  const SPLIT = [
+    trackOf(104, "Bremen", { split: true, duration_ms: 600_000 }),
+    trackOf(154, "Intro", { segment_of: 104, duration_ms: 180_000 }),
+    trackOf(1, "Melt"),
+  ];
+  const routes = () => signedIn(SPLIT, [playlistOf("p1", "Whole", [104, 1])]);
+
+  it("gives way to its songs among the Library's songs", async () => {
+    open("", routes());
+
+    expect(await screen.findByRole("button", { name: "Intro" })).toBeInTheDocument();
+    expect(songs()).toEqual(["Intro", "Melt"]);
+  });
+
+  it("still plays whole in a Playlist that held it before it was split", async () => {
+    open("#/playlists", routes());
+
+    const links = within(await screen.findByRole("list", { name: "Playlists" })).getAllByRole(
+      "link",
+    );
+    expect(links.map((link) => link.textContent)).toContain("Whole2 songs, 13 min");
+  });
+});

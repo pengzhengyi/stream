@@ -13,6 +13,7 @@ import {
   PencilSimpleIcon,
   PlaylistIcon,
   QueueIcon,
+  ScissorsIcon,
   VinylRecordIcon,
 } from "@phosphor-icons/react";
 import * as Menu from "@radix-ui/react-dropdown-menu";
@@ -28,6 +29,8 @@ export interface TrackMenuActions {
   readonly onAdd: (track: Track) => void;
   readonly onAddToPlaylist: (track: Track) => void;
   readonly onEditDetails: (track: Track) => void;
+  /** Edit the songs of the file `track` is, or is a song of. */
+  readonly onEditSongs: (track: Track) => void;
 }
 
 /** The "…" button of `track`, and its menu; `queueing` offers Play next and Add to queue. */
@@ -110,6 +113,14 @@ export function TrackMenu({
             }}
           >
             Edit details…
+          </Item>
+          <Item
+            icon={<ScissorsIcon />}
+            onSelect={() => {
+              actions.onEditSongs(track);
+            }}
+          >
+            {track.split || track.segment_of !== null ? "Edit songs…" : "Split into songs…"}
           </Item>
         </Menu.Content>
       </Menu.Portal>

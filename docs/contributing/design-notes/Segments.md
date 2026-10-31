@@ -1,9 +1,9 @@
 # Segments
 
 > [!NOTE]
-> **Status: in progress.** Splitting a file into songs, the songs API, and
-> playing a song (its stretch, availability, smart playlists, the download
-> policy, and the player) are built; the editor and the album view follow. This note
+> **Status: in progress.** Splitting a file into songs, the songs API, playing a
+> song, and the editor are built; listening from a row's start, and moving rows
+> by dragging, follow. This note
 > describes splitting one long file, such as a whole album uploaded as one video,
 > into its songs, and playing them as Tracks. Where a song list comes from is in
 > [Track details](Track%20details.md).
@@ -38,8 +38,8 @@
   the album file's Source. A segment Source has no file of its own; removing the
   album file's Source removes its segments, and their Tracks with them.
 - **The file keeps its own Track,** the *album file*. Once split it is marked
-  `split`: Songs, Artists, search, and smart playlists show its segments instead,
-  while Albums still offers it, to play the file as one or to edit its songs.
+  `split`: Songs, Artists, Albums, search, and smart playlists show its segments
+  instead, and a Playlist that held it before it was split still plays it whole.
 - **A segment Track is a Track like any other:** its own favorite, rating,
   plays, place in Playlists and the queue, and details. Its length is its end
   less its start, and it was added when its album file was.
@@ -112,12 +112,17 @@ both read its full length.
 
 ## The web client
 
-- **Albums** shows a split file as an album of its songs, with *Play* and
-  *Shuffle*, as for any album.
-- ***Edit songs…*** on the album file's menu opens the editor: a row per song
-  with its start, title, and artist; insert, delete, move, and retime; *Paste a
-  list*; the lists found, to start from; and a click on a start to listen from
-  there.
+- **A split file gives way to its songs** in Songs, Artists, Albums, Downloaded,
+  and search, so the songs make up its album there; a Playlist that held the file
+  before it was split still plays it whole.
+- ***Split into songs…*** on a file's menu, and ***Edit songs…*** on any of its
+  songs, open the editor: a row per song with its start, such as `3:12` or
+  `1:07:40`, its title, and its artist; add, remove, and move rows; start from a
+  list found in the video's details, or ***Paste a list***, which the server
+  reads. Saving says first how many songs it removes with their ratings and
+  plays, and so does ***Unsplit***.
+- **Planned:** a click on a row's start to listen from there, and dragging rows
+  to move them.
 
 ## What the API shows
 
@@ -125,6 +130,7 @@ both read its full length.
 | --- | --- | --- |
 | `GET /api/tracks/{id}/songs` | Signed in | The album file's songs, with ids and ends, its length, whether to check them, and the lists found |
 | `PUT /api/tracks/{id}/songs` | Signed in | The household's rows, by id; answers the segment Tracks |
+| `POST /api/tracks/{id}/songs/read` | Signed in | The songs a pasted list names, or the first line that isn't one |
 | `DELETE /api/tracks/{id}/songs` | Signed in | Unsplits the file |
 | `POST /api/tracks/{id}/playback` | Signed in | Now answers a segment's `start_ms` and `end_ms` |
 

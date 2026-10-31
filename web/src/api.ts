@@ -72,6 +72,27 @@ export interface Song {
   readonly artist: string;
 }
 
+/** A song of a split file: its id, its Track, and where it ends, if known. */
+export interface SplitSong extends Song {
+  readonly id: number;
+  readonly track_id: number;
+  readonly end_ms: number | null;
+}
+
+/** A file's songs, whether its length changed since it was split, and the lists found. */
+export interface Songs {
+  readonly track_id: number;
+  readonly length_ms: number | null;
+  readonly needs_check: boolean;
+  readonly songs: readonly SplitSong[];
+  readonly found: readonly (readonly Song[])[];
+}
+
+/** A row of the songs editor: the song it keeps by `id`, or `null` for a new one. */
+export interface SongRowIn extends Song {
+  readonly id: number | null;
+}
+
 /** A Track's details once its video's text is read, and the songs that text lists. */
 export interface VideoRead {
   readonly details: Details;
@@ -256,12 +277,28 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   return (response.status === 204 ? undefined : await response.json()) as T;
 }
 
+/** Say why the server refused: its own words, each check a request failed, or its status. */
 async function detailOf(response: Response): Promise<string> {
+  const status = response.statusText || `The server refused this (${String(response.status)}).`;
   try {
     const body = (await response.json()) as { detail?: unknown };
-    return typeof body.detail === "string" ? body.detail : response.statusText;
+    if (typeof body.detail === "string") {
+      return body.detail;
+    }
+    if (Array.isArray(body.detail)) {
+      const checks = body.detail.flatMap((check: unknown) =>
+        typeof check === "object" &&
+        check !== null &&
+        "msg" in check &&
+        typeof check.msg === "string"
+          ? [check.msg]
+          : [],
+      );
+      return checks.length > 0 ? checks.join("; ") : status;
+    }
+    return status;
   } catch {
-    return response.statusText;
+    return status;
   }
 }
 
@@ -285,6 +322,17 @@ export const api = {
   /** Read a video's pasted title and description as the Track's `video` values. */
   readVideoText: (trackId: number, text: VideoText) =>
     call<VideoRead>("POST", `/api/tracks/${String(trackId)}/video-text`, text),
+  /** The songs a Track's file is split into, and the lists found for it. */
+  songs: (trackId: number) => call<Songs>("GET", `/api/tracks/${String(trackId)}/songs`),
+  /** Make `rows` the file's songs: each kept by its id, the others new, the rest removed. */
+  saveSongs: (trackId: number, rows: readonly SongRowIn[], known: readonly number[]) =>
+    call<Songs>("PUT", `/api/tracks/${String(trackId)}/songs`, { rows, known }),
+  /** Read a song list pasted for the file; refused with the first line that isn't a song. */
+  readSongList: (trackId: number, text: string) =>
+    call<{ songs: Song[] }>("POST", `/api/tracks/${String(trackId)}/songs/read`, { text }),
+  /** Remove every song of the file, with its Track. */
+  unsplit: (trackId: number) =>
+    call<{ removed: number }>("DELETE", `/api/tracks/${String(trackId)}/songs`),
   playlists: () => call<Playlist[]>("GET", "/api/playlists"),
   /** Create or replace a plain Playlist under an id the client chose. */
   putPlaylist: (id: string, playlist: PlainPlaylist) =>

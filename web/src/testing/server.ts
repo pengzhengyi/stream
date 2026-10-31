@@ -13,6 +13,8 @@ import type {
   ModeSettings,
   Playlist,
   Preferences,
+  Song,
+  Songs,
   Track,
   VideoText,
 } from "../api";
@@ -239,4 +241,29 @@ export function preferencesOf(shortcuts: SavedShortcuts = null): Routes {
 export async function openWithShortcuts(shortcuts: SavedShortcuts): Promise<void> {
   serve(preferencesOf(shortcuts));
   await openAccount(ALICE.id);
+}
+
+/**
+ * The songs of the album file `trackId`, an hour long, split into `songs` (each
+ * `[id, start_ms, title]`, its Track `100 + id`), with the lists `found` for it.
+ */
+export function splitSongsOf(
+  trackId: number,
+  songs: readonly (readonly [number, number, string])[],
+  found: readonly (readonly Song[])[] = [],
+): Songs {
+  return {
+    track_id: trackId,
+    length_ms: 3_600_000,
+    needs_check: false,
+    songs: songs.map(([id, start, title], index) => ({
+      id,
+      track_id: 100 + id,
+      start_ms: start,
+      end_ms: songs[index + 1]?.[1] ?? 3_600_000,
+      title,
+      artist: "",
+    })),
+    found,
+  };
 }

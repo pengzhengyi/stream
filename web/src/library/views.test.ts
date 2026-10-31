@@ -9,6 +9,7 @@ import {
   favoritesOf,
   fold,
   search,
+  songsOf,
   tracksOfAlbum,
   tracksOfArtist,
 } from "./views";
@@ -132,5 +133,15 @@ describe("search", () => {
 
   it("finds nothing for a blank search", () => {
     expect(search(LIBRARY, "   ")).toEqual({ tracks: [], artists: [], albums: [] });
+  });
+});
+
+describe("the songs of the Library", () => {
+  it("are its songs in place of a file split into them", () => {
+    const album = trackOf(104, "BV1dm4y1s7ak", { split: true });
+    const first = trackOf(154, "アイネクライネ", { segment_of: 104 });
+    const melt = trackOf(1, "Melt");
+
+    expect(songsOf([album, first, melt])).toEqual([first, melt]);
   });
 });

@@ -143,3 +143,69 @@ def test_the_songs_of_a_song_conflict(client: TestClient, catalog: CatalogServic
     song = client.put(f"/api/tracks/{album}/songs", json={"rows": TWO_SONGS}).json()["songs"][0]
 
     assert client.get(f"/api/tracks/{song['track_id']}/songs").status_code == 409
+
+
+def test_a_pasted_list_answers_its_songs(client: TestClient, catalog: CatalogService) -> None:
+    set_up_as_alice(client)
+    album = _album(catalog)
+
+    response = client.post(
+        f"/api/tracks/{album}/songs/read",
+        json={"text": "00:00 Intro\n03:12 Night Drive - Blue Room"},
+    )
+
+    assert response.json() == {
+        "songs": [
+            {"start_ms": 0, "title": "Intro", "artist": ""},
+            {"start_ms": 192_000, "title": "Night Drive", "artist": "Blue Room"},
+        ]
+    }
+
+
+def test_a_pasted_text_of_no_song_list_answers_why(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    album = _album(catalog)
+
+    response = client.post(f"/api/tracks/{album}/songs/read", json={"text": "Intro\n03:12 B"})
+
+    assert response.status_code == 422
+    assert "Line 1" in response.text
+
+
+def test_a_save_naming_the_songs_it_saw_is_refused_once_they_changed(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    album = _album(catalog)
+    seen = client.put(f"/api/tracks/{album}/songs", json={"rows": TWO_SONGS}).json()["songs"]
+    rows = [
+        {"id": song["id"], "start_ms": song["start_ms"], "title": song["title"]} for song in seen
+    ]
+    client.put(
+        f"/api/tracks/{album}/songs",
+        json={"rows": [*rows, {"start_ms": 600_000, "title": "Encore"}]},
+    )
+
+    response = client.put(
+        f"/api/tracks/{album}/songs",
+        json={
+            "rows": [*rows[:1], {"start_ms": 300_000, "title": "B"}],
+            "known": [s["id"] for s in seen],
+        },
+    )
+
+    assert response.status_code == 409
+
+
+def test_a_pasted_list_with_an_unknown_field_is_refused(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+
+    response = client.post(
+        f"/api/tracks/{_album(catalog)}/songs/read", json={"text": "00:00 A\n03:12 B", "z": 1}
+    )
+
+    assert response.status_code == 422

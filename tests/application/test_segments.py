@@ -302,3 +302,47 @@ def test_a_song_is_downloaded_while_its_album_file_is(
         album,
         *(song.track_id for song in songs.songs(album).songs),
     }
+
+
+def test_a_pasted_list_reads_as_the_songs_it_names(songs: SongsService, album: TrackId) -> None:
+    listed = songs.read_list(
+        album,
+        """\
+00:00 アイネクライネ
+1. 04:12 ゴーゴー幽霊船 - 米津玄師
+Last 08:00
+""",
+    )
+
+    assert listed == (
+        Song(0, "アイネクライネ"),
+        Song(252_000, "ゴーゴー幽霊船", "米津玄師"),
+        Song(480_000, "Last"),
+    )
+
+
+def test_a_pasted_list_with_a_line_of_no_song_is_refused_naming_it(
+    songs: SongsService, album: TrackId
+) -> None:
+    with pytest.raises(InvalidInputError, match="Line 2"):
+        songs.read_list(album, "00:00 Intro\nthanks for listening\n08:00 Last")
+
+
+def test_a_save_from_an_editor_opened_before_the_songs_changed_is_refused(
+    songs: SongsService, album: TrackId
+) -> None:
+    opened = songs.save(album, THREE_SONGS).songs
+    songs.save(
+        album,
+        [
+            *_kept(opened, "アイネクライネ", "ゴーゴー幽霊船", "Last"),
+            SongRow(None, Song(600_000, "Encore")),
+        ],
+    )
+
+    with pytest.raises(ConflictError, match="changed"):
+        songs.save(
+            album, _kept(opened, "アイネクライネ", "Last"), known=[song.id for song in opened]
+        )
+
+    assert len(songs.songs(album).songs) == 4
