@@ -515,6 +515,33 @@ def test_a_paste_after_a_sidecar_read_survives_a_rescan_that_finds_the_sidecar_u
 
 
 @pytest.mark.usefixtures("melt_read")
+def test_a_paste_survives_a_rescan_that_reads_the_unchanged_sidecar_again(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId
+) -> None:
+    _paste(units, clock, VIDEO, VideoText(WORLD_IS_MINE))
+    reread = InfoJsonFactory.read(MELT)
+
+    _scan(units, clock, library, ScannedFileFactory.untagged(VIDEO, info_json=reread))
+
+    assert _video_text(units, VIDEO) == VideoText(WORLD_IS_MINE)
+    assert _came_from(units) == ["household"]
+
+
+@pytest.mark.usefixtures("melt_read")
+def test_a_sidecar_that_couldnt_be_read_for_now_is_read_again_next_scan(
+    units: sessionmaker[Session], clock: FakeClock, library: LibraryId
+) -> None:
+    late = InfoJsonFactory.unreadable_for_now(modified_ns=2)
+
+    _scan(units, clock, library, ScannedFileFactory.unchanged(VIDEO, info_json=late))
+
+    details = _source_details(units)
+    assert details["info_json"] == {"size": 200, "modified_ns": 1}
+    assert "can't be read" in str(details["info_json_error"])
+    assert _video_text(units, VIDEO) == VideoText(MELT)
+
+
+@pytest.mark.usefixtures("melt_read")
 def test_a_changed_sidecar_replaces_a_paste(
     units: sessionmaker[Session], clock: FakeClock, library: LibraryId
 ) -> None:
@@ -578,9 +605,8 @@ def test_a_moved_file_keeps_its_track_and_reads_the_sidecar_at_its_new_path(
     )
     _scan(units, clock, library, before)
     track_id = _catalog(units)[f"old/{VIDEO}"].track_id
-    after = ScannedFileFactory.untagged(
-        f"new/{VIDEO}", fingerprint="f1", info_json=InfoJsonFactory.read(WORLD_IS_MINE)
-    )
+    other = InfoJsonFactory.read(WORLD_IS_MINE, modified_ns=2)
+    after = ScannedFileFactory.untagged(f"new/{VIDEO}", fingerprint="f1", info_json=other)
 
     _scan(units, clock, library, after)
 

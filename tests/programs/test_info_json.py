@@ -7,6 +7,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from medleyplay.programs.info_json import (
+    MAX_CHAPTERS,
     MAX_DESCRIPTION,
     MAX_TITLE,
     InfoChapter,
@@ -119,3 +120,55 @@ def test_any_object_reads_to_text_within_the_limits_and_never_raises(document: o
     assert len(text.title) <= MAX_TITLE
     assert len(text.description) <= MAX_DESCRIPTION
     assert all(chapter.start_ms >= 0 for chapter in text.chapters)
+
+
+def test_text_that_isnt_valid_unicode_keeps_a_replacement_character() -> None:
+    text = parse_info_json(
+        rb"""
+        {
+          "title": "Melt \ud800",
+          "chapters": [
+            {"start_time": 0, "title": "Intro \udfff"},
+            {"start_time": 60, "title": "Night Drive"}
+          ]
+        }
+        """
+    )
+
+    assert text.title == "Melt �"
+    assert text.chapters[0].title == "Intro �"
+    assert "Melt" in text.model_dump_json()
+
+
+def test_a_long_chapter_title_is_cut_to_the_limit_of_a_title() -> None:
+    document = {"chapters": [{"start_time": 0, "title": "x" * (MAX_TITLE + 40)}]}
+
+    text = parse_info_json(json.dumps(document).encode())
+
+    assert text.chapters == (InfoChapter(start_ms=0, title="x" * MAX_TITLE),)
+
+
+def test_chapters_past_the_limit_are_left_out() -> None:
+    document = {
+        "chapters": [
+            {"start_time": seconds, "title": "Song"} for seconds in range(MAX_CHAPTERS + 5)
+        ]
+    }
+
+    text = parse_info_json(json.dumps(document).encode())
+
+    assert len(text.chapters) == MAX_CHAPTERS
+
+
+def test_a_chapter_starting_more_than_a_week_in_is_left_out() -> None:
+    document = {
+        "chapters": [
+            {"start_time": 0, "title": "Intro"},
+            {"start_time": 8 * 24 * 3600, "title": "Much later"},
+            {"start_time": 1e300, "title": "Never"},
+        ]
+    }
+
+    text = parse_info_json(json.dumps(document).encode())
+
+    assert text.chapters == (InfoChapter(start_ms=0, title="Intro"),)

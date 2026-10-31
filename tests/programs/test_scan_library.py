@@ -233,3 +233,15 @@ def test_the_sidecar_of_a_zip_archive_is_read_stored_or_compressed(tmp_path: Pat
         "x/deflated.wav": "【初音ミク】ワールドイズマイン / ryo(supercell)【MV】",
         "x/stored.wav": MELT_TITLE,
     }
+
+
+def test_a_sidecar_that_cant_be_opened_is_read_again_next_scan(tmp_path: Path) -> None:
+    music = folder_of(tmp_path / "Music", {"a.wav": Song("A")})
+    sidecar = info_json_beside(music / "a.wav", melt_video())
+    sidecar.chmod(0)
+
+    info = _scan(tmp_path, music)["a.wav"].info_json
+
+    sidecar.chmod(0o644)
+    assert info is not None
+    assert (info.retry, "can't be read" in info.error) == (True, True)

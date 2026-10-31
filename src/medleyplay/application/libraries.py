@@ -299,22 +299,31 @@ def _apply_info_json(
 ) -> dict[str, object]:
     """Apply the `.info.json` the scan found beside the file; return what the Source keeps of it.
 
-    Text read replaces the Track's video's text. A sidecar that couldn't be read
-    leaves the earlier text and notes the error until a later read succeeds, and
-    one the scan didn't read leaves both as they were. A sidecar that was there
-    last scan and isn't now takes with it the text read from a file, never a paste.
+    Text read from a new or changed file replaces the Track's video's text. A
+    sidecar that couldn't be read leaves the earlier text and notes the error until
+    a later read succeeds, and one the scan didn't read leaves both as they were. A
+    sidecar that was there last scan and isn't now takes with it the text read from
+    a file, never a paste.
     """
     if info is None:
         if INFO_JSON in previous:
             details.forget_video_text_read_from_a_file(db, track_id, now)
         return {}
-    kept: dict[str, object] = {INFO_JSON: {"size": info.size, "modified_ns": info.modified_ns}}
-    if info.error:
+    stamp = {"size": info.size, "modified_ns": info.modified_ns}
+    kept: dict[str, object] = {INFO_JSON: stamp}
+    if info.retry:
+        # The last stamp read, if any, so the next scan reads this one again.
+        kept = {INFO_JSON: previous[INFO_JSON]} if INFO_JSON in previous else {}
+        kept[INFO_JSON_ERROR] = info.error
+    elif info.error:
         kept[INFO_JSON_ERROR] = info.error
     elif info.text is None and INFO_JSON_ERROR in previous:
         kept[INFO_JSON_ERROR] = previous[INFO_JSON_ERROR]
     elif info.text is not None and (text := _video_text(info.text)) is not None:
-        details.record_video_text(db, track_id, text, "file", now)
+        # A file read again unchanged, as by a full scan, leaves a later paste standing.
+        unchanged = previous.get(INFO_JSON) == stamp
+        if not unchanged or details.video_text_of(db, track_id) is None:
+            details.record_video_text(db, track_id, text, "file", now)
     return kept
 
 

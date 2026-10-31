@@ -22,7 +22,11 @@ MAX_BYTES: Final = 5 * 1024 * 1024
 """A file longer than this is not read."""
 MAX_TITLE: Final = 1_000
 MAX_DESCRIPTION: Final = 20_000
-"""Text is cut to the limits of a pasted title and description."""
+"""Text is cut to the limits of a pasted title and description; a chapter's to a title's."""
+MAX_CHAPTERS: Final = 1_000
+"""Chapters past this many are left out; a song list holds far fewer."""
+MAX_START_MS: Final = 7 * 24 * 3600 * 1000
+"""A chapter starting later than a week in is left out."""
 
 
 class InfoJsonError(ValueError):
@@ -71,12 +75,15 @@ def parse_info_json(data: bytes) -> InfoText:
 
 
 def _text(value: object) -> str:
-    return value if isinstance(value, str) else ""
+    # JSON can name half of a UTF-16 pair, which no UTF-8 text holds; it reads as U+FFFD.
+    if not isinstance(value, str):
+        return ""
+    return value.encode("utf-16", "surrogatepass").decode("utf-16", "replace")
 
 
 def _chapters(entries: list[object]) -> tuple[InfoChapter, ...]:
     chapters = (_chapter(entry) for entry in entries)
-    return tuple(chapter for chapter in chapters if chapter is not None)
+    return tuple(chapter for chapter in chapters if chapter is not None)[:MAX_CHAPTERS]
 
 
 def _chapter(entry: object) -> InfoChapter | None:
@@ -87,8 +94,8 @@ def _chapter(entry: object) -> InfoChapter | None:
         return None
     try:
         milliseconds = start * 1000
-        if not math.isfinite(milliseconds) or milliseconds < 0:
+        if not math.isfinite(milliseconds) or not 0 <= milliseconds <= MAX_START_MS:
             return None
-        return InfoChapter(start_ms=round(milliseconds), title=title)
+        return InfoChapter(start_ms=round(milliseconds), title=_text(title)[:MAX_TITLE])
     except OverflowError:  # A whole number too large for a float.
         return None

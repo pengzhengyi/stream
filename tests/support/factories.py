@@ -102,6 +102,12 @@ class InfoJsonFactory:
         return InfoJson(size=200, modified_ns=1, text=InfoText())
 
     @staticmethod
+    def unreadable_for_now(*, modified_ns: int = 1) -> InfoJson:
+        """Return a sidecar the scan couldn't read this time, as from a drive too slow to answer."""
+        error = "can't be read (PluginCallFailedError)"
+        return InfoJson(size=200, modified_ns=modified_ns, error=error, retry=True)
+
+    @staticmethod
     def malformed(*, modified_ns: int = 1) -> InfoJson:
         """Return a sidecar the scan couldn't read, as one cut short mid-object would be."""
         error = "isn't valid JSON (JSONDecodeError)"

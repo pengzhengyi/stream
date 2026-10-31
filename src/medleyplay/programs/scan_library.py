@@ -73,13 +73,16 @@ class InfoJson(_Model):
     """The `.info.json` beside a file: its stamp, and what reading it gave.
 
     A sidecar the scan skipped as unchanged has neither `text` nor `error`. One it
-    read has the `text`, or the `error` when it couldn't be read as a video's details.
+    read has the `text`, or the `error` when it couldn't be read as a video's details;
+    `retry` says the error may pass, as when its drive answered too late, so the next
+    scan reads it again.
     """
 
     size: int
     modified_ns: int
     text: InfoText | None = None
     error: str = ""
+    retry: bool = False
 
 
 class ScannedFile(_Model):
@@ -235,10 +238,9 @@ def _info_json(
         text = parse_info_json(_contents(request.root, sidecar, context))
     except InfoJsonError as error:
         return listed.model_copy(update={"error": str(error)})
-    except PluginCallFailedError as error:
-        return listed.model_copy(update={"error": f"can't be read ({error})"})
-    except OSError as error:
-        return listed.model_copy(update={"error": f"can't be read ({type(error).__name__})"})
+    except (PluginCallFailedError, OSError) as error:
+        failed = f"can't be read ({type(error).__name__})"
+        return listed.model_copy(update={"error": failed, "retry": True})
     return listed.model_copy(update={"text": text})
 
 
