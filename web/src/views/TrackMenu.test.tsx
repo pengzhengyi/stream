@@ -9,14 +9,15 @@ import { TrackMenu, type TrackMenuActions } from "./TrackMenu";
 /** Melt by ryo, on the album Supercell, which is listed under its album artist, supercell. */
 const MELT = trackOf(1, "Melt", { artist: "ryo", album: "Supercell", album_artist: "supercell" });
 
-function renderMenu(queueing = true) {
+function renderMenu(queueing = true, track = MELT) {
   const actions: TrackMenuActions = {
     onPlayNext: vi.fn(),
     onAdd: vi.fn(),
     onAddToPlaylist: vi.fn(),
     onEditDetails: vi.fn(),
+    onEditSongs: vi.fn(),
   };
-  render(<TrackMenu track={MELT} actions={actions} queueing={queueing} />);
+  render(<TrackMenu track={track} actions={actions} queueing={queueing} />);
   return actions;
 }
 
@@ -42,6 +43,7 @@ describe("a song's menu", () => {
       "Go to album",
       "Add to playlist…",
       "Edit details…",
+      "Split into songs…",
     ]);
   });
 
@@ -77,6 +79,7 @@ describe("a song's menu", () => {
     ["Add to queue", "onAdd"],
     ["Add to playlist…", "onAddToPlaylist"],
     ["Edit details…", "onEditDetails"],
+    ["Split into songs…", "onEditSongs"],
   ] as const)("%s acts on the song, and closes the menu", async (item, action) => {
     const actions = renderMenu();
     await open();
@@ -110,5 +113,16 @@ describe("a song's menu", () => {
       expect(screen.queryByRole("menu")).toBeNull();
     });
     expect(screen.getByRole("button", { name: "More actions for Melt" })).toHaveFocus();
+  });
+});
+
+describe("a song's menu for a song inside a longer file", () => {
+  it("edits the songs of its file", async () => {
+    const actions = renderMenu(true, trackOf(1, "Melt", { segment_of: 104 }));
+    await open();
+
+    await userEvent.click(screen.getByRole("menuitem", { name: "Edit songs…" }));
+
+    expect(actions.onEditSongs).toHaveBeenCalledOnce();
   });
 });

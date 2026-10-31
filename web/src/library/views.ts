@@ -41,6 +41,11 @@ export function fold(text: string): string {
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
+/** Return the Tracks that stand for music in the Library: a file split into songs gives way to them. */
+export function songsOf(tracks: readonly Track[]): Track[] {
+  return tracks.filter((track) => !track.split);
+}
+
 /** Return each artist once, sorted by name as people read them, a blank name first. */
 export function artistsOf(tracks: readonly Track[]): Artist[] {
   return groups(tracks, (track) => track.artist).map(({ name, count, durationMs }) => ({

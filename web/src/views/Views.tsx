@@ -15,6 +15,7 @@ import {
   downloadedOf,
   favoritesOf,
   search,
+  songsOf,
   tracksOfAlbum,
   tracksOfArtist,
 } from "../library/views";
@@ -42,7 +43,9 @@ export interface ViewProps {
 }
 
 /** The view `route` names. */
-export function CurrentView(props: ViewProps) {
+export function CurrentView(given: ViewProps) {
+  // A Playlist names its Tracks by id among them all; every other view lists songs.
+  const props = { ...given, tracks: songsOf(given.tracks) };
   const { route } = props;
   switch (route.view) {
     case "songs":
@@ -98,7 +101,7 @@ export function CurrentView(props: ViewProps) {
     case "playlists":
       return <Playlists tracks={props.tracks} playlists={props.playlists} />;
     case "playlist":
-      return <PlaylistView {...props} id={route.id} />;
+      return <PlaylistView {...props} tracks={given.tracks} id={route.id} />;
     case "search":
       return <SearchResults {...props} query={route.query} />;
     case "settings":

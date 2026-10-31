@@ -2205,6 +2205,107 @@ dialog.modal::backdrop {
   }
 }
 
+/* Editing a file's songs: a row each, its start narrow, its title widest. */
+
+.edit-songs .card {
+  width: min(44rem, calc(100vw - 2rem));
+  max-height: min(48rem, 90dvh);
+}
+
+.edit-songs .detail-input {
+  height: 2.4rem;
+  margin: 0;
+  padding-block: 0;
+}
+
+.edit-songs textarea.detail-input {
+  height: auto;
+  padding-block: 0.4rem;
+  resize: vertical;
+}
+
+.song-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0 0 0.6rem;
+  padding: 0;
+  list-style: none;
+}
+
+.song-row {
+  display: grid;
+  grid-template-columns: 5rem minmax(0, 2fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.song-row-buttons {
+  display: flex;
+  gap: 0.1rem;
+}
+
+.edit-songs .songs-found,
+.edit-songs .songs-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: auto;
+  margin: 0 0 0.75rem;
+  padding: 0.35rem 0.9rem;
+  font-size: 0.85rem;
+}
+
+.songs-note {
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.edit-songs .dialog-button {
+  width: auto;
+  margin: 0;
+  padding: 0 1rem;
+  height: 2.6rem;
+}
+
+.edit-songs .songs-unsplit {
+  margin-right: auto;
+}
+
+.edit-songs .error {
+  margin: 0;
+  color: #d1495b;
+  font-size: 0.9rem;
+}
+
+@media (width <= 36rem) {
+  /* Start and title on one line; the artist and the buttons on the next. */
+  .song-row {
+    grid-template-areas:
+      "start title title"
+      "artist artist buttons";
+    grid-template-columns: 4.5rem minmax(0, 1fr) auto;
+  }
+
+  .song-start {
+    grid-area: start;
+  }
+
+  .song-title {
+    grid-area: title;
+  }
+
+  .song-artist {
+    grid-area: artist;
+  }
+
+  .song-row-buttons {
+    grid-area: buttons;
+  }
+}
+
 /* What was just done, above the player for a moment. */
 
 .notice {
