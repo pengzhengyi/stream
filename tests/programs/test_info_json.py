@@ -128,7 +128,7 @@ def test_text_that_isnt_valid_unicode_keeps_a_replacement_character() -> None:
         {
           "title": "Melt \ud800",
           "chapters": [
-            {"start_time": 0, "title": "Intro \udfff"},
+            {"start_time": 0, "title": "Intro \udc00"},
             {"start_time": 60, "title": "Night Drive"}
           ]
         }

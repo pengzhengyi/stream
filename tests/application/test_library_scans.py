@@ -528,7 +528,7 @@ def test_a_paste_survives_a_rescan_that_reads_the_unchanged_sidecar_again(
 
 
 @pytest.mark.usefixtures("melt_read")
-def test_a_sidecar_that_couldnt_be_read_for_now_is_read_again_next_scan(
+def test_a_sidecar_unreadable_for_now_is_read_again_next_scan(
     units: sessionmaker[Session], clock: FakeClock, library: LibraryId
 ) -> None:
     late = InfoJsonFactory.unreadable_for_now(modified_ns=2)
