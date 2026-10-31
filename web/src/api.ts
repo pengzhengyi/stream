@@ -217,6 +217,10 @@ export type PlaybackAnswer =
       readonly source_id: number;
       readonly audio_url: string;
       readonly media_type: string;
+      /** Where a song inside a longer file starts in it; `null` for a whole file. */
+      readonly start_ms: number | null;
+      /** Where it ends; `null` when the file's end is its end. */
+      readonly end_ms: number | null;
     }
   | { readonly state: "preparing"; readonly source_id: number; readonly job_id: number }
   | { readonly state: "unplayable"; readonly availability: Availability };
