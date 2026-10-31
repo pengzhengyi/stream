@@ -128,7 +128,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shows where each came from and offers what the others say; many Tracks are
   edited at once through `POST /api/tracks/details`. *Paste the video's details*
   there reads a video's title and description, copied from the site, for the
-  song's title, artist, and album, and the songs it lists. See the
+  song's title, artist, and album, and the songs it lists, and a Library scan
+  reads the `.info.json` yt-dlp writes beside a download the same way. See the
   [Track details](docs/contributing/design-notes/Track%20details.md) note.
 
 - **Songs inside a long file** — *Split into songs…* on a song's menu splits a

@@ -44,9 +44,8 @@ _DASH: Final = re.compile(r"\s+[-\u2013\u2014]\s+|\s*\uff0d\s*")
 # Spaced slash, or a full-width slash with or without spaces.
 _SLASH: Final = re.compile(r"\s+/\s+|\s*\uff0f\s*")
 _LEADING_SEPARATOR: Final = re.compile(r"\s*[/\uff0f\-\u2013\u2014\uff0d]")
-# Whitespace, `|`, `/`, hyphens, dashes, and the middle dot, full-width forms included.
-_SEPARATORS: Final = r"\s|\uff5c/\uff0f\-\u2013\u2014\uff0d\u00b7"
-_EDGE: Final = re.compile(rf"^[{_SEPARATORS}]+|[{_SEPARATORS}]+$")
+# A space, `|`, `/`, hyphens, dashes, and the middle dot, full-width forms included.
+_SEPARATORS: Final = " |\uff5c/\uff0f-\u2013\u2014\uff0d\u00b7"
 
 _TIME: Final = r"(?:(\d{1,2}):)?(\d{1,3}):(\d{2})(?![\d:])"
 _OPEN: Final = r"[\[(\uff08\u3010]?"
@@ -177,7 +176,9 @@ def _problem_with_starts(songs: Sequence[Song]) -> str | None:
 def _songs_of(text: VideoText) -> tuple[Song, ...]:
     if len(text.chapters) >= MIN_SONGS:
         timed: Iterable[tuple[int, str] | None] = (
-            (chapter.start_ms, chapter.title) for chapter in text.chapters
+            (chapter.start_ms, chapter.title)
+            for chapter in text.chapters
+            if len(chapter.title) <= MAX_LINE
         )
     else:
         timed = (_timed(line) for line in text.description.splitlines())
@@ -248,7 +249,7 @@ def _split_at(separator: re.Pattern[str], text: str) -> tuple[str, str]:
 
 def _tidy(text: str) -> str:
     """Return `text` with whitespace collapsed and separators removed from its ends."""
-    return _EDGE.sub("", " ".join(text.split()))
+    return " ".join(text.split()).strip(_SEPARATORS)
 
 
 def _values(name: str, artist: str, *, album: bool) -> Values:
