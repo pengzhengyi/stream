@@ -123,6 +123,21 @@ values.
   details yt-dlp writes with `--write-info-json`, and `<name>.jpg`, `.png`, or
   `.webp`, a cover such as `--write-thumbnail` writes. A scan notes them, and
   reads them again when they change.
+  - **An `.info.json` is read** when it is new, when its size or modified time
+    differs from what the last scan kept, and on a full scan, even when the audio
+    file is unchanged. Its title, description, and chapters become the Track's
+    video text, as a paste would; any other `.json`, and an `.info.json` with no
+    audio file of that name beside it, is ignored. A file over 5 MiB is not read.
+  - **The latest text read wins:** a changed file replaces a paste, and a paste
+    stands until the file changes, even when a full scan reads it again.
+  - **A malformed or oversized file keeps the earlier text** and values. The scan
+    notes the error on the Source, and a later good read clears it; one that
+    couldn't be opened, as on a drive too slow to answer, is read again next scan.
+  - **The file is nobody's word:** text that isn't valid Unicode keeps a
+    replacement character, a chapter's title is cut to a title's length, and
+    chapters past a thousand, or starting more than a week in, are left out.
+  - **A removed file drops only text read from a file,** with the `video` values
+    it gave; a household paste stays. A sidecar with no words records nothing.
 - **The video id** comes from the Track's Bilibili Source, or from a file name
   that is a `BV` id, such as `BV1dm4y1s7ak.m4a`.
 - **The video's text is read by one parser,** a pure function of the core: it

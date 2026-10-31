@@ -317,6 +317,15 @@ def test_a_line_too_long_for_a_song_is_not_one() -> None:
     )
 
 
+def test_a_chapter_title_of_long_runs_of_dashes_is_read_at_once() -> None:
+    chapters = (Chapter(0, "a" + "-" * 20_000 + "x"), Chapter(192_000, "Night Drive"))
+
+    started = time.perf_counter()
+    read_video(VideoText("Mixtape", chapters=chapters))
+
+    assert time.perf_counter() - started < 1.0
+
+
 def test_two_chapters_make_the_song_list() -> None:
     reading = read_video(VideoText("Mixtape", chapters=TWO_CHAPTERS))
 
