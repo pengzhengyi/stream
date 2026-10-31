@@ -21,9 +21,16 @@ interface Row {
   readonly key: string;
   readonly id: number | null;
   readonly start: string;
+  /** The start as loaded, kept to the millisecond while its text is as it was shown. */
+  readonly loaded: { readonly text: string; readonly ms: number };
   readonly title: string;
   readonly artist: string;
 }
+
+/** The most songs a file is split into, as the server keeps them. */
+const MAX_SONGS = 300;
+/** The longest list to paste, as the server reads it. */
+const MAX_LIST = 100_000;
 
 /**
  * Edit the songs `album`'s file is split into, read with `load`; `onSave` sends the
@@ -40,7 +47,8 @@ export function EditSongs({
   readonly album: Track;
   readonly load: (trackId: number) => Promise<Songs>;
   readonly readList: (trackId: number, text: string) => Promise<readonly Song[]>;
-  readonly onSave: (rows: readonly SongRowIn[]) => Promise<void>;
+  /** Save `rows`, refused when the file's songs are no longer the `known` ones the editor saw. */
+  readonly onSave: (rows: readonly SongRowIn[], known: readonly number[]) => Promise<void>;
   readonly onUnsplit: () => Promise<void>;
   readonly onClose: () => void;
 }) {
@@ -114,7 +122,7 @@ export function EditSongs({
 
   const save = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const sent = rowsIn(rows);
+    const sent = rowsIn(rows, songs?.length_ms ?? null);
     if (typeof sent === "string") {
       setError(sent);
       return;
@@ -124,7 +132,7 @@ export function EditSongs({
       return;
     }
     void run(async () => {
-      await onSave(sent);
+      await onSave(sent, songs?.songs.map((song) => song.id) ?? []);
       close();
     });
   };
@@ -188,6 +196,7 @@ export function EditSongs({
                   id="songs-list"
                   className="detail-input"
                   rows={5}
+                  maxLength={MAX_LIST}
                   placeholder={"00:00 Intro\n03:12 Night Drive - Blue Room"}
                   value={pasted}
                   onChange={(event) => {
@@ -231,8 +240,9 @@ export function EditSongs({
             <button
               type="button"
               className="secondary outline songs-add"
+              disabled={rows.length >= MAX_SONGS}
               onClick={() => {
-                edit([...rows, { key: newId(), id: null, start: "", title: "", artist: "" }]);
+                edit([...rows, rowOf({ start_ms: 0, title: "", artist: "" }, null, "")]);
               }}
             >
               <PlusIcon aria-hidden /> Add a song
@@ -310,7 +320,6 @@ function SongRow({
       <input
         className="detail-input song-start"
         aria-label={`Start of song ${String(place)}`}
-        inputMode="numeric"
         placeholder="0:00"
         value={row.start}
         onChange={(event) => {
@@ -365,23 +374,28 @@ function SongRow({
   );
 }
 
-function rowOf(song: Song, id: number | null): Row {
+function rowOf(song: Song, id: number | null, start = formatStart(song.start_ms)): Row {
   return {
     key: newId(),
     id,
-    start: formatStart(song.start_ms),
+    start,
+    loaded: { text: start, ms: song.start_ms },
     title: song.title,
     artist: song.artist,
   };
 }
 
-/** Return the rows as the server takes them, or why one can't be. */
-function rowsIn(rows: readonly Row[]): SongRowIn[] | string {
+/** Return the rows as the server takes them, or why one can't be, in a file `lengthMs` long. */
+function rowsIn(rows: readonly Row[], lengthMs: number | null): SongRowIn[] | string {
   const sent: SongRowIn[] = [];
   for (const [index, row] of rows.entries()) {
-    const start = parseStart(row.start);
+    const start = row.start === row.loaded.text ? row.loaded.ms : parseStart(row.start);
+    const song = `Song ${String(index + 1)}`;
     if (start === undefined) {
-      return `Song ${String(index + 1)} starts at no time; write it as 3:12 or 1:07:40.`;
+      return `${song} starts at no time; write it as 3:12 or 1:07:40.`;
+    }
+    if (lengthMs !== null && start >= lengthMs) {
+      return `${song} starts after the file ends, at ${formatStart(lengthMs)}.`;
     }
     sent.push({ id: row.id, start_ms: start, title: row.title.trim(), artist: row.artist.trim() });
   }

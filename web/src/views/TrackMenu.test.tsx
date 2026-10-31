@@ -126,3 +126,12 @@ describe("a song's menu for a song inside a longer file", () => {
     expect(actions.onEditSongs).toHaveBeenCalledOnce();
   });
 });
+
+describe("a song's menu for a file already split", () => {
+  it("edits its songs", async () => {
+    renderMenu(true, trackOf(1, "Melt", { split: true }));
+    await open();
+
+    expect(screen.getByRole("menuitem", { name: "Edit songs…" })).toBeInTheDocument();
+  });
+});

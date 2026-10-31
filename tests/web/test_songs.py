@@ -172,3 +172,40 @@ def test_a_pasted_list_that_isnt_one_answers_why(
 
     assert response.status_code == 422
     assert "Line 1" in response.text
+
+
+def test_a_save_naming_the_songs_it_saw_is_refused_once_they_changed(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+    album = _album(catalog)
+    seen = client.put(f"/api/tracks/{album}/songs", json={"rows": TWO_SONGS}).json()["songs"]
+    rows = [
+        {"id": song["id"], "start_ms": song["start_ms"], "title": song["title"]} for song in seen
+    ]
+    client.put(
+        f"/api/tracks/{album}/songs",
+        json={"rows": [*rows, {"start_ms": 600_000, "title": "Encore"}]},
+    )
+
+    response = client.put(
+        f"/api/tracks/{album}/songs",
+        json={
+            "rows": [*rows[:1], {"start_ms": 300_000, "title": "B"}],
+            "known": [s["id"] for s in seen],
+        },
+    )
+
+    assert response.status_code == 409
+
+
+def test_a_pasted_list_with_a_field_it_doesnt_know_is_refused(
+    client: TestClient, catalog: CatalogService
+) -> None:
+    set_up_as_alice(client)
+
+    response = client.post(
+        f"/api/tracks/{_album(catalog)}/songs/read", json={"text": "00:00 A\n03:12 B", "z": 1}
+    )
+
+    assert response.status_code == 422

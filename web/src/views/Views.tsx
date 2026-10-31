@@ -99,7 +99,7 @@ export function CurrentView(given: ViewProps) {
         </Songs>
       );
     case "playlists":
-      return <Playlists tracks={props.tracks} playlists={props.playlists} />;
+      return <Playlists tracks={given.tracks} playlists={props.playlists} />;
     case "playlist":
       return <PlaylistView {...props} tracks={given.tracks} id={route.id} />;
     case "search":

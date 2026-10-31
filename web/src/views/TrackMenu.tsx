@@ -120,7 +120,7 @@ export function TrackMenu({
               actions.onEditSongs(track);
             }}
           >
-            {track.segment_of === null ? "Split into songs…" : "Edit songs…"}
+            {track.split || track.segment_of !== null ? "Edit songs…" : "Split into songs…"}
           </Item>
         </Menu.Content>
       </Menu.Portal>

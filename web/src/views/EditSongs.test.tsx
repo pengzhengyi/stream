@@ -25,7 +25,9 @@ const LISTED: readonly Song[] = [
 async function renderEditor(
   songs: Songs = SPLIT,
   {
-    onSave = vi.fn<(rows: readonly SongRowIn[]) => Promise<void>>(() => Promise.resolve()),
+    onSave = vi.fn<(rows: readonly SongRowIn[], known: readonly number[]) => Promise<void>>(() =>
+      Promise.resolve(),
+    ),
     onUnsplit = vi.fn<() => Promise<void>>(() => Promise.resolve()),
     readList = vi.fn<(trackId: number, text: string) => Promise<readonly Song[]>>(() =>
       Promise.resolve(LISTED),
@@ -69,10 +71,13 @@ describe("editing a file's songs", () => {
     await press(dialog, "Use the 2 songs from the video's details");
     await press(dialog, "Save");
 
-    expect(onSave).toHaveBeenCalledExactlyOnceWith([
-      { id: null, start_ms: 0, title: "アイネクライネ", artist: "" },
-      { id: null, start_ms: 252_000, title: "ゴーゴー幽霊船", artist: "ハチ" },
-    ]);
+    expect(onSave).toHaveBeenCalledExactlyOnceWith(
+      [
+        { id: null, start_ms: 0, title: "アイネクライネ", artist: "" },
+        { id: null, start_ms: 252_000, title: "ゴーゴー幽霊船", artist: "ハチ" },
+      ],
+      [],
+    );
     expect(onClose).toHaveBeenCalledOnce();
   });
 
@@ -100,11 +105,14 @@ describe("editing a file's songs", () => {
     await userEvent.type(box(dialog, "Title of song 2"), " (Reprise)");
     await press(dialog, "Save");
 
-    expect(onSave).toHaveBeenCalledExactlyOnceWith([
-      { id: 1, start_ms: 0, title: "アイネクライネ", artist: "" },
-      { id: 3, start_ms: 180_000, title: "Last (Reprise)", artist: "" },
-      { id: 2, start_ms: 252_000, title: "ゴーゴー幽霊船", artist: "" },
-    ]);
+    expect(onSave).toHaveBeenCalledExactlyOnceWith(
+      [
+        { id: 1, start_ms: 0, title: "アイネクライネ", artist: "" },
+        { id: 3, start_ms: 180_000, title: "Last (Reprise)", artist: "" },
+        { id: 2, start_ms: 252_000, title: "ゴーゴー幽霊船", artist: "" },
+      ],
+      [1, 2, 3],
+    );
   });
 
   it("says what saving removes first, and saves on the second press", async () => {
@@ -155,5 +163,51 @@ describe("editing a file's songs", () => {
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("song 2 breaks that");
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+describe("the songs editor's guards", () => {
+  it("takes a start typed with a colon, as a phone's keyboard offers it", async () => {
+    const { dialog } = await renderEditor();
+
+    expect(box(dialog, "Start of song 1")).not.toHaveAttribute("inputmode", "numeric");
+  });
+
+  it("asks again after any edit made once it said what saving removes", async () => {
+    const { dialog, onSave } = await renderEditor();
+    await press(dialog, "Remove “Last”");
+    await press(dialog, "Save");
+
+    await userEvent.type(box(dialog, "Title of song 1"), "!");
+    await press(dialog, "Save");
+
+    expect(onSave).not.toHaveBeenCalled();
+    expect(within(dialog).getByRole("button", { name: "Save and remove 1 song" })).toBeVisible();
+  });
+
+  it("keeps a start of part of a second as it was, unless its time is edited", async () => {
+    const { dialog, onSave } = await renderEditor(
+      splitSongsOf(104, [
+        [1, 0, "Intro"],
+        [2, 192_500, "Night Drive"],
+      ]),
+    );
+
+    await press(dialog, "Save");
+
+    expect(onSave.mock.calls[0]?.[0][1]?.start_ms).toBe(192_500);
+  });
+
+  it("says which song starts after its file ends", async () => {
+    const { dialog, onSave } = await renderEditor();
+
+    await userEvent.clear(box(dialog, "Start of song 3"));
+    await userEvent.type(box(dialog, "Start of song 3"), "2:00:00");
+    await press(dialog, "Save");
+
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(
+      "Song 3 starts after the file ends",
+    );
+    expect(onSave).not.toHaveBeenCalled();
   });
 });

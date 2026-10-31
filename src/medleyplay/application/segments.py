@@ -6,7 +6,7 @@ out removes its song's Track. A song's Source has the kind `segment` and names i
 album file's Source, so a song plays, and is available, as its file is.
 """
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass
 
 from sqlalchemy import Select, delete, select
@@ -93,11 +93,23 @@ class SongsService:
             track_id, length, needs_check(split_at, length), songs, (listed,) if listed else ()
         )
 
-    def save(self, track_id: TrackId, rows: Sequence[SongRow]) -> SongsView:
-        """Make `rows` the file's songs: keep each by its id, add new ones, remove the rest."""
+    def save(
+        self,
+        track_id: TrackId,
+        rows: Sequence[SongRow],
+        known: Collection[SegmentId] | None = None,
+    ) -> SongsView:
+        """Make `rows` the file's songs: keep each by its id, add new ones, remove the rest.
+
+        `known` is the songs the editor saw; when the file's songs are others now, the
+        save is refused, so it can't remove a song nobody saw.
+        """
         with self._units.begin() as db:
             album = _album_file(db, track_id)
             existing = {SegmentId(song.id): song for song in songs_of(db, track_id)}
+            if known is not None and set(known) != set(existing):
+                message = "The songs changed since they were opened; open them again."
+                raise ConflictError(message)
             plan = plan_split(existing, rows, album.duration_ms)
             if plan.removed:
                 removed = [existing[gone].track_id for gone in plan.removed]

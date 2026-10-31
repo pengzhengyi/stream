@@ -326,3 +326,23 @@ def test_a_pasted_list_with_a_line_that_isnt_a_song_is_refused_naming_it(
 ) -> None:
     with pytest.raises(InvalidInputError, match="Line 2"):
         songs.read_list(album, "00:00 Intro\nthanks for listening\n08:00 Last")
+
+
+def test_a_save_from_an_editor_opened_before_the_songs_changed_is_refused(
+    songs: SongsService, album: TrackId
+) -> None:
+    opened = songs.save(album, THREE_SONGS).songs
+    songs.save(
+        album,
+        [
+            *_kept(opened, "アイネクライネ", "ゴーゴー幽霊船", "Last"),
+            SongRow(None, Song(600_000, "Encore")),
+        ],
+    )
+
+    with pytest.raises(ConflictError, match="changed"):
+        songs.save(
+            album, _kept(opened, "アイネクライネ", "Last"), known=[song.id for song in opened]
+        )
+
+    assert len(songs.songs(album).songs) == 4

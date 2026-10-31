@@ -38,8 +38,8 @@
   the album file's Source. A segment Source has no file of its own; removing the
   album file's Source removes its segments, and their Tracks with them.
 - **The file keeps its own Track,** the *album file*. Once split it is marked
-  `split`: Songs, Artists, search, and smart playlists show its segments instead,
-  while Albums still offers it, to play the file as one or to edit its songs.
+  `split`: Songs, Artists, Albums, search, and smart playlists show its segments
+  instead, and a Playlist that held it before it was split still plays it whole.
 - **A segment Track is a Track like any other:** its own favorite, rating,
   plays, place in Playlists and the queue, and details. Its length is its end
   less its start, and it was added when its album file was.

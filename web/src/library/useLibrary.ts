@@ -47,7 +47,11 @@ export interface Library {
    */
   readonly readVideoText: (id: number, text: VideoText) => Promise<VideoRead>;
   /** Make `rows` the songs of the file `id`; the Tracks then show the songs as saved. */
-  readonly saveSongs: (id: number, rows: readonly SongRowIn[]) => Promise<void>;
+  readonly saveSongs: (
+    id: number,
+    rows: readonly SongRowIn[],
+    known: readonly number[],
+  ) => Promise<void>;
   /** Remove every song of the file `id`; the Tracks then show the file whole again. */
   readonly unsplit: (id: number) => Promise<void>;
   /**
@@ -213,8 +217,8 @@ export function useLibrary(onSignedOut: () => void): Library {
       await changeDetails(id, api.setDetails([id], changes));
     },
     readVideoText: (id, text) => changeDetails(id, api.readVideoText(id, text)),
-    saveSongs: async (id, rows) => {
-      await changeTracks(api.saveSongs(id, rows));
+    saveSongs: async (id, rows, known) => {
+      await changeTracks(api.saveSongs(id, rows, known));
     },
     unsplit: async (id) => {
       await changeTracks(api.unsplit(id));

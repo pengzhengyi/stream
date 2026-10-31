@@ -14,22 +14,31 @@ from medleyplay.web.ids import RowId
 
 router = APIRouter(prefix="/api/tracks", tags=["songs"])
 
+# A song's id, strict, so `"1"` or `true` is refused rather than read as 1.
+type SongId = Annotated[StrictInt, Field(ge=1, le=2**63 - 1)]
+
 
 class SongIn(BaseModel):
     """A row of the songs editor: the song it keeps by id, or `null` for a new one."""
 
     model_config = ConfigDict(extra="forbid")
 
-    id: Annotated[StrictInt, Field(ge=1, le=2**63 - 1)] | None = None
+    id: SongId | None = None
     start_ms: Annotated[StrictInt, Field(ge=0, le=2**63 - 1)]
     title: StrictStr
     artist: StrictStr = ""
 
 
 class RowsIn(BaseModel):
-    """The file's songs, in order; a song left out is removed with its Track."""
+    """The file's songs, in order; a song left out is removed with its Track.
+
+    `known` names the songs the editor saw, so a save after someone else's is
+    refused rather than removing a song nobody saw.
+    """
 
     model_config = ConfigDict(extra="forbid")
+
+    known: Annotated[list[SongId], Field(max_length=MAX_SONGS)] | None = None
 
     rows: Annotated[list[SongIn], Field(max_length=MAX_SONGS)] = Field(
         examples=[
@@ -91,6 +100,8 @@ class SongsOut(BaseModel):
 class ListIn(BaseModel):
     """A pasted song list: one song a line, its time first or last."""
 
+    model_config = ConfigDict(extra="forbid")
+
     text: Annotated[StrictStr, Field(max_length=100_000)] = Field(
         examples=["00:00 Intro\n1. 03:12 Night Drive - Blue Room\nBlue Room 1:07:40"]
     )
@@ -128,7 +139,8 @@ def save_songs(track_id: RowId, body: RowsIn, _: SignedInAccount, service: Songs
         )
         for row in body.rows
     ]
-    return SongsOut.of(service.save(TrackId(track_id), rows))
+    known = None if body.known is None else [SegmentId(song) for song in body.known]
+    return SongsOut.of(service.save(TrackId(track_id), rows, known))
 
 
 @router.post("/{track_id}/songs/read")
