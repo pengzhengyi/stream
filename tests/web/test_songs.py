@@ -162,7 +162,7 @@ def test_a_pasted_list_answers_its_songs(client: TestClient, catalog: CatalogSer
     }
 
 
-def test_a_pasted_list_that_isnt_one_answers_why(
+def test_a_pasted_text_of_no_song_list_answers_why(
     client: TestClient, catalog: CatalogService
 ) -> None:
     set_up_as_alice(client)
@@ -199,7 +199,7 @@ def test_a_save_naming_the_songs_it_saw_is_refused_once_they_changed(
     assert response.status_code == 409
 
 
-def test_a_pasted_list_with_a_field_it_doesnt_know_is_refused(
+def test_a_pasted_list_with_an_unknown_field_is_refused(
     client: TestClient, catalog: CatalogService
 ) -> None:
     set_up_as_alice(client)

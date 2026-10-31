@@ -321,7 +321,7 @@ Last 08:00
     )
 
 
-def test_a_pasted_list_with_a_line_that_isnt_a_song_is_refused_naming_it(
+def test_a_pasted_list_with_a_line_of_no_song_is_refused_naming_it(
     songs: SongsService, album: TrackId
 ) -> None:
     with pytest.raises(InvalidInputError, match="Line 2"):
