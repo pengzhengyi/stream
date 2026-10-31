@@ -132,6 +132,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reads the `.info.json` yt-dlp writes beside a download the same way. See the
   [Track details](docs/contributing/design-notes/Track%20details.md) note.
 
+- **Songs inside a long file** — a whole album uploaded as one video can be
+  split into its songs through `PUT /api/tracks/{id}/songs`, each a Track of its
+  own that keeps its ratings, plays, and Playlist places when the list is
+  edited, and takes its album, artist, and track number from the file. See the
+  [Segments](docs/contributing/design-notes/Segments.md) note.
+
 ### Changed
 
 - Renamed the project from stream to medleyplay.

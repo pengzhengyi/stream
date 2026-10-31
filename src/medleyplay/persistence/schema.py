@@ -117,6 +117,30 @@ class TrackValueRow(Base):
     recorded_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 
+class SegmentRow(Base):
+    """One song inside an album file: a stretch of that file's Source, played as its own Track.
+
+    The song ends where the next starts, and the last at the end of the file.
+    `split_length_ms` is the file's length when it was split, to tell when it changed.
+    """
+
+    __tablename__ = "segment"
+    # A removed song's id is never given to another, so an editor left open can't adopt it;
+    # and an album file's Source can't go while its songs remain.
+    __table_args__ = ({"sqlite_autoincrement": True},)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    album_source_id: Mapped[int] = mapped_column(
+        ForeignKey("source.id", ondelete="RESTRICT"), index=True
+    )
+    track_id: Mapped[int] = mapped_column(ForeignKey("track.id", ondelete="CASCADE"), unique=True)
+    position: Mapped[int]
+    start_ms: Mapped[int]
+    title: Mapped[str] = mapped_column(String(512))
+    artist: Mapped[str] = mapped_column(String(512), default="")
+    split_length_ms: Mapped[int | None]
+
+
 class VideoTextRow(Base):
     """The text of a Track's video, as pasted or read beside the file: the `video` values' source.
 

@@ -125,6 +125,10 @@ class Track:
     availability: Availability
     downloaded: bool = False
     """Whether a Source of the Track has a Download kept on the server."""
+    segment_of: TrackId | None = None
+    """The album file this Track is a song of, if it is one."""
+    split: bool = False
+    """Whether this Track's file is split into songs, which then stand for it."""
 
 
 @dataclass(frozen=True)

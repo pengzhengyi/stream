@@ -28,6 +28,10 @@ export interface Track {
   readonly availability: Availability;
   /** Whether a Source of the Track has a Download kept on the server. */
   readonly downloaded: boolean;
+  /** The album file this Track is a song of, if it is one. */
+  readonly segment_of: number | null;
+  /** Whether this Track's file is split into songs, which then stand for it. */
+  readonly split: boolean;
 }
 
 /** A detail of a Track the household can edit. */
@@ -213,6 +217,10 @@ export type PlaybackAnswer =
       readonly source_id: number;
       readonly audio_url: string;
       readonly media_type: string;
+      /** Where a song inside a longer file starts in it; `null` for a whole file. */
+      readonly start_ms: number | null;
+      /** Where it ends; `null` when the file's end is its end. */
+      readonly end_ms: number | null;
     }
   | { readonly state: "preparing"; readonly source_id: number; readonly job_id: number }
   | { readonly state: "unplayable"; readonly availability: Availability };

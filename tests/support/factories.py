@@ -58,6 +58,18 @@ class TrackDetailsFactory:
         """Return a three-minute song by a fixed artist."""
         return TrackDetails(title=title, artist="The Band", album="Blue", duration_ms=180_000)
 
+    @staticmethod
+    def album_file(duration_ms: int | None = 3_600_000) -> TrackDetails:
+        """Return a whole album uploaded as one hour-long video: *Bremen* by ハチ, 2015."""
+        return TrackDetails(
+            title="Bremen",
+            artist="ハチ",
+            album="Bremen",
+            album_artist="ハチ",
+            duration_ms=duration_ms,
+            year=2015,
+        )
+
 
 class InfoJsonFactory:
     """Builds what a scan reports of the `.info.json` beside an audio file."""

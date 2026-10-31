@@ -38,6 +38,7 @@ from medleyplay.web import (
     plugins,
     preferences,
     settings,
+    songs,
     storage,
 )
 from medleyplay.web.deps import Services
@@ -94,6 +95,7 @@ def create_app(
     app.include_router(preferences.router)
     app.include_router(mode.router)
     app.include_router(details.router)
+    app.include_router(songs.router)
     app.include_router(storage.router)
     app.mount("/", client_app(client_dir))
     app.add_exception_handler(MedleyplayError, _handle_domain_error)  # type: ignore[arg-type] # Starlette types handlers for any Exception

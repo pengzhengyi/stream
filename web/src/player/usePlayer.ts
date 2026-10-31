@@ -1,5 +1,9 @@
 /**
  * @file The player: one `<audio>` element playing the queue, with the lock screen's controls.
+ *
+ * A song inside a longer file plays its stretch of that file: the player shows, seeks,
+ * and saves its position from the song's own start, and moves on at its end, playing
+ * on without reloading the file when the next song starts there.
  */
 
 import { type RefObject, useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
@@ -9,6 +13,15 @@ import { newId } from "../ids";
 import { PlayTime, countsAsPlayed } from "./playCount";
 import { EMPTY, type Entry, type Queue, type Repeat, current, following, reduce } from "./queue";
 import { type Play, forgetPlay, keepPlay, keptPlays, loadQueue, saveQueue } from "./storage";
+import {
+  type Stretch,
+  WHOLE,
+  fileTimeOf,
+  lengthOf,
+  positionIn,
+  remainingIn,
+  stretchOf,
+} from "./stretch";
 import { loadVolume, saveVolume } from "./volume";
 
 /** What the player is doing. */
@@ -67,6 +80,8 @@ const RESTART_AFTER = 3;
 const SAVE_EVERY = 5;
 const FINISHED_JOB = new Set(["succeeded", "failed", "cancelled"]);
 const PAUSING_ERRORS = new Set(["AbortError", "NotAllowedError"]);
+/** How near a song's start the file may already be for it to play on without a seek, in seconds. */
+const IN_PLACE = 0.25;
 /** The plays the server will never accept, so retrying them is pointless. */
 const REFUSED_PLAY = new Set([404, 409, 422]);
 
@@ -110,6 +125,10 @@ export function usePlayer(
   const resumeAt = useRef<number | undefined>(undefined);
   const listening = useRef<{ play: Play; time: PlayTime; counted: boolean } | undefined>(undefined);
   const lastSaved = useRef(0);
+  // The current song's stretch of its file, the timer that ends it, and the entry last ended.
+  const stretch = useRef<Stretch>(WHOLE);
+  const ending = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const ended = useRef<string | undefined>(undefined);
   const [volume, setVolume] = useState(loadVolume);
   const [muted, setMuted] = useState(false);
 
@@ -166,6 +185,8 @@ export function usePlayer(
     }
     const load = ++loads.current;
     const stale = () => load !== loads.current;
+    clearTimeout(ending.current);
+    ended.current = undefined;
     if (trackId === undefined) {
       element.pause();
       element.removeAttribute("src");
@@ -198,6 +219,23 @@ export function usePlayer(
           return;
         }
         listen(trackId);
+        const song = stretchOf(answer);
+        stretch.current = song;
+        if (playsFrom(element, answer.audio_url)) {
+          // A song of the file already loaded: play on, from its start.
+          if (Math.abs(element.currentTime - song.start) > IN_PLACE) {
+            element.currentTime = song.start;
+          }
+          // Playing on fires no `play` event, so the new entry says it is playing itself.
+          show(key, {
+            duration: lengthOf(song, element.duration),
+            ...(element.paused ? {} : { status: { kind: "playing" } }),
+          });
+          if (element.paused) {
+            await element.play();
+          }
+          return;
+        }
         element.src = answer.audio_url;
         if (restoring === undefined) {
           await element.play();
@@ -233,7 +271,8 @@ export function usePlayer(
     if (element === null || trackId === undefined) {
       return;
     }
-    element.currentTime = 0;
+    element.currentTime = stretch.current.start;
+    ended.current = undefined;
     startListening(trackId);
     if (play) {
       const forKey = playingKey.current;
@@ -244,7 +283,10 @@ export function usePlayer(
   };
   const previous = () => {
     const element = audio.current;
-    if (element !== null && (element.currentTime > RESTART_AFTER || queue.position === 0)) {
+    if (
+      element !== null &&
+      (positionIn(stretch.current, element.currentTime) > RESTART_AFTER || queue.position === 0)
+    ) {
       restart(false);
       return;
     }
@@ -261,12 +303,49 @@ export function usePlayer(
   const seek = (seconds: number) => {
     const element = audio.current;
     if (element !== null && Number.isFinite(seconds)) {
-      element.currentTime = seconds;
+      element.currentTime = fileTimeOf(stretch.current, seconds, element.duration);
     }
   };
 
+  /** End the current entry once: start it over, or move on, playing on into the next song of the file. */
+  const finish = useEffectEvent(() => {
+    const element = audio.current;
+    if (element === null || ended.current === playingKey.current) {
+      return;
+    }
+    ended.current = playingKey.current;
+    clearTimeout(ending.current);
+    if (queue.repeat === "one") {
+      restart(true);
+      return;
+    }
+    const coming = following(queue);
+    const early = coming === undefined ? undefined : ahead.current.get(coming.trackId);
+    const end = stretch.current.end;
+    const flowsOn =
+      early?.state === "ready" &&
+      playsFrom(element, early.audio_url) &&
+      end !== undefined &&
+      Math.abs(stretchOf(early).start - end) <= IN_PLACE;
+    if (end !== undefined && !flowsOn) {
+      element.pause();
+    }
+    next();
+  });
+
   const onTime = useEffectEvent((element: HTMLAudioElement) => {
-    show(playingKey.current, { position: element.currentTime });
+    const position = positionIn(stretch.current, element.currentTime);
+    show(playingKey.current, { position });
+    const left = remainingIn(stretch.current, element.currentTime);
+    if (left !== undefined && !element.paused) {
+      // `timeupdate` comes a few times a second; the timer ends the song on time between.
+      clearTimeout(ending.current);
+      if (left <= 0) {
+        finish();
+      } else {
+        ending.current = setTimeout(finish, (left * 1000) / element.playbackRate);
+      }
+    }
     const heard = listening.current;
     if (heard !== undefined && !element.paused) {
       heard.time.update(element.currentTime);
@@ -276,28 +355,20 @@ export function usePlayer(
         void keepPlay(heard.play).then(() => sendPlays(heard.play));
       }
     }
-    if (Math.abs(element.currentTime - lastSaved.current) >= SAVE_EVERY) {
-      lastSaved.current = element.currentTime;
-      void saveQueue({ queue, seconds: element.currentTime });
+    if (Math.abs(position - lastSaved.current) >= SAVE_EVERY) {
+      lastSaved.current = position;
+      void saveQueue({ queue, seconds: position });
     }
   });
 
   const onLoaded = useEffectEvent((element: HTMLAudioElement) => {
-    if (resumeAt.current !== undefined) {
-      element.currentTime = resumeAt.current;
+    const song = stretch.current;
+    if (resumeAt.current !== undefined || song.start > 0) {
+      element.currentTime = fileTimeOf(song, resumeAt.current ?? 0, element.duration);
       resumeAt.current = undefined;
     }
-    const length = Number.isFinite(element.duration) ? element.duration : undefined;
-    show(playingKey.current, { duration: length });
-    updatePositionState(element);
-  });
-
-  const onEnded = useEffectEvent(() => {
-    if (queue.repeat === "one") {
-      restart(true);
-    } else {
-      next();
-    }
+    show(playingKey.current, { duration: lengthOf(song, element.duration) });
+    updatePositionState(element, song);
   });
 
   // Follow the audio element.
@@ -316,6 +387,7 @@ export function usePlayer(
       [
         "pause",
         () => {
+          clearTimeout(ending.current);
           listening.current?.time.pause();
           if (!element.ended) {
             show(playingKey.current, { status: { kind: "paused" } });
@@ -325,7 +397,7 @@ export function usePlayer(
       [
         "ended",
         () => {
-          onEnded();
+          finish();
         },
       ],
       [
@@ -344,7 +416,7 @@ export function usePlayer(
         "seeked",
         () => {
           listening.current?.time.pause();
-          updatePositionState(element);
+          updatePositionState(element, stretch.current);
         },
       ],
       [
@@ -584,14 +656,22 @@ async function sendPlays(only?: Play): Promise<void> {
   }
 }
 
-function updatePositionState(element: HTMLAudioElement): void {
+/** Return whether `element` already has the file at `audioUrl` loaded. */
+function playsFrom(element: HTMLAudioElement, audioUrl: string): boolean {
+  return (
+    element.getAttribute("src") !== null && element.src === new URL(audioUrl, document.baseURI).href
+  );
+}
+
+function updatePositionState(element: HTMLAudioElement, song: Stretch): void {
+  const duration = lengthOf(song, element.duration);
   // `setPositionState` throws on an unknown length, which a live stream has.
-  if (!("mediaSession" in navigator) || !Number.isFinite(element.duration)) {
+  if (!("mediaSession" in navigator) || duration === undefined) {
     return;
   }
   navigator.mediaSession.setPositionState({
-    duration: element.duration,
+    duration,
     playbackRate: element.playbackRate,
-    position: Math.min(element.currentTime, element.duration),
+    position: Math.min(positionIn(song, element.currentTime), duration),
   });
 }

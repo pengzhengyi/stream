@@ -79,7 +79,35 @@ def test_asking_to_play_a_ready_track_answers_its_audio_url_and_type(
         "source_id": answer["source_id"],
         "audio_url": f"/api/sources/{answer['source_id']}/audio",
         "media_type": "audio/wav",
+        "start_ms": None,
+        "end_ms": None,
     }
+
+
+def test_a_song_answers_its_album_files_audio_and_its_stretch(
+    player: TestClient, running: Libraries, tmp_path: Path
+) -> None:
+    set_up_as_alice(player)
+    tracks = _register(
+        player,
+        running,
+        "folder",
+        folder_of(tmp_path / "M", {"Bremen.wav": Song("Bremen", seconds=5.0)}),
+    )
+    rows = [
+        {"start_ms": 0, "title": "アイネクライネ"},
+        {"start_ms": 2_000, "title": "Last"},
+    ]
+    split = player.put(f"/api/tracks/{tracks['Bremen']}/songs", json={"rows": rows}).json()
+
+    answer = player.post(f"/api/tracks/{split['songs'][1]['track_id']}/playback").json()
+    whole = player.post(f"/api/tracks/{tracks['Bremen']}/playback").json()
+
+    assert (answer["audio_url"], answer["start_ms"], answer["end_ms"]) == (
+        whole["audio_url"],
+        2_000,
+        5_000,
+    )
 
 
 def test_the_whole_file_is_served_with_its_headers(player: TestClient, intro_url: str) -> None:

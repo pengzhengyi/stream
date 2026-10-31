@@ -103,6 +103,8 @@ def test_an_added_track_plays_once_its_download_finishes(site_client: TestClient
         "source_id": added["source_id"],
         "media_type": "audio/mp4",
         "audio_url": f"/api/sources/{added['source_id']}/audio",
+        "start_ms": None,
+        "end_ms": None,
     }
     assert (audio.status_code, audio.headers["content-type"]) == (200, "audio/mp4")
     assert audio.content.startswith(b"BV1Xx41117Tz/p1")
